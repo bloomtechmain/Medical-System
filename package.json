@@ -1,0 +1,15 @@
+{
+  "name": "pharmacy-management-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "db:migrate": "cd server && npm run db:migrate",
+    "db:seed": "cd server && npm run db:seed"
+  },
+  "dependencies": {
+    "claude": "^0.1.1"
+  }
+}
