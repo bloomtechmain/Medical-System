@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes bell-ring {
+  0%   { transform: rotate(0deg);   }
+  10%  { transform: rotate(18deg);  }
+  20%  { transform: rotate(-16deg); }
+  30%  { transform: rotate(14deg);  }
+  40%  { transform: rotate(-12deg); }
+  50%  { transform: rotate(10deg);  }
+  60%  { transform: rotate(-8deg);  }
+  70%  { transform: rotate(6deg);   }
+  80%  { transform: rotate(-4deg);  }
+  90%  { transform: rotate(2deg);   }
+  100% { transform: rotate(0deg);   }
+}
+
+@keyframes badge-pop {
+  0%   { transform: scale(0)   rotate(-15deg); opacity: 0; }
+  55%  { transform: scale(1.4) rotate(5deg);  opacity: 1; }
+  75%  { transform: scale(0.9) rotate(-3deg); opacity: 1; }
+  100% { transform: scale(1)   rotate(0deg);  opacity: 1; }
+}
+
+.bell-ringing {
+  animation: bell-ring 0.75s ease-in-out;
+  transform-origin: top center;
+}
+
+.badge-pop {
+  animation: badge-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+  }
+  .input {
+    @apply block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm placeholder-gray-400
+           focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500;
+  }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+}
