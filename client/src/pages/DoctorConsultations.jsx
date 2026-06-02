@@ -94,6 +94,7 @@ function NewConsultationModal({ onClose, onSaved }) {
     visit_date: new Date().toISOString().slice(0, 10),
     doctor_name: '', hospital_clinic: '',
     sick_description: '', diagnosis: '', treatment_description: '',
+    lab_tests_requested: '',
   });
   const [selectedPatient, setSelectedPatient]       = useState(null);
   const [selectedPharmacist, setSelectedPharmacist] = useState(null);
@@ -222,6 +223,23 @@ function NewConsultationModal({ onClose, onSaved }) {
                   value={fields.treatment_description} onChange={e => sf('treatment_description', e.target.value)} />
               </div>
             </div>
+          </div>
+
+          {/* Lab Test Request */}
+          <div>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+              Lab Test Request
+              <span className="ml-2 text-cyan-600 normal-case font-normal">— patient will choose and send to a laboratory</span>
+            </h3>
+            <textarea rows={2} className="input resize-none"
+              placeholder="e.g. Full Blood Count, Liver Function Tests, Blood Glucose, HbA1c…"
+              value={fields.lab_tests_requested}
+              onChange={e => sf('lab_tests_requested', e.target.value)} />
+            {fields.lab_tests_requested && (
+              <p className="text-xs text-cyan-600 mt-1.5">
+                ✓ Patient will be notified to send these tests to a laboratory of their choice.
+              </p>
+            )}
           </div>
 
           {/* Prescription upload */}

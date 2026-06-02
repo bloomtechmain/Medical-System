@@ -24,7 +24,7 @@ const upload = multer({
 
 router.get('/',    protect, authorize('doctor', 'patient', 'laboratory', 'admin'), getAll);
 router.get('/:id', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), getOne);
-router.post('/',   protect, authorize('doctor'), create);
+router.post('/',   protect, authorize('doctor', 'patient'), create);
 router.patch('/:id/report',  protect, authorize('laboratory'), upload.single('report'), uploadReport);
 router.patch('/:id/status',  protect, authorize('laboratory'), updateStatus);
 router.delete('/:id',        protect, authorize('doctor'),     remove);

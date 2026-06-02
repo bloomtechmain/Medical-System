@@ -16,31 +16,72 @@ const labName = async (labId) => {
 const userName = async (uid) =>
   (await pool.query('SELECT name FROM users WHERE id=$1', [uid])).rows[0]?.name || 'User';
 
-// ── create (doctor) ────────────────────────────────────────────
+// ── create (doctor or patient-from-consultation) ───────────────
 const create = async (req, res, next) => {
   try {
     const { patient_id, laboratory_id, consultation_id, test_description, notes } = req.body;
-    const doctorId = req.user.id;
+    const isDoctor  = req.user.role === 'doctor';
+    const isPatient = req.user.role === 'patient';
+
+    if (!laboratory_id) return res.status(400).json({ message: 'Laboratory selection is required' });
+
+    let doctorId  = isDoctor ? req.user.id : null;
+    let patientId = isDoctor ? patient_id  : req.user.id;
+    let testDesc  = test_description;
+
+    // Patient sending from a doctor's consultation: derive doctor + test description
+    if (isPatient && consultation_id) {
+      const { rows: [cons] } = await pool.query(
+        'SELECT doctor_id, lab_tests_requested FROM medical_consultations WHERE id=$1 AND patient_id=$2',
+        [consultation_id, patientId]
+      );
+      if (!cons) return res.status(404).json({ message: 'Consultation not found' });
+      doctorId = cons.doctor_id;
+      if (!testDesc) testDesc = cons.lab_tests_requested;
+    }
+
+    if (!patientId) return res.status(400).json({ message: 'Patient is required' });
+    if (!testDesc)  return res.status(400).json({ message: 'Test description is required' });
+
+    // Prevent duplicate lab requests for the same consultation
+    if (consultation_id && isPatient) {
+      const { rows: dup } = await pool.query(
+        'SELECT id FROM lab_requests WHERE consultation_id=$1 AND patient_id=$2',
+        [consultation_id, patientId]
+      );
+      if (dup.length) return res.status(409).json({ message: 'Lab request already sent for this consultation' });
+    }
 
     const { rows: [request] } = await pool.query(`
       INSERT INTO lab_requests
         (doctor_id, patient_id, laboratory_id, consultation_id, test_description, notes)
       VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING *
-    `, [doctorId, patient_id, laboratory_id, consultation_id || null,
-        test_description, notes || null]);
+    `, [doctorId, patientId, laboratory_id, consultation_id || null, testDesc, notes || null]);
 
-    const [drName, ptName, lName] = await Promise.all([
-      userName(doctorId), userName(patient_id), labName(laboratory_id),
-    ]);
+    const lName  = await labName(laboratory_id);
+    const ptName = await userName(patientId);
 
+    // Notify lab
+    const senderDesc = isDoctor ? `Dr. ${await userName(doctorId)}` : ptName;
     await sendNotification(
       laboratory_id,
       'lab_request_assigned',
       'New Lab Test Request',
-      `Dr. ${drName} has requested lab tests for patient ${ptName}. Please process and upload the report.`,
+      `${senderDesc} has requested lab tests for patient ${ptName}. Please process and upload the report.`,
       { lab_request_id: request.id }
     );
+
+    // If patient sent the request, notify doctor as well
+    if (isPatient && doctorId) {
+      await sendNotification(
+        doctorId,
+        'lab_request_sent',
+        'Patient Sent Lab Request',
+        `${ptName} has forwarded your prescribed lab tests to ${lName}.`,
+        { lab_request_id: request.id }
+      );
+    }
 
     res.status(201).json(request);
   } catch (err) { next(err); }

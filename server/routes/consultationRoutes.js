@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const path   = require('path');
 const multer = require('multer');
-const { create, update, getAll, getOne, updateStatus, getPatientHistory, remove } = require('../controllers/consultationController');
+const { create, update, updateByPatient, getAll, getOne, updateStatus, getPatientHistory, remove } = require('../controllers/consultationController');
 const { protect, authorize } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
@@ -26,7 +26,8 @@ router.get('/patient/:patientId/history', protect, authorize('doctor', 'admin'),
 router.get('/',        protect, authorize('patient', 'doctor', 'pharmacist'), getAll);
 router.get('/:id',     protect, authorize('patient', 'doctor', 'pharmacist'), getOne);
 router.post('/',       protect, authorize('patient', 'doctor'), upload.single('prescription'), create);
-router.put('/:id',          protect, authorize('doctor'), upload.single('prescription'), update);
+router.put('/:id',          protect, authorize('doctor'),  upload.single('prescription'), update);
+router.put('/:id/patient',  protect, authorize('patient'), updateByPatient);
 router.patch('/:id/status', protect, authorize('pharmacist'), updateStatus);
 router.delete('/:id',       protect, authorize('patient', 'doctor'), remove);
 

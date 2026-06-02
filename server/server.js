@@ -39,7 +39,10 @@ app.use('/api/medicines',     require('./routes/medicineRoutes'));
 app.use('/api/suppliers',     require('./routes/supplierRoutes'));
 app.use('/api/orders',        require('./routes/orderRoutes'));
 app.use('/api/sales',         require('./routes/saleRoutes'));
-app.use('/api/inventory',     require('./routes/inventoryRoutes'));
+app.use('/api/inventory',       require('./routes/inventoryRoutes'));
+app.use('/api/patient-reports',   require('./routes/patientReportRoutes'));
+app.use('/api/access-requests',     require('./routes/accessRequestRoutes'));
+app.use('/api/lab-view-requests',   require('./routes/labViewRequestRoutes'));
 
 app.get('/api/health', (req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })

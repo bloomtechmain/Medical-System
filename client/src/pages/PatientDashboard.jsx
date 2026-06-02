@@ -1,9 +1,16 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
+import {
+  Stethoscope, HeartPulse, CheckCircle2, FlaskConical, Pill, UserRound,
+  ArrowUpRight, Download, Calendar, MapPin, Building2, ChevronDown,
+  Thermometer, Microscope, Package, Clock,
+} from 'lucide-react';
 import { authApi, consultationApi, labApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/helpers';
+import MiniCalendar from '../components/common/MiniCalendar';
 
 // ── PDF report ──────────────────────────────────────────────────
 function downloadHealthReport(me, profile, consultations) {
@@ -133,7 +140,7 @@ function downloadHealthReport(me, profile, consultations) {
 
 // ── Small helpers ───────────────────────────────────────────────
 function SectionTitle({ children }) {
-  return <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{children}</h2>;
+  return <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{children}</h2>;
 }
 
 const STATUS_META = {
@@ -152,22 +159,30 @@ function StatusBadge({ status }) {
   );
 }
 
+const STAT_THEMES = {
+  teal:   { grad:'from-teal-400 to-teal-600',     glow:'shadow-teal-200/60'   },
+  blue:   { grad:'from-blue-400 to-blue-600',     glow:'shadow-blue-200/60'   },
+  purple: { grad:'from-violet-400 to-purple-600', glow:'shadow-violet-200/60' },
+  green:  { grad:'from-emerald-400 to-green-600', glow:'shadow-emerald-200/60'},
+  yellow: { grad:'from-amber-400 to-orange-500',  glow:'shadow-amber-200/60'  },
+  cyan:   { grad:'from-cyan-400 to-sky-600',      glow:'shadow-cyan-200/60'   },
+  red:    { grad:'from-rose-400 to-red-600',      glow:'shadow-rose-200/60'   },
+};
+
 function StatCard({ icon, label, value, sub, color }) {
-  const rings = {
-    teal:   'border-teal-100   bg-teal-50',
-    blue:   'border-blue-100   bg-blue-50',
-    purple: 'border-purple-100 bg-purple-50',
-    green:  'border-green-100  bg-green-50',
-    red:    'border-red-100    bg-red-50',
-    yellow: 'border-yellow-100 bg-yellow-50',
-    cyan:   'border-cyan-100   bg-cyan-50',
-  }[color] || 'border-gray-100 bg-gray-50';
+  const t = STAT_THEMES[color] || STAT_THEMES.teal;
   return (
-    <div className={`rounded-xl border p-4 ${rings}`}>
-      <span className="text-2xl">{icon}</span>
-      <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5 font-medium">{label}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    <div className="ios-stat-tile relative overflow-hidden">
+      {/* Decorative bg circle */}
+      <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${t.grad} opacity-10`} />
+      {/* Icon tile */}
+      <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${t.grad} flex items-center justify-center mb-3 shadow-lg ${t.glow} relative`}>
+        <span className="text-white [&>svg]:stroke-2">{icon}</span>
+      </div>
+      {/* Number */}
+      <p className="text-[32px] font-bold text-gray-900 tracking-tight leading-none relative">{value}</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 relative">{label}</p>
+      {sub && <p className="text-[11px] text-gray-400 mt-0.5 relative">{sub}</p>}
     </div>
   );
 }
@@ -222,6 +237,204 @@ function TimelineItem({ icon, title, subtitle, date, color, last }) {
         <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
         {subtitle && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{subtitle}</p>}
         <p className="text-xs text-gray-400 mt-0.5">{date}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── iOS palette set (same as PatientConsultations) ───────────────────────────
+const DASH_PALETTES = [
+  { grad:'from-violet-500 to-purple-700',   step:'bg-violet-500',  line:'bg-violet-300',  light:'bg-violet-50',  accent:'text-violet-600', badge:'bg-violet-100 text-violet-700'  },
+  { grad:'from-blue-500 to-indigo-700',      step:'bg-blue-500',    line:'bg-blue-300',    light:'bg-blue-50',    accent:'text-blue-600',   badge:'bg-blue-100 text-blue-700'      },
+  { grad:'from-teal-500 to-emerald-700',     step:'bg-teal-500',    line:'bg-teal-300',    light:'bg-teal-50',    accent:'text-teal-600',   badge:'bg-teal-100 text-teal-700'      },
+  { grad:'from-rose-500 to-pink-700',        step:'bg-rose-500',    line:'bg-rose-300',    light:'bg-rose-50',    accent:'text-rose-600',   badge:'bg-rose-100 text-rose-700'      },
+  { grad:'from-amber-500 to-orange-600',     step:'bg-amber-500',   line:'bg-amber-300',   light:'bg-amber-50',   accent:'text-amber-600',  badge:'bg-amber-100 text-amber-700'    },
+  { grad:'from-cyan-500 to-sky-700',         step:'bg-cyan-500',    line:'bg-cyan-300',    light:'bg-cyan-50',    accent:'text-cyan-600',   badge:'bg-cyan-100 text-cyan-700'      },
+];
+
+// ── Doctor Consultation Tiles (dashboard section) ────────────────────────────
+function DashboardDoctorTiles({ consultations }) {
+  const [expandedId, setExpandedId] = useState(null);
+
+  const doctorGroups = useMemo(() => {
+    const groups = {};
+    consultations.forEach(c => {
+      const key = c.doctor_display_name || c.doctor_name || 'Self-Recorded';
+      if (!groups[key]) groups[key] = { doctorKey:key, isSystemDoctor:!!c.doctor_display_name, hospital:'', hasActive:false, consultations:[] };
+      groups[key].consultations.push(c);
+      if (c.hospital_clinic) groups[key].hospital = c.hospital_clinic;
+      if (c.status === 'active') groups[key].hasActive = true;
+    });
+    return Object.values(groups).sort((a,b) => {
+      if (a.hasActive !== b.hasActive) return a.hasActive ? -1 : 1;
+      return new Date(b.consultations[0]?.visit_date||0) - new Date(a.consultations[0]?.visit_date||0);
+    });
+  }, [consultations]);
+
+  if (doctorGroups.length === 0) return null;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <SectionTitle>Consultations by Doctor</SectionTitle>
+        <Link to="/patient/consultations"
+          className="flex items-center gap-1 text-xs font-bold text-primary-600 hover:text-primary-700 transition-colors">
+          View all &amp; manage
+          <ArrowUpRight size={12} strokeWidth={2.5} />
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {doctorGroups.map((group, idx) => {
+          const pal     = DASH_PALETTES[idx % DASH_PALETTES.length];
+          const initial = group.doctorKey.replace(/^Dr\.?\s*/i,'').charAt(0).toUpperCase();
+
+          return (
+            <div key={group.doctorKey} className="ios-tile">
+
+              {/* Gradient header */}
+              <div className={`relative bg-gradient-to-br ${pal.grad} px-4 pt-4 pb-10 overflow-hidden`}>
+                <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center text-white font-bold text-base shadow-md">
+                    {initial}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-bold text-sm leading-snug">
+                      {group.doctorKey === 'Self-Recorded' ? 'Self-Recorded' : `Dr. ${group.doctorKey}`}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {group.hospital && (
+                        <span className="flex items-center gap-1 text-white/70 text-[11px]">
+                          <Building2 size={9} strokeWidth={2} />{group.hospital}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 text-white/70 text-[11px]">
+                        <Calendar size={9} strokeWidth={2} />
+                        {group.consultations.length} visit{group.consultations.length !== 1 ? 's' : ''}
+                      </span>
+                      {group.hasActive && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-400/30 text-amber-100 border border-amber-200/30 px-2 py-0.5 rounded-full">
+                          <span className="w-1 h-1 bg-amber-300 rounded-full animate-pulse" />Active
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Consultations body — sits below gradient with overlap */}
+              <div className="bg-slate-50/60 -mt-6 pt-7 px-3 pb-3 rounded-b-3xl space-y-2">
+                {group.consultations.map(c => {
+                  const isOpen = expandedId === c.id;
+                  const meds   = c.medicines || [];
+                  const wfSteps = [
+                    { done:!!c.sick_description,     Icon:Thermometer,   label:'Symptom'   },
+                    { done:!!c.diagnosis,             Icon:Stethoscope,   label:'Diagnosed' },
+                    { done:!!c.treatment_description, Icon:Microscope,    label:'Treated'   },
+                    { done: c.status !== 'active',
+                      Icon: c.status==='completed' ? CheckCircle2 : c.status==='dispensed' ? Package : Clock,
+                      label: c.status==='completed' ? 'Resolved' : c.status==='dispensed' ? 'Dispensed' : 'Ongoing' },
+                  ];
+
+                  return (
+                    <div key={c.id} className={`rounded-2xl border bg-white overflow-hidden shadow-sm transition-all duration-200 ${
+                      c.status==='active' ? 'border-amber-200' : c.status==='completed' ? 'border-emerald-100' : 'border-gray-100'
+                    }`}>
+                      <button type="button" className="w-full text-left px-3.5 pt-3 pb-2"
+                        onClick={() => setExpandedId(isOpen ? null : c.id)}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-bold text-gray-900 leading-snug">
+                            {c.diagnosis || c.sick_description || 'Medical Visit'}
+                          </p>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {meds.length > 0 && (
+                              <span className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-lg ${pal.badge}`}>
+                                <Pill size={9} strokeWidth={2.5} />{meds.length}
+                              </span>
+                            )}
+                            <ChevronDown size={13} strokeWidth={2} className={`text-gray-400 transition-transform duration-200 ${isOpen?'rotate-180':''}`} />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                            <Calendar size={10} strokeWidth={2} />
+                            {formatDate(c.visit_date)}
+                          </span>
+                        </div>
+
+                        {/* Compact workflow steps */}
+                        <div className="flex items-start pt-2.5">
+                          {wfSteps.map((s, i) => (
+                            <div key={i} className="flex items-start flex-1">
+                              <div className="flex flex-col items-center flex-1">
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center ring-2 ${
+                                  s.done ? `bg-gradient-to-br ${pal.grad} ring-transparent shadow-sm` : 'bg-white ring-gray-200'
+                                }`}>
+                                  <s.Icon size={12} strokeWidth={2} className={s.done ? 'text-white' : 'text-gray-300'} />
+                                </div>
+                                <p className={`text-[9px] font-semibold mt-1 text-center leading-tight ${s.done ? pal.accent : 'text-gray-300'}`}>
+                                  {s.label}
+                                </p>
+                              </div>
+                              {i < wfSteps.length - 1 && (
+                                <div className={`step-connector mt-3.5 mx-0.5 ${s.done && wfSteps[i+1].done ? pal.line : ''}`}
+                                  style={{ background: s.done && wfSteps[i+1].done ? undefined : '#e5e7eb' }} />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+
+                      {/* Expanded details */}
+                      {isOpen && (
+                        <div className="px-3.5 pb-3 pt-2 border-t border-gray-50 space-y-2">
+                          {c.sick_description && (
+                            <div className="bg-orange-50 rounded-xl px-3 py-2 border border-orange-100">
+                              <p className="text-[9px] font-bold text-orange-500 uppercase tracking-wider mb-0.5">Symptoms</p>
+                              <p className="text-xs text-gray-700">{c.sick_description}</p>
+                            </div>
+                          )}
+                          {c.diagnosis && (
+                            <div className={`${pal.light} rounded-xl px-3 py-2 border border-gray-100`}>
+                              <p className={`text-[9px] font-bold uppercase tracking-wider mb-0.5 ${pal.accent}`}>Diagnosis</p>
+                              <p className="text-xs text-gray-700">{c.diagnosis}</p>
+                            </div>
+                          )}
+                          {c.treatment_description && (
+                            <div className="bg-teal-50 rounded-xl px-3 py-2 border border-teal-100">
+                              <p className="text-[9px] font-bold text-teal-600 uppercase tracking-wider mb-0.5">Treatment</p>
+                              <p className="text-xs text-gray-700">{c.treatment_description}</p>
+                            </div>
+                          )}
+                          {meds.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {meds.map((m,i) => (
+                                <span key={i} className="flex items-center gap-1 bg-white border border-gray-100 rounded-xl px-2 py-1 text-[11px] shadow-sm">
+                                  <div className={`w-4 h-4 rounded-lg ${pal.step} flex items-center justify-center`}>
+                                    <Pill size={8} strokeWidth={2.5} className="text-white" />
+                                  </div>
+                                  <span className="font-semibold text-gray-800">{m.medicine_name}</span>
+                                  {m.dosage && <span className="text-gray-400">· {m.dosage}</span>}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {!c.doctor_id && (
+                            <Link to="/patient/consultations"
+                              className={`inline-flex items-center gap-1 text-xs font-semibold ${pal.accent} hover:opacity-70 transition-opacity`}>
+                              Edit this consultation <ArrowUpRight size={11} strokeWidth={2.5} />
+                            </Link>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -334,55 +547,114 @@ export default function PatientDashboard() {
     finally { setTimeout(() => setDownloading(false), 800); }
   };
 
+  // Visit dates for calendar highlighting
+  const visitDates = useMemo(() =>
+    consultations.map(c => c.visit_date?.split('T')[0]).filter(Boolean),
+    [consultations]
+  );
+
   return (
     <div className="space-y-6">
 
-      {/* ── Welcome banner ── */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-6 text-white">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-primary-200 text-sm">Good day,</p>
-            <h1 className="text-2xl font-bold mt-0.5">{firstName}</h1>
-            <div className="flex flex-wrap items-center gap-3 mt-3">
-              {profile?.blood_type && (
-                <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                  🩸 {profile.blood_type}
-                </span>
-              )}
-              {age && (
-                <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                  🎂 {age} years
-                </span>
-              )}
-              {profile?.gender && (
-                <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full capitalize">
-                  {profile.gender === 'male' ? '♂' : profile.gender === 'female' ? '♀' : '⚧'} {profile.gender}
-                </span>
-              )}
-              {activeConsultations.length > 0 && (
-                <span className="bg-yellow-400/30 text-yellow-100 text-xs font-bold px-2.5 py-1 rounded-full">
-                  ⚕️ {activeConsultations.length} active treatment{activeConsultations.length !== 1 ? 's' : ''}
-                </span>
-              )}
+      {/* ── Top row: Welcome banner + Calendar ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+
+        {/* Welcome card (takes 2/3) */}
+        <div className="lg:col-span-2 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-6 text-white relative overflow-hidden">
+          {/* decorative circles */}
+          <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full" />
+          <div className="absolute -bottom-12 -right-4 w-56 h-56 bg-white/5 rounded-full" />
+
+          <div className="relative flex flex-col h-full justify-between gap-4">
+            <div>
+              <p className="text-primary-200 text-sm font-medium">Welcome back,</p>
+              <h1 className="text-3xl font-bold mt-1 leading-tight">{firstName}</h1>
+              <div className="flex flex-wrap items-center gap-2 mt-4">
+                {profile?.blood_type && (
+                  <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
+                    🩸 {profile.blood_type}
+                  </span>
+                )}
+                {age && (
+                  <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
+                    🎂 {age} yrs
+                  </span>
+                )}
+                {profile?.gender && (
+                  <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20 capitalize">
+                    {profile.gender === 'male' ? '♂' : profile.gender === 'female' ? '♀' : '⚧'} {profile.gender}
+                  </span>
+                )}
+                {activeConsultations.length > 0 && (
+                  <span className="bg-yellow-400/25 text-yellow-100 text-xs font-semibold px-3 py-1.5 rounded-full border border-yellow-300/30">
+                    ⚕️ {activeConsultations.length} active treatment{activeConsultations.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-end justify-between flex-wrap gap-3">
+              {/* Quick stats row */}
+              <div className="flex gap-5">
+                <div>
+                  <p className="text-2xl font-bold">{consultations.length}</p>
+                  <p className="text-xs text-primary-300 mt-0.5">Total Visits</p>
+                </div>
+                <div className="w-px bg-white/10" />
+                <div>
+                  <p className="text-2xl font-bold">{doctors.length}</p>
+                  <p className="text-xs text-primary-300 mt-0.5">Doctors</p>
+                </div>
+                <div className="w-px bg-white/10" />
+                <div>
+                  <p className="text-2xl font-bold">{labReports.length}</p>
+                  <p className="text-xs text-primary-300 mt-0.5">Lab Tests</p>
+                </div>
+              </div>
+
+              {/* Download button */}
+              <button
+                onClick={handleDownload}
+                disabled={downloading || !me}
+                className="shrink-0 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-2 border border-white/20 backdrop-blur-sm"
+              >
+                {downloading
+                  ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  : <Download size={15} strokeWidth={2} />
+                }
+                {downloading ? 'Generating…' : 'Health Report'}
+              </button>
             </div>
           </div>
-          <button
-            onClick={handleDownload}
-            disabled={downloading || !me}
-            className="shrink-0 bg-white text-primary-700 hover:bg-primary-50 disabled:opacity-60 text-sm font-semibold px-4 py-2 rounded-xl transition-colors flex items-center gap-2 shadow-sm"
-          >
-            {downloading ? (
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-            ) : (
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-              </svg>
-            )}
-            {downloading ? 'Generating...' : 'Download Report'}
-          </button>
+        </div>
+
+        {/* Calendar (takes 1/3) — hidden on mobile to save space */}
+        <div className="hidden lg:block lg:col-span-1">
+          <MiniCalendar highlightDates={visitDates} title="My Schedule" />
+          {/* Today's upcoming quick view */}
+          {activeConsultations.length > 0 && (
+            <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Active Treatments</p>
+              <div className="space-y-2">
+                {activeConsultations.slice(0, 3).map(c => (
+                  <div key={c.id} className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-sm shrink-0 font-bold text-yellow-700">
+                      {(c.doctor_display_name || c.doctor_name || 'S').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate">
+                        {c.diagnosis || c.sick_description || 'Treatment'}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {c.doctor_display_name ? `Dr. ${c.doctor_display_name}` : c.doctor_name ? `Dr. ${c.doctor_name}` : 'Self-recorded'}
+                      </p>
+                    </div>
+                    <span className="w-2 h-2 bg-yellow-400 rounded-full shrink-0 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -440,14 +712,19 @@ export default function PatientDashboard() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard icon="🏥" label="Doctor Visits"      value={consultations.length}                                        color="teal"   />
-        <StatCard icon="⚕️" label="Active Treatments"  value={activeConsultations.length}                                  color="yellow" />
-        <StatCard icon="✅" label="Resolved"           value={diseases.filter(d => d.status === 'completed').length}       color="green"  />
-        <StatCard icon="🔬" label="Lab Tests"          value={labReports.length}                                           color="cyan"   />
-        <StatCard icon="💊" label="Medicines Taken"    value={medCount.length}                                             color="purple" />
-        <StatCard icon="🩺" label="Doctors Seen"       value={doctors.length}                                              color="blue"   />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
+        <StatCard icon={<Stethoscope size={14} />}   label="Doctor Visits"     value={consultations.length}                                  color="teal"   />
+        <StatCard icon={<HeartPulse size={14} />}    label="Active Treatments" value={activeConsultations.length}                            color="yellow" />
+        <StatCard icon={<CheckCircle2 size={14} />}  label="Resolved"          value={diseases.filter(d => d.status === 'completed').length} color="green"  />
+        <StatCard icon={<FlaskConical size={14} />}  label="Lab Tests"         value={labReports.length}                                     color="cyan"   />
+        <StatCard icon={<Pill size={14} />}          label="Medicines"         value={medCount.length}                                       color="purple" />
+        <StatCard icon={<UserRound size={14} />}     label="Doctors Seen"      value={doctors.length}                                        color="blue"   />
       </div>
+
+      {/* ── Doctor consultation tiles ── */}
+      {consultations.length > 0 && (
+        <DashboardDoctorTiles consultations={consultations} />
+      )}
 
       {/* ── Active medications ── */}
       {activeMeds.length > 0 && (
