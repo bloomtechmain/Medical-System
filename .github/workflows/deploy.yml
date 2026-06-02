@@ -1,0 +1,173 @@
+# =============================================================================
+# CD Pipeline — Core Health Medical System  (PERN Stack)
+# Triggers: only after a successful CI run on main
+# =============================================================================
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]           # must match the `name:` field in ci.yml
+    branches: [main]
+    types: [completed]          # fires when CI finishes (pass or fail)
+
+# Prevent two deploy jobs running at the same time
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false     # never cancel an in-flight deployment
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Deploy to VPS / EC2 / DigitalOcean via SSH
+  #
+  # Required GitHub Secrets  (Settings → Secrets and Variables → Actions):
+  #
+  #   SECRET            EXAMPLE VALUE
+  #   ──────────────    ──────────────────────────────────────────────────
+  #   SSH_HOST          203.0.113.42          (your server IP)
+  #   SSH_USERNAME      ubuntu                (or root / your user)
+  #   SSH_KEY           -----BEGIN OPENSSH PRIVATE KEY-----...
+  #   SSH_PORT          22                    (optional, default 22)
+  #   DEPLOY_PATH       /var/www/medical-system
+  #   VITE_API_URL      https://api.yourapp.com/api
+  #   JWT_SECRET        <32-char random string>
+  #   DB_HOST           localhost             (or managed DB host)
+  #   DB_PORT           5432
+  #   DB_NAME           corehealth
+  #   DB_USER           postgres
+  #   DB_PASSWORD       <strong password>
+  #   CLIENT_URL        https://yourapp.com
+  #   PORT              5000
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: "Deploy to Production Server"
+    runs-on: ubuntu-latest
+
+    # Only run if CI passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      # ── 1. Download the pre-built React app from CI ──────────────────────────
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: client-dist
+          path: client-dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Upload built client/dist to the server ────────────────────────────
+      - name: Copy frontend build to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key:      ${{ secrets.SSH_KEY }}
+          port:     ${{ secrets.SSH_PORT || 22 }}
+          source:   "client-dist/*"
+          target:   "${{ secrets.DEPLOY_PATH }}/client/dist"
+          strip_components: 1
+
+      # ── 3. SSH into server and deploy ────────────────────────────────────────
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key:      ${{ secrets.SSH_KEY }}
+          port:     ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e   # abort on any error
+
+            echo "──────────────────────────────────────"
+            echo "  Core Health — Deployment Started"
+            echo "  $(date)"
+            echo "──────────────────────────────────────"
+
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            # ── Pull latest code ──────────────────────────────────────────────
+            echo "▶  Pulling latest code..."
+            git pull origin main
+
+            # ── Write server .env from GitHub Secrets ────────────────────────
+            echo "▶  Writing .env..."
+            cat > server/.env << 'ENVEOF'
+            PORT=${{ secrets.PORT }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            CLIENT_URL=${{ secrets.CLIENT_URL }}
+            NODE_ENV=production
+            ENVEOF
+
+            # ── Install server dependencies ───────────────────────────────────
+            echo "▶  Installing server dependencies..."
+            cd server
+            npm ci --omit=dev
+            cd ..
+
+            # ── Run any pending database migrations ───────────────────────────
+            echo "▶  Running DB migrations..."
+            cd server
+            node config/migrateAccessRequests.js   2>/dev/null || true
+            node config/migrateLabViewRequests.js  2>/dev/null || true
+            node config/migratePatientReports.js   2>/dev/null || true
+            cd ..
+
+            # ── Restart backend with PM2 ──────────────────────────────────────
+            echo "▶  Restarting backend (PM2)..."
+            pm2 describe medical-api > /dev/null 2>&1 \
+              && pm2 restart medical-api \
+              || pm2 start server/server.js --name medical-api \
+                    --env production \
+                    --log /var/log/medical-api.log \
+                    --max-memory-restart 512M
+            pm2 save
+
+            # ── Reload Nginx to serve the new client/dist ─────────────────────
+            echo "▶  Reloading Nginx..."
+            sudo nginx -t && sudo systemctl reload nginx
+
+            echo ""
+            echo "✅ Deployment complete — $(date)"
+            echo "   API  : ${{ secrets.VITE_API_URL }}"
+            echo "   App  : ${{ secrets.CLIENT_URL }}"
+
+      # ── 4. Smoke-test: verify the API is responding ──────────────────────────
+      - name: Health check
+        run: |
+          sleep 5   # give PM2 a moment to start
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.VITE_API_URL }}/health" || echo "000")
+          if [ "$STATUS" -eq 200 ]; then
+            echo "✅ API health check passed (HTTP $STATUS)"
+          else
+            echo "❌ API health check failed (HTTP $STATUS)"
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # (Alternative) Deploy to Render
+  # Use this job instead of the SSH job above if you host on Render.
+  #
+  # Required secret:
+  #   RENDER_DEPLOY_HOOK   — copy from Render → Settings → Deploy Hook
+  #
+  # Uncomment to use:
+  # ---------------------------------------------------------------------------
+  # deploy-render:
+  #   name: "Deploy to Render"
+  #   runs-on: ubuntu-latest
+  #   if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  #   steps:
+  #     - name: Trigger Render deploy
+  #       run: |
+  #         curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+  #           -H "Content-Type: application/json" \
+  #           --fail
+  #       env:
+  #         RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
