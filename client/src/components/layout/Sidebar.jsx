@@ -1,134 +1,227 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { accessRequestApi, labViewRequestApi } from '../../services/api';
+import {
+  LayoutDashboard, Stethoscope, Activity, FileText, FlaskConical,
+  FolderOpen, Users, Pill, Truck, ShoppingCart, Receipt, BarChart2,
+  ClipboardList, Microscope, LogOut, Settings, UserSearch, ShieldCheck,
+} from 'lucide-react';
 
+// ── 4-dot logo mark ───────────────────────────────────────────────────────────
+function LogoMark() {
+  return (
+    <svg viewBox="0 0 28 28" fill="none" className="w-6 h-6 shrink-0">
+      <circle cx="9"  cy="9"  r="5.5" fill="white" opacity="0.95" />
+      <circle cx="19" cy="9"  r="5.5" fill="white" opacity="0.95" />
+      <circle cx="9"  cy="19" r="5.5" fill="white" opacity="0.95" />
+      <circle cx="19" cy="19" r="5.5" fill="white" opacity="0.95" />
+    </svg>
+  );
+}
+
+// ── Nav definitions ───────────────────────────────────────────────────────────
 const NAV = {
   admin: [
-    { to: '/admin',           label: 'Dashboard',  icon: '🏠', exact: true },
-    { to: '/admin/medicines', label: 'Medicines',  icon: '💊' },
-    { to: '/admin/suppliers', label: 'Suppliers',  icon: '🏭' },
-    { to: '/admin/orders',    label: 'Orders',     icon: '📦' },
-    { to: '/admin/sales',     label: 'Sales',      icon: '🧾' },
-    { to: '/admin/inventory', label: 'Inventory',  icon: '📊' },
-    { to: '/admin/users',     label: 'Users',      icon: '👥' },
+    { to: '/admin',           label: 'Dashboard',       icon: LayoutDashboard, exact: true },
+    { to: '/admin/medicines', label: 'Medicines',        icon: Pill },
+    { to: '/admin/suppliers', label: 'Suppliers',        icon: Truck },
+    { to: '/admin/orders',    label: 'Orders',           icon: ShoppingCart },
+    { to: '/admin/sales',     label: 'Sales',            icon: Receipt },
+    { to: '/admin/inventory', label: 'Inventory',        icon: BarChart2 },
+    { to: '/admin/users',     label: 'Users',            icon: Users },
   ],
   pharmacist: [
-    { to: '/pharmacist',                label: 'Dashboard',     icon: '🏠', exact: true },
-    { to: '/pharmacist/consultations',  label: 'Prescriptions', icon: '📋' },
-    { to: '/pharmacist/medicines',      label: 'Medicines',     icon: '💊' },
-    { to: '/pharmacist/suppliers',      label: 'Suppliers',     icon: '🏭' },
-    { to: '/pharmacist/orders',         label: 'Orders',        icon: '📦' },
-    { to: '/pharmacist/sales',          label: 'Sales',         icon: '🧾' },
-    { to: '/pharmacist/inventory',      label: 'Inventory',     icon: '📊' },
+    { to: '/pharmacist',               label: 'Dashboard',     icon: LayoutDashboard, exact: true },
+    { to: '/pharmacist/consultations', label: 'Prescriptions', icon: ClipboardList },
+    { to: '/pharmacist/medicines',     label: 'Medicines',     icon: Pill },
+    { to: '/pharmacist/suppliers',     label: 'Suppliers',     icon: Truck },
+    { to: '/pharmacist/orders',        label: 'Orders',        icon: ShoppingCart },
+    { to: '/pharmacist/sales',         label: 'Sales',         icon: Receipt },
+    { to: '/pharmacist/inventory',     label: 'Inventory',     icon: BarChart2 },
   ],
   doctor: [
-    { to: '/doctor',               label: 'Dashboard',      icon: '🏠', exact: true },
-    { to: '/doctor/consultations', label: 'Consultations',  icon: '🩺' },
-    { to: '/doctor/lab-requests',  label: 'Lab Requests',   icon: '🔬' },
-    { to: '/doctor/history',       label: 'Patient History', icon: '📋' },
+    { to: '/doctor',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
+    { to: '/doctor/consultations', label: 'Consultations',   icon: Stethoscope },
+    { to: '/doctor/lab-requests',  label: 'Lab Reports',     icon: Microscope },
+    { to: '/doctor/patients',      label: 'Patients',        icon: UserSearch,  badge: 'patients'  },
+    { to: '/doctor/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
   ],
   patient: [
-    { to: '/patient',              label: 'Dashboard',          icon: '🏠', exact: true },
-    { to: '/patient/medical-flow', label: 'Medical Flow',       icon: '🧬' },
-    { to: '/patient/medical',      label: 'Medical Description', icon: '🩺' },
-    { to: '/patient/lab-reports',  label: 'Lab Reports',         icon: '🔬' },
+    { to: '/patient',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
+    { to: '/patient/consultations', label: 'Consultations',   icon: Stethoscope },
+    { to: '/patient/medical-flow',  label: 'Medical Flow',    icon: Activity },
+    { to: '/patient/my-reports',    label: 'My Reports',      icon: FolderOpen },
+    { to: '/patient/requests',      label: 'Doctor Requests', icon: ShieldCheck, badge: 'ptRequests' },
   ],
   laboratory: [
-    { to: '/laboratory',         label: 'Dashboard',   icon: '🏠', exact: true },
-    { to: '/laboratory/reports', label: 'Lab Reports', icon: '📋' },
+    { to: '/laboratory',         label: 'Dashboard',   icon: LayoutDashboard, exact: true },
+    { to: '/laboratory/reports', label: 'Lab Reports', icon: ClipboardList },
   ],
-};
-
-const BRAND_COLORS = {
-  admin:      'text-red-600',
-  pharmacist: 'text-purple-600',
-  doctor:     'text-primary-600',
-  patient:    'text-blue-600',
-  laboratory: 'text-cyan-600',
 };
 
 const ROLE_LABELS = {
-  admin:      '🛡️ Admin Panel',
-  pharmacist: '💊 Pharmacist',
-  doctor:     '🩺 Doctor Portal',
-  patient:    '🏥 Patient Portal',
-  laboratory: '🔬 Laboratory Portal',
+  admin: 'Admin Panel', pharmacist: 'Pharmacist',
+  doctor: 'Doctor Portal', patient: 'Patient Portal', laboratory: 'Laboratory',
 };
 
+const ROLE_DOTS = {
+  admin: 'bg-red-400', pharmacist: 'bg-purple-400',
+  doctor: 'bg-primary-400', patient: 'bg-blue-400', laboratory: 'bg-cyan-400',
+};
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-
   const items = NAV[user?.role] || [];
 
-  const linkClass = ({ isActive }) =>
-    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-      isActive
-        ? 'bg-primary-600 text-white shadow-sm'
-        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-    }`;
+  // Fetch pending access-request counts for badge indicators
+  const { data: accessRequests = [] } = useQuery({
+    queryKey: ['access-requests'],
+    queryFn:  accessRequestApi.getAll,
+    enabled:  !!user && (user.role === 'patient' || user.role === 'doctor'),
+  });
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  // Fetch lab view requests for badge counts (patient pending + doctor new responses)
+  const { data: labViewRequests = [] } = useQuery({
+    queryKey: ['lab-view-requests'],
+    queryFn:  labViewRequestApi.getAll,
+    enabled:  !!user && (user.role === 'patient' || user.role === 'doctor'),
+  });
+
+  const accessPending    = accessRequests.filter(r => r.status === 'pending').length;
+  // Patient: lab view requests waiting for their response
+  const labViewPending   = labViewRequests.filter(r => r.status === 'pending').length;
+  const getBadge = (badgeKey) => {
+    if (badgeKey === 'ptRequests') return accessPending + labViewPending;
+    if (badgeKey === 'drRequests') return accessPending;
+    return 0;
   };
 
   return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0">
-      {/* Logo */}
-      <div className="h-16 flex items-center gap-3 px-5 border-b border-gray-200">
-        <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center shrink-0">
-          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-          </svg>
+    /*
+     * fixed + group + overflow-hidden:
+     *   • starts at 70 px, expands to 240 px on hover
+     *   • transition-[width] gives the smooth slide
+     *   • children use group-hover: to fade their labels in
+     *   • z-40 keeps it above main content while expanded
+     */
+    <aside className="
+      hidden md:flex
+      fixed left-0 top-0 h-screen z-40
+      w-[70px] hover:w-60
+      bg-[#111827]
+      flex-col
+      overflow-hidden
+      transition-[width] duration-300 ease-in-out
+      group
+      shadow-xl shadow-black/20
+    ">
+
+      {/* ── Logo ── */}
+      <div className="h-16 flex items-center gap-3 px-[13px] border-b border-white/5 shrink-0">
+        {/* icon always visible */}
+        <div className="w-10 h-10 flex items-center justify-center shrink-0">
+          <LogoMark />
         </div>
-        <div>
-          <p className="text-sm font-bold text-gray-900 leading-none">Core Health</p>
-          <p className="text-xs text-gray-400">by BloomTech</p>
+        {/* text fades in on expand */}
+        <div className="overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
+          <p className="text-sm font-bold text-white whitespace-nowrap leading-tight">Core Health</p>
+          <p className="text-[11px] text-slate-500 whitespace-nowrap">by BloomTech</p>
         </div>
       </div>
 
-      {/* Role badge */}
-      <div className="px-5 py-3 border-b border-gray-100">
-        <span className={`text-xs font-semibold ${BRAND_COLORS[user?.role]}`}>
-          {ROLE_LABELS[user?.role] || ''}
-        </span>
+      {/* ── Role badge ── */}
+      <div className="px-3 pt-3 pb-1 shrink-0">
+        <div className="flex items-center gap-3 bg-white/5 rounded-xl px-2.5 py-2 overflow-hidden">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${ROLE_DOTS[user?.role] || 'bg-gray-400'}`} />
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
+            {ROLE_LABELS[user?.role] || ''}
+          </span>
+        </div>
       </div>
 
-      {/* Nav items */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.exact}
-            className={linkClass}
-          >
-            <span>{item.icon}</span>
-            {item.label}
-          </NavLink>
-        ))}
+      {/* ── Nav items ── */}
+      <nav className="flex-1 flex flex-col gap-0.5 py-3 px-3 overflow-y-auto overflow-x-hidden">
+        {items.map(item => {
+          const Icon      = item.icon;
+          const badgeCount = item.badge ? getBadge(item.badge) : 0;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.exact}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-2xl transition-all duration-150 overflow-hidden
+                 ${isActive
+                   ? 'bg-[#3B82F6] text-white shadow-lg shadow-blue-900/40'
+                   : 'text-slate-500 hover:bg-white/[0.08] hover:text-slate-100'
+                 }`
+              }
+            >
+              {/* Icon slot with optional badge dot */}
+              <span className="w-11 h-11 flex items-center justify-center shrink-0 relative">
+                <Icon size={19} strokeWidth={1.8} />
+                {badgeCount > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full ring-1 ring-slate-900" />
+                )}
+              </span>
+
+              {/* Label + badge count — fade in on hover */}
+              <span className="flex-1 flex items-center justify-between whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 pr-2">
+                <span className="text-sm font-medium">{item.label}</span>
+                {badgeCount > 0 && (
+                  <span className="text-[10px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                    {badgeCount}
+                  </span>
+                )}
+              </span>
+            </NavLink>
+          );
+        })}
       </nav>
 
-      {/* User info + logout */}
-      <div className="p-3 border-t border-gray-200">
-        <div className="flex items-center gap-2 px-2 py-2">
-          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold shrink-0">
-            {user?.name?.charAt(0)?.toUpperCase()}
+      {/* ── Bottom section ── */}
+      <div className="flex flex-col gap-0.5 pb-4 px-3 border-t border-white/5 pt-3 shrink-0 overflow-hidden">
+
+        {/* Settings */}
+        <button className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-white/[0.08] hover:text-slate-200 transition-all duration-150 overflow-hidden">
+          <span className="w-11 h-11 flex items-center justify-center shrink-0">
+            <Settings size={19} strokeWidth={1.8} />
+          </span>
+          <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 pr-2">
+            Settings
+          </span>
+        </button>
+
+        {/* User row */}
+        <div className="flex items-center gap-3 rounded-2xl px-0 py-1.5 hover:bg-white/[0.05] transition-colors overflow-hidden">
+          {/* Avatar — sits inside the 44px icon slot */}
+          <div className="w-11 h-11 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold text-white select-none">
+              {user?.name?.charAt(0)?.toUpperCase()}
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-gray-800 truncate">{user?.name}</p>
-            <p className="text-xs text-gray-400 capitalize">{user?.role}</p>
+          {/* User info — fades in */}
+          <div className="flex-1 min-w-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 overflow-hidden">
+            <p className="text-xs font-semibold text-white truncate whitespace-nowrap leading-tight">{user?.name}</p>
+            <p className="text-[11px] text-slate-500 capitalize whitespace-nowrap">{user?.role}</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded"
-            title="Sign out"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
         </div>
+
+        {/* Logout */}
+        <button
+          onClick={() => { logout(); navigate('/login'); }}
+          className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-150 overflow-hidden"
+        >
+          <span className="w-11 h-11 flex items-center justify-center shrink-0">
+            <LogOut size={19} strokeWidth={1.8} />
+          </span>
+          <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 pr-2">
+            Sign out
+          </span>
+        </button>
       </div>
     </aside>
   );

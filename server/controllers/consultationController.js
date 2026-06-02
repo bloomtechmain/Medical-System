@@ -24,6 +24,7 @@ const create = async (req, res, next) => {
       visit_date, doctor_name, hospital_clinic,
       sick_description, diagnosis, treatment_description,
       manual_medicines, patient_id, assigned_pharmacist_id,
+      lab_tests_requested,
     } = req.body;
 
     const isDoctor  = req.user.role === 'doctor';
@@ -48,8 +49,8 @@ const create = async (req, res, next) => {
         (patient_id, doctor_id, assigned_pharmacist_id,
          visit_date, doctor_name, hospital_clinic,
          sick_description, diagnosis, treatment_description,
-         prescription_file, ocr_text, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active')
+         prescription_file, ocr_text, lab_tests_requested, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active')
       RETURNING *
     `, [
       patientId,
@@ -63,6 +64,7 @@ const create = async (req, res, next) => {
       treatment_description || null,
       prescriptionFile,
       ocrText || null,
+      lab_tests_requested || null,
     ]);
 
     let manualMeds = [];
@@ -102,11 +104,12 @@ const create = async (req, res, next) => {
       const ptName = ptRow.rows[0]?.name || 'A patient';
 
       // Notify patient
+      const labNote = lab_tests_requested ? ' Lab tests have been requested — please send them to a laboratory from your consultations page.' : '';
       await sendNotification(
         patientId,
         'new_consultation',
         'New Consultation Added',
-        `Dr. ${drName} has created a consultation for you on ${new Date(visit_date).toDateString()}.`,
+        `Dr. ${drName} has created a consultation for you on ${new Date(visit_date).toDateString()}.${labNote}`,
         { consultation_id: consultation.id }
       );
 
@@ -143,6 +146,20 @@ const getAll = async (req, res, next) => {
 
     if (role === 'patient') {
       query  = `SELECT c.*,
+                  COALESCE(
+                    JSON_AGG(
+                      JSON_BUILD_OBJECT(
+                        'id',            m.id,
+                        'medicine_name', m.medicine_name,
+                        'dosage',        m.dosage,
+                        'frequency',     m.frequency,
+                        'duration',      m.duration,
+                        'notes',         m.notes,
+                        'source',        m.source
+                      ) ORDER BY m.id
+                    ) FILTER (WHERE m.id IS NOT NULL),
+                    '[]'
+                  ) AS medicines,
                   COUNT(m.id)::int AS medicine_count,
                   u.name AS doctor_display_name,
                   ph.name AS pharmacist_name,
@@ -461,4 +478,72 @@ const remove = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { create, update, getAll, getOne, updateStatus, getPatientHistory, remove };
+const updateByPatient = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { rows: existing } = await pool.query(
+      'SELECT * FROM medical_consultations WHERE id=$1 AND patient_id=$2 AND doctor_id IS NULL',
+      [req.params.id, req.user.id]
+    );
+    if (!existing.length)
+      return res.status(404).json({ message: 'Consultation not found or cannot be edited' });
+
+    const {
+      visit_date, doctor_name, hospital_clinic,
+      sick_description, diagnosis, treatment_description, medicines,
+    } = req.body;
+
+    await client.query('BEGIN');
+
+    const { rows: [consultation] } = await client.query(`
+      UPDATE medical_consultations SET
+        visit_date=$1, doctor_name=$2, hospital_clinic=$3,
+        sick_description=$4, diagnosis=$5, treatment_description=$6,
+        updated_at=NOW()
+      WHERE id=$7
+      RETURNING *
+    `, [
+      visit_date,
+      doctor_name           || null,
+      hospital_clinic       || null,
+      sick_description      || null,
+      diagnosis             || null,
+      treatment_description || null,
+      req.params.id,
+    ]);
+
+    await client.query('DELETE FROM consultation_medicines WHERE consultation_id=$1', [req.params.id]);
+
+    const medList = Array.isArray(medicines) ? medicines : [];
+    for (const med of medList.filter(m => m.medicine_name?.trim())) {
+      await client.query(`
+        INSERT INTO consultation_medicines
+          (consultation_id, medicine_name, dosage, frequency, duration, notes, source)
+        VALUES ($1,$2,$3,$4,$5,$6,'manual')
+      `, [
+        req.params.id,
+        med.medicine_name.trim(),
+        med.dosage    || null,
+        med.frequency || null,
+        med.duration  || null,
+        med.notes     || null,
+      ]);
+    }
+
+    await client.query('COMMIT');
+
+    const { rows: updatedMeds } = await pool.query(
+      'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY id',
+      [req.params.id]
+    );
+
+    res.json({ ...consultation, medicines: updatedMeds });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { create, update, updateByPatient, getAll, getOne, updateStatus, getPatientHistory, remove };

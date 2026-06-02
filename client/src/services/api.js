@@ -73,6 +73,7 @@ export const consultationApi = {
   update:          (id, formData) => api.put(`/consultations/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   updateStatus:    (id, status) => api.patch(`/consultations/${id}/status`, { status }),
   remove:          (id)         => api.delete(`/consultations/${id}`),
+  updateByPatient: (id, data)   => api.put(`/consultations/${id}/patient`, data),
   getPatientHistory: (patientId) => api.get(`/consultations/patient/${patientId}/history`),
 };
 
@@ -83,6 +84,29 @@ export const labApi = {
   uploadReport: (id, formData) => api.patch(`/lab-requests/${id}/report`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   updateStatus: (id, status)   => api.patch(`/lab-requests/${id}/status`, { status }),
   remove:       (id)       => api.delete(`/lab-requests/${id}`),
+};
+
+export const labViewRequestApi = {
+  getAll:       ()                        => api.get('/lab-view-requests'),
+  create:       (data)                    => api.post('/lab-view-requests', data),
+  respond:      (id, status)              => api.patch(`/lab-view-requests/${id}/respond`, { status }),
+  getFileUrl:   (id)                      => `${api.defaults.baseURL || '/api'}/lab-view-requests/${id}/file`,
+};
+
+export const accessRequestApi = {
+  getAll:          ()                   => api.get('/access-requests'),
+  create:          (data)               => api.post('/access-requests', data),
+  respond:         (id, status)         => api.patch(`/access-requests/${id}/respond`, { status }),
+  searchPatients:  (q)                  => api.get('/access-requests/search-patients', { params: { q } }),
+  getPatientView:  (patientId)          => api.get(`/access-requests/patient/${patientId}/view`),
+};
+
+export const patientReportApi = {
+  getAll:  ()         => api.get('/patient-reports'),
+  getOne:  (id)       => api.get(`/patient-reports/${id}`),
+  create:  (formData) => api.post('/patient-reports', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  remove:  (id)       => api.delete(`/patient-reports/${id}`),
+  getFile: (id)       => api.get(`/patient-reports/${id}/file`, { responseType: 'blob' }),
 };
 
 export const notificationApi = {
