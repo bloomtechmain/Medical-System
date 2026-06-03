@@ -10,7 +10,8 @@ interface SocketContextValue {
 
 const SocketContext = createContext<SocketContextValue | null>(null);
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+// VITE_API_URL is the bare backend origin (no /api suffix) in production.
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:5000';
 
 const NOTIF_ICONS: Record<string, string> = {
   new_consultation:       '🩺',

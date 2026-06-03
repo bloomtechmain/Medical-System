@@ -22,6 +22,7 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await authApi.login(data) as unknown as { user: User; token: string };
+      if (!res?.user?.role) throw new Error('Invalid response from server');
       login(res.user, res.token);
       const routes: Record<string, string> = { admin: '/admin', doctor: '/doctor', pharmacist: '/pharmacist', patient: '/patient', laboratory: '/laboratory' };
       navigate(routes[res.user.role] || '/');
