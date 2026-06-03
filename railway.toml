@@ -1,9 +1,9 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm run install:all && npm run build:all"
+buildCommand = "npm install --prefix server --include=dev && npm install --prefix client --include=dev && npm run build --prefix server && npm run build --prefix client"
 
 [deploy]
-startCommand = "npm start"
+startCommand = "npm start --prefix server"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
