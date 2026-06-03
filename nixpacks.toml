@@ -1,6 +1,8 @@
-# System packages required by the 'canvas' native addon (used by Tesseract OCR)
+# Explicitly include Node.js — custom nixPkgs replaces nixpacks' defaults,
+# so nodejs must be listed here or npm will not be found.
 [phases.setup]
 nixPkgs = [
+  "nodejs_20",
   "cairo",
   "pango",
   "libpng",
