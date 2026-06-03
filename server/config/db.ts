@@ -15,19 +15,30 @@ const pool = new Pool(
       }
 );
 
-const connectDB = async (): Promise<void> => {
-  try {
-    const client = await pool.connect();
-    // Idempotent schema additions
-    await client.query(`
-      ALTER TABLE medical_consultations
-        ADD COLUMN IF NOT EXISTS lab_tests_requested TEXT;
-    `);
-    console.log(`PostgreSQL connected: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
-    client.release();
-  } catch (err) {
-    console.error('Database connection failed:', (err as Error).message);
-    process.exit(1);
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+const connectDB = async (retries = 8, baseDelay = 3000): Promise<void> => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const client = await pool.connect();
+      await client.query(`
+        ALTER TABLE medical_consultations
+          ADD COLUMN IF NOT EXISTS lab_tests_requested TEXT;
+      `);
+      const target = process.env.DATABASE_URL
+        ? 'Railway PostgreSQL'
+        : `${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`;
+      console.log(`PostgreSQL connected: ${target}`);
+      client.release();
+      return;
+    } catch (err) {
+      console.error(`DB connection attempt ${attempt}/${retries} failed: ${(err as Error).message}`);
+      if (attempt === retries) {
+        console.error('All DB connection attempts exhausted. Exiting.');
+        process.exit(1);
+      }
+      await sleep(baseDelay * attempt);
+    }
   }
 };
 

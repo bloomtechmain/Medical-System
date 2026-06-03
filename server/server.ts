@@ -82,10 +82,10 @@ app.use(errorHandler);
 const PORT = parseInt(process.env.PORT || '5000');
 
 const start = async (): Promise<void> => {
+  // Listen first — Railway health check can reach /api/health while DB connects
+  await new Promise<void>(resolve => server.listen(PORT, resolve));
+  console.log(`Core Health API + Socket.IO running on port ${PORT} [${process.env.NODE_ENV}]`);
   await connectDB();
-  server.listen(PORT, () =>
-    console.log(`Core Health API + Socket.IO running on port ${PORT} [${process.env.NODE_ENV}]`)
-  );
 };
 
 start();
