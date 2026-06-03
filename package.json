@@ -2,14 +2,16 @@
   "name": "pharmacy-management-system",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev",
-    "install:all": "npm install --prefix server && npm install --prefix client",
-    "db:migrate": "cd server && npm run db:migrate",
-    "db:seed": "cd server && npm run db:seed"
+  "engines": {
+    "node": ">=20.0.0"
   },
-  "dependencies": {
-    "claude": "^0.1.1"
+  "scripts": {
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "build:all": "npm run build --prefix server && npm run build --prefix client",
+    "start": "npm start --prefix server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "db:migrate": "npm run db:migrate --prefix server",
+    "db:seed": "npm run db:seed --prefix server"
   }
 }

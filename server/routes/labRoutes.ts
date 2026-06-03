@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import path from 'path';
+import fs from 'fs';
 import multer from 'multer';
 import { protect, authorize } from '../middleware/auth';
 import { create, getAll, getOne, uploadReport, updateStatus, remove } from '../controllers/labController';
@@ -7,8 +8,11 @@ import { Request } from 'express';
 
 const router = Router();
 
+const labReportsDir = path.join(__dirname, '../uploads/lab-reports');
+if (!fs.existsSync(labReportsDir)) fs.mkdirSync(labReportsDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: path.join(__dirname, '../uploads/lab-reports'),
+  destination: labReportsDir,
   filename: (req: Request, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `lab_${req.user?.id || 'u'}_${Date.now()}${ext}`);
