@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import path from 'path';
+import fs from 'fs';
 import multer from 'multer';
 import { create, update, updateByPatient, getAll, getOne, updateStatus, getPatientHistory, remove } from '../controllers/consultationController';
 import { protect, authorize } from '../middleware/auth';
@@ -7,8 +8,11 @@ import { Request } from 'express';
 
 const router = Router();
 
+const prescriptionsDir = path.join(__dirname, '../uploads/prescriptions');
+if (!fs.existsSync(prescriptionsDir)) fs.mkdirSync(prescriptionsDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: path.join(__dirname, '../uploads/prescriptions'),
+  destination: prescriptionsDir,
   filename: (req: Request, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `rx_${req.user?.id || 'u'}_${Date.now()}${ext}`);

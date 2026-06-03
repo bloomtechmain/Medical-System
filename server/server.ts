@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import http from 'http';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -25,6 +26,12 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Ensure upload directories exist (Railway has ephemeral FS)
+['uploads', 'uploads/prescriptions', 'uploads/lab-reports', 'uploads/patient-reports'].forEach(dir => {
+  const p = path.join(__dirname, dir);
+  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+});
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/lab-reports', express.static(path.join(__dirname, 'uploads/lab-reports')));
@@ -62,6 +69,13 @@ app.use('/api/patient-vitals',    patientVitalsRoutes);
 app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 );
+
+// In production the server serves the built React app
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '../../client/dist');
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+}
 
 app.use(errorHandler);
 

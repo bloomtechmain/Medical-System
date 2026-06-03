@@ -10,10 +10,11 @@ interface AuthSocket extends Socket {
 let io: Server;
 
 const ALLOWED_ORIGINS = [
+  process.env.CLIENT_URL,
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
-];
+].filter(Boolean) as string[];
 
 const initSocket = (httpServer: HttpServer): Server => {
   io = new Server(httpServer, {
