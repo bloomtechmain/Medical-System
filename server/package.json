@@ -8,12 +8,12 @@
     "dev": "tsx watch server.ts",
     "build": "tsc",
     "lint": "eslint . --ext .ts --ignore-path .eslintignore",
-    "db:migrate": "tsx config/migrate.ts",
-    "db:seed": "tsx config/seed.ts",
-    "db:migrate:patient-reports": "tsx config/migratePatientReports.ts",
-    "db:migrate:access-requests": "tsx config/migrateAccessRequests.ts",
-    "db:migrate:lab-view-requests": "tsx config/migrateLabViewRequests.ts",
-    "db:migrate:vitals": "tsx config/migrateVitals.ts"
+    "db:migrate": "node dist/config/migrate.js",
+    "db:seed": "node dist/config/seed.js",
+    "db:migrate:patient-reports": "node dist/config/migratePatientReports.js",
+    "db:migrate:access-requests": "node dist/config/migrateAccessRequests.js",
+    "db:migrate:lab-view-requests": "node dist/config/migrateLabViewRequests.js",
+    "db:migrate:vitals": "node dist/config/migrateVitals.js"
   },
   "dependencies": {
     "@types/pdf-parse": "^1.1.5",
