@@ -1,9 +1,13 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "server/Dockerfile"
+# dockerfilePath is intentionally omitted — Railway auto-detects the Dockerfile
+# from each service's Root Directory:
+#   backend service (Root Dir = server/) → server/Dockerfile
+#   frontend service (Root Dir = client/) → client/Dockerfile
 
 [deploy]
-healthcheckPath = "/api/health"
-healthcheckTimeout = 300
+# healthcheckPath is omitted — the shared value "/api/health" caused the
+# frontend (static site) health check to fail. Each service can set its
+# own health check path in the Railway dashboard if needed.
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
