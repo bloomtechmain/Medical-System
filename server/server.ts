@@ -70,14 +70,17 @@ app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 );
 
-// In production: serve the React app if client/dist exists alongside the server
-// (single-service deployment). Skipped silently in separate-service deployments.
-if (process.env.NODE_ENV === 'production') {
-  const clientDist = path.join(__dirname, '../../client/dist');
-  if (fs.existsSync(clientDist)) {
-    app.use(express.static(clientDist));
-    app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
-  }
+// Serve the React app whenever client/dist exists next to the server.
+// Uses process.cwd() (Docker WORKDIR = /app) so the path is correct regardless
+// of where the compiled server.js sits inside the container.
+const clientDist = [
+  path.join(process.cwd(), 'client', 'dist'),       // root Dockerfile: /app → /app/client/dist
+  path.join(__dirname, '../../client', 'dist'),      // root Dockerfile via __dirname fallback
+].find(p => fs.existsSync(path.join(p, 'index.html')));
+
+if (clientDist) {
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
 app.use(errorHandler);
