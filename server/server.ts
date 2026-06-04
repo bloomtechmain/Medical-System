@@ -72,9 +72,10 @@ app.get('/api/health', (_req, res) =>
 
 // Serve the React app — try all candidate paths and use the first that has index.html
 const candidatePaths = [
-  path.join(process.cwd(), 'client', 'dist'),
-  path.join(__dirname, '../../client', 'dist'),
-  path.join(__dirname, '../../../client', 'dist'),
+  path.join(process.cwd(), 'client', 'dist'),       // /app → /app/client/dist
+  path.join(__dirname, '../client', 'dist'),          // /app/dist → /app/client/dist  ← server/Dockerfile
+  path.join(__dirname, '../../client', 'dist'),       // /app/server/dist → /app/client/dist  ← root Dockerfile
+  path.join(__dirname, '../../../client', 'dist'),    // deeper fallback
 ];
 
 console.log('[Static] cwd:', process.cwd());

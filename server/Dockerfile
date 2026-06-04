@@ -1,7 +1,6 @@
 FROM node:20-slim
 
-# System libs for the canvas native addon (Tesseract OCR fallback build).
-# These are skipped automatically if prebuilt binaries are downloaded.
+# Canvas system libs (fallback if prebuilt binaries unavailable for this platform)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2-dev \
     libpango1.0-dev \
@@ -17,20 +16,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Cache layer: install deps before copying full source so this layer
-# is reused when only source files change (not package files).
-COPY package*.json ./
-RUN npm install
+# ── Server ────────────────────────────────────────────────────────────────────
+# Build context is the REPO ROOT (set dockerfilePath in railway.toml).
+# Server source lands at /app/, client source at /app/client/.
+COPY server/package*.json ./
+RUN npm install --include=dev
 
-# Copy all server source (build context is the server/ directory)
-COPY . .
+COPY server/ .
 
-# Compile TypeScript → dist/
 RUN npm run build
 
-# Strip devDependencies from the final image
+# ── Client ────────────────────────────────────────────────────────────────────
+COPY client/package*.json ./client/
+RUN npm install --prefix client --include=dev
+
+COPY client/ ./client/
+
+RUN npm run build --prefix client
+
+# ── Prune server devDeps ──────────────────────────────────────────────────────
 RUN npm prune --omit=dev
 
 EXPOSE 5000
 
+# __dirname = /app/dist  →  client/dist = /app/client/dist
 CMD ["node", "dist/server.js"]
