@@ -25,7 +25,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       visit_date, doctor_name, hospital_clinic,
       sick_description, diagnosis, treatment_description,
       manual_medicines, patient_id, assigned_pharmacist_id,
-      lab_tests_requested,
+      lab_tests_requested, assigned_laboratory_id,
     } = req.body;
 
     const isDoctor  = req.user.role === 'doctor';
@@ -45,6 +45,8 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     await client.query('BEGIN');
 
+    const labId = isDoctor ? (assigned_laboratory_id || null) : null;
+
     const { rows: [consultation] } = await client.query(`
       INSERT INTO medical_consultations
         (patient_id, doctor_id, assigned_pharmacist_id,
@@ -58,10 +60,10 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       doctorId,
       assigned_pharmacist_id || null,
       visit_date,
-      doctor_name   || null,
-      hospital_clinic || null,
-      sick_description || null,
-      diagnosis     || null,
+      doctor_name           || null,
+      hospital_clinic       || null,
+      sick_description      || null,
+      diagnosis             || null,
       treatment_description || null,
       prescriptionFile,
       ocrText || null,
@@ -92,6 +94,18 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       ]);
     }
 
+    // If doctor assigned a lab and provided test details, create lab_request immediately
+    let directLabRequest: any = null;
+    if (isDoctor && labId && lab_tests_requested) {
+      const { rows: [lr] } = await client.query(`
+        INSERT INTO lab_requests
+          (doctor_id, patient_id, laboratory_id, consultation_id, test_description)
+        VALUES ($1,$2,$3,$4,$5)
+        RETURNING *
+      `, [doctorId, patientId, labId, consultation.id, lab_tests_requested]);
+      directLabRequest = lr;
+    }
+
     await client.query('COMMIT');
 
     // ── Notifications ─────────────────────────────────────────────
@@ -103,7 +117,19 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       const drName = drRow.rows[0]?.name || 'Your doctor';
       const ptName = ptRow.rows[0]?.name || 'A patient';
 
-      const labNote = lab_tests_requested ? ' Lab tests have been requested — please send them to a laboratory from your consultations page.' : '';
+      let labNote = '';
+      if (directLabRequest) {
+        const { rows: [labRow] } = await pool.query(
+          `SELECT COALESCE(lp.lab_name, u.name) AS lab_name
+           FROM users u LEFT JOIN laboratory_profiles lp ON lp.user_id = u.id
+           WHERE u.id = $1`, [labId]
+        );
+        const lName = labRow?.lab_name || 'a laboratory';
+        labNote = ` Lab tests have been sent directly to ${lName}.`;
+      } else if (lab_tests_requested) {
+        labNote = ' Lab tests have been requested — please send them to a laboratory from your consultations page.';
+      }
+
       await sendNotification(
         patientId,
         'new_consultation',
@@ -119,6 +145,16 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
           'New Prescription Assigned',
           `Dr. ${drName} has assigned a prescription for patient ${ptName}. Please dispense the medicines.`,
           { consultation_id: consultation.id }
+        );
+      }
+
+      if (directLabRequest) {
+        await sendNotification(
+          labId!,
+          'lab_request_created',
+          'New Lab Request',
+          `Dr. ${drName} has sent a lab request for patient ${ptName}. Please process the tests.`,
+          { lab_request_id: directLabRequest.id, consultation_id: consultation.id }
         );
       }
     }
@@ -159,16 +195,18 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
                     '[]'
                   ) AS medicines,
                   COUNT(m.id)::int AS medicine_count,
-                  u.name AS doctor_display_name,
+                  u.name  AS doctor_display_name,
                   ph.name AS pharmacist_name,
-                  pp.pharmacy_name
+                  pp.pharmacy_name,
+                  pp.pharmacy_address,
+                  pp.phone AS pharmacy_phone
                 FROM medical_consultations c
                 LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
-                LEFT JOIN users u  ON u.id  = c.doctor_id
-                LEFT JOIN users ph ON ph.id = c.assigned_pharmacist_id
+                LEFT JOIN users u   ON u.id  = c.doctor_id
+                LEFT JOIN users ph  ON ph.id = c.assigned_pharmacist_id
                 LEFT JOIN pharmacist_profiles pp ON pp.user_id = c.assigned_pharmacist_id
                 WHERE c.patient_id = $1
-                GROUP BY c.id, u.name, ph.name, pp.pharmacy_name
+                GROUP BY c.id, u.name, ph.name, pp.pharmacy_name, pp.pharmacy_address, pp.phone
                 ORDER BY c.visit_date DESC, c.created_at DESC`;
       params = [id];
     } else if (role === 'doctor') {
@@ -534,4 +572,52 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
   }
 };
 
-export { create, update, updateByPatient, getAll, getOne, updateStatus, getPatientHistory, remove };
+const assignPharmacy = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { pharmacist_id } = req.body;
+    const patientId = req.user.id;
+
+    if (!pharmacist_id) { res.status(400).json({ message: 'pharmacist_id is required' }); return; }
+
+    const { rows: existing } = await pool.query(
+      'SELECT * FROM medical_consultations WHERE id=$1 AND patient_id=$2',
+      [req.params.id, patientId]
+    );
+    if (!existing.length) { res.status(404).json({ message: 'Consultation not found' }); return; }
+
+    const c = existing[0];
+    if (c.assigned_pharmacist_id) {
+      res.status(409).json({ message: 'A pharmacy is already assigned to this consultation' }); return;
+    }
+    if (c.status !== 'active') {
+      res.status(400).json({ message: 'Cannot reassign pharmacy after dispensing' }); return;
+    }
+
+    const { rows: phRows } = await pool.query(
+      "SELECT u.id, u.name, pp.pharmacy_name FROM users u LEFT JOIN pharmacist_profiles pp ON pp.user_id = u.id WHERE u.id=$1 AND u.role='pharmacist' AND u.is_active=TRUE",
+      [pharmacist_id]
+    );
+    if (!phRows.length) { res.status(404).json({ message: 'Pharmacist not found' }); return; }
+
+    const { rows: [updated] } = await pool.query(
+      'UPDATE medical_consultations SET assigned_pharmacist_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+      [pharmacist_id, req.params.id]
+    );
+
+    const ptRow  = await pool.query('SELECT name FROM users WHERE id=$1', [patientId]);
+    const ptName = ptRow.rows[0]?.name || 'A patient';
+    const phName = phRows[0].pharmacy_name || phRows[0].name || 'Pharmacy';
+
+    await sendNotification(
+      pharmacist_id,
+      'consultation_assigned',
+      'New Prescription Forwarded',
+      `Patient ${ptName} has forwarded a prescription to ${phName}. Please prepare the medicines.`,
+      { consultation_id: c.id }
+    );
+
+    res.json(updated);
+  } catch (err) { next(err); }
+};
+
+export { create, update, updateByPatient, getAll, getOne, updateStatus, getPatientHistory, remove, assignPharmacy };

@@ -109,8 +109,9 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
     sick_description: '', diagnosis: '', treatment_description: '',
     lab_tests_requested: '',
   });
-  const [selectedPatient, setSelectedPatient]       = useState<any>(null);
-  const [selectedPharmacist, setSelectedPharmacist] = useState<any>(null);
+  const [selectedPatient,     setSelectedPatient]     = useState<any>(null);
+  const [selectedPharmacist,  setSelectedPharmacist]  = useState<any>(null);
+  const [selectedLaboratory,  setSelectedLaboratory]  = useState<any>(null);
   const [medicines, setMedicines] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -137,16 +138,23 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
     try {
       const fd = new FormData();
       fd.append('patient_id', selectedPatient.id);
-      if (selectedPharmacist) fd.append('assigned_pharmacist_id', selectedPharmacist.id);
+      if (selectedPharmacist)  fd.append('assigned_pharmacist_id',  selectedPharmacist.id);
+      if (selectedLaboratory)  fd.append('assigned_laboratory_id',  selectedLaboratory.id);
       Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
       fd.append('manual_medicines', JSON.stringify(medicines.filter(m => m.medicine_name.trim())));
       if (file) fd.append('prescription', file);
 
       const result = await consultationApi.create(fd);
       const found = result.ocr_medicines_found || 0;
+
+      const labMsg = selectedLaboratory && fields.lab_tests_requested
+        ? ` · Lab sent to ${selectedLaboratory.lab_name || selectedLaboratory.name}`
+        : fields.lab_tests_requested ? ' · Patient to choose lab' : '';
+
       toast.success(
         `Consultation saved${found > 0 ? ` · ${found} medicine${found > 1 ? 's' : ''} auto-extracted` : ''}` +
         (selectedPharmacist ? ' · Pharmacy notified' : '') +
+        labMsg +
         ' · Patient notified'
       );
       onSaved();
@@ -164,7 +172,7 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-bold text-gray-900">New Patient Consultation</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Add prescription, assign pharmacy, and notify patient</p>
+            <p className="text-xs text-gray-400 mt-0.5">Add prescription, assign pharmacy &amp; laboratory, and notify patient</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -242,16 +250,49 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
           <div>
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
               Lab Test Request
-              <span className="ml-2 text-cyan-600 normal-case font-normal">— patient will choose and send to a laboratory</span>
+              <span className="ml-2 text-gray-400 normal-case font-normal">— optional, assign a lab or let the patient choose</span>
             </h3>
-            <textarea rows={2} className="input resize-none"
+            <textarea rows={2} className="input resize-none mb-3"
               placeholder="e.g. Full Blood Count, Liver Function Tests, Blood Glucose, HbA1c…"
               value={fields.lab_tests_requested}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => sf('lab_tests_requested', e.target.value)} />
+
             {fields.lab_tests_requested && (
-              <p className="text-xs text-cyan-600 mt-1.5">
-                ✓ Patient will be notified to send these tests to a laboratory of their choice.
-              </p>
+              <div className="mt-1 mb-3">
+                <SearchDropdown
+                  label="Assign Laboratory (optional)"
+                  placeholder="Search by lab name or address to send directly…"
+                  fetchFn={userApi.searchLaboratories}
+                  queryKey="search-labs-new"
+                  selected={selectedLaboratory}
+                  onSelect={setSelectedLaboratory}
+                  renderItem={(l: any) => (
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">🔬</span>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{l.lab_name || l.name}</p>
+                        <p className="text-xs text-gray-400">{l.address || l.email}</p>
+                        {l.lab_type && <p className="text-xs text-cyan-600 capitalize">{l.lab_type.replace('_', ' ')}</p>}
+                      </div>
+                    </div>
+                  )}
+                  renderSelected={(l: any) => (
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🔬</span>
+                      <div>
+                        <p className="text-sm font-semibold text-cyan-700">{l.lab_name || l.name}</p>
+                        <p className="text-xs text-gray-500">{l.address || l.email}</p>
+                      </div>
+                    </div>
+                  )}
+                />
+                <p className="text-xs mt-2">
+                  {selectedLaboratory
+                    ? <span className="text-cyan-600">✓ Lab request will be sent directly to <strong>{selectedLaboratory.lab_name || selectedLaboratory.name}</strong> when you save.</span>
+                    : <span className="text-gray-400">No lab assigned — patient will choose a laboratory from their consultations page.</span>
+                  }
+                </p>
+              </div>
             )}
           </div>
 

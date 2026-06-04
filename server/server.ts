@@ -70,17 +70,31 @@ app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 );
 
-// Serve the React app whenever client/dist exists next to the server.
-// Uses process.cwd() (Docker WORKDIR = /app) so the path is correct regardless
-// of where the compiled server.js sits inside the container.
-const clientDist = [
-  path.join(process.cwd(), 'client', 'dist'),       // root Dockerfile: /app → /app/client/dist
-  path.join(__dirname, '../../client', 'dist'),      // root Dockerfile via __dirname fallback
-].find(p => fs.existsSync(path.join(p, 'index.html')));
+// Serve the React app — try all candidate paths and use the first that has index.html
+const candidatePaths = [
+  path.join(process.cwd(), 'client', 'dist'),
+  path.join(__dirname, '../../client', 'dist'),
+  path.join(__dirname, '../../../client', 'dist'),
+];
+
+console.log('[Static] cwd:', process.cwd());
+console.log('[Static] __dirname:', __dirname);
+candidatePaths.forEach(p => console.log(`[Static] ${p} → exists:`, fs.existsSync(path.join(p, 'index.html'))));
+
+const clientDist = candidatePaths.find(p => fs.existsSync(path.join(p, 'index.html')));
 
 if (clientDist) {
+  console.log('[Static] Serving React app from:', clientDist);
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+} else {
+  console.warn('[Static] client/dist not found — frontend will not be served');
+  app.get('/', (_req, res) => res.status(200).send(`
+    <h2>Core Health API is running</h2>
+    <p>Frontend build not found. Searched:</p>
+    <ul>${candidatePaths.map(p => `<li>${p}</li>`).join('')}</ul>
+    <p>Try: <a href="/api/health">/api/health</a></p>
+  `));
 }
 
 app.use(errorHandler);

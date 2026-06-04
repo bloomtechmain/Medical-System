@@ -74,14 +74,15 @@ export const inventoryApi = {
 };
 
 export const consultationApi = {
-  getAll:          (): Promise<any>                          => api.get('/consultations'),
-  getOne:          (id: number): Promise<any>                => api.get(`/consultations/${id}`),
-  create:          (formData: FormData): Promise<any>        => api.post('/consultations', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  update:          (id: number, formData: FormData): Promise<any> => api.put(`/consultations/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  updateStatus:    (id: number, status: string): Promise<any> => api.patch(`/consultations/${id}/status`, { status }),
-  remove:          (id: number): Promise<any>                => api.delete(`/consultations/${id}`),
-  updateByPatient: (id: number, data: unknown): Promise<any> => api.put(`/consultations/${id}/patient`, data),
-  getPatientHistory: (patientId: number): Promise<any>       => api.get(`/consultations/patient/${patientId}/history`),
+  getAll:           (): Promise<any>                               => api.get('/consultations'),
+  getOne:           (id: number): Promise<any>                     => api.get(`/consultations/${id}`),
+  create:           (formData: FormData): Promise<any>             => api.post('/consultations', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:           (id: number, formData: FormData): Promise<any> => api.put(`/consultations/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  updateStatus:     (id: number, status: string): Promise<any>     => api.patch(`/consultations/${id}/status`, { status }),
+  remove:           (id: number): Promise<any>                     => api.delete(`/consultations/${id}`),
+  updateByPatient:  (id: number, data: unknown): Promise<any>      => api.put(`/consultations/${id}/patient`, data),
+  getPatientHistory:(patientId: number): Promise<any>              => api.get(`/consultations/patient/${patientId}/history`),
+  assignPharmacy:   (id: number, pharmacist_id: number): Promise<any> => api.patch(`/consultations/${id}/assign-pharmacy`, { pharmacist_id }),
 };
 
 export const labApi = {

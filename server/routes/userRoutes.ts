@@ -5,9 +5,9 @@ import { protect, authorize } from '../middleware/auth';
 const router = Router();
 
 router.get('/stats',        protect, authorize('admin'),            getStats);
-router.get('/patients',     protect, authorize('admin', 'doctor'),  searchPatients);
-router.get('/pharmacists',  protect, authorize('admin', 'doctor'),  searchPharmacists);
-router.get('/laboratories', protect, authorize('admin', 'doctor'),  searchLaboratories);
+router.get('/patients',     protect, authorize('admin', 'doctor'),                    searchPatients);
+router.get('/pharmacists',  protect, authorize('admin', 'doctor', 'patient'),          searchPharmacists);
+router.get('/laboratories', protect, authorize('admin', 'doctor', 'patient'),          searchLaboratories);
 
 router.use(protect, authorize('admin'));
 router.get('/', getAll);
