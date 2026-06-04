@@ -250,7 +250,7 @@ CREATE TABLE IF NOT EXISTS data_access_requests (
   doctor_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   patient_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   access_type  VARCHAR(50) NOT NULL
-               CHECK (access_type IN ('lab_reports','medical_history','personal_reports','contact_info')),
+               CHECK (access_type IN ('lab_reports','medical_history','personal_reports','contact_info','vitals')),
   reason       TEXT,
   status       VARCHAR(20) NOT NULL DEFAULT 'pending'
                CHECK (status IN ('pending','accepted','declined')),

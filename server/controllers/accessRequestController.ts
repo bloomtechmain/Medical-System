@@ -1,3 +1,5 @@
+import path from 'path';
+import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/db';
 import { sendNotification } from '../utils/notify';
@@ -195,31 +197,29 @@ const getPatientView = async (req: Request, res: Response, next: NextFunction): 
     if (access.medical_history?.status === 'accepted') {
       const { rows } = await pool.query(`
         SELECT c.*,
+          u.name AS doctor_name,
           COALESCE(
             JSON_AGG(
               JSON_BUILD_OBJECT(
+                'id',            m.id,
                 'medicine_name', m.medicine_name,
                 'dosage',        m.dosage,
                 'frequency',     m.frequency,
-                'duration',      m.duration
+                'duration',      m.duration,
+                'notes',         m.notes,
+                'source',        m.source
               ) ORDER BY m.id
             ) FILTER (WHERE m.id IS NOT NULL),
             '[]'
           ) AS medicines
         FROM medical_consultations c
         LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
+        LEFT JOIN users u ON u.id = c.doctor_id
         WHERE c.patient_id = $1
-        GROUP BY c.id
+        GROUP BY c.id, u.name
         ORDER BY c.visit_date DESC
       `, [patientId]);
       data.consultations = rows;
-
-      // Also include patient vitals under medical_history access
-      const { rows: vitals } = await pool.query(
-        `SELECT * FROM patient_vitals WHERE patient_id = $1 ORDER BY recorded_at DESC LIMIT 1`,
-        [patientId]
-      );
-      data.vitals = vitals[0] || null;
     }
 
     if (access.personal_reports?.status === 'accepted') {
@@ -228,6 +228,14 @@ const getPatientView = async (req: Request, res: Response, next: NextFunction): 
         [patientId]
       );
       data.personal_reports = rows;
+    }
+
+    if (access.vitals?.status === 'accepted') {
+      const { rows: vitalsHistory } = await pool.query(
+        `SELECT * FROM patient_vitals WHERE patient_id=$1 ORDER BY recorded_at DESC`,
+        [patientId]
+      );
+      data.vitals_history = vitalsHistory;
     }
 
     res.json({ patient, access, active_meds: activeMeds, data });
@@ -251,4 +259,47 @@ const searchPatients = async (req: Request, res: Response, next: NextFunction): 
   } catch (err) { next(err); }
 };
 
-export { createRequest, respond, getAll, getPatientView, searchPatients };
+const serveLabReportFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const doctorId     = req.user.id;
+    const patientId    = parseInt(req.params.patientId, 10);
+    const labRequestId = parseInt(req.params.labRequestId, 10);
+
+    const { rows: accessRows } = await pool.query(
+      `SELECT id FROM data_access_requests
+       WHERE doctor_id=$1 AND patient_id=$2 AND access_type='lab_reports' AND status='accepted'
+       LIMIT 1`,
+      [doctorId, patientId]
+    );
+    if (!accessRows.length) {
+      res.status(403).json({ message: 'Lab reports access not granted for this patient.' }); return;
+    }
+
+    const { rows: labRows } = await pool.query(
+      `SELECT * FROM lab_requests WHERE id=$1 AND patient_id=$2`,
+      [labRequestId, patientId]
+    );
+    if (!labRows.length) {
+      res.status(404).json({ message: 'Lab report not found.' }); return;
+    }
+
+    const labReq = labRows[0];
+    if (!labReq.report_file) {
+      res.status(404).json({ message: 'Report file not yet available.' }); return;
+    }
+
+    const filePath = path.join(__dirname, '../uploads/lab-reports', labReq.report_file);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ message: 'File not found on disk.' }); return;
+    }
+
+    res.setHeader('Content-Type', labReq.report_mimetype || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="lab-report-${labRequestId}${path.extname(labReq.report_file)}"`
+    );
+    res.sendFile(filePath);
+  } catch (err) { next(err); }
+};
+
+export { createRequest, respond, getAll, getPatientView, searchPatients, serveLabReportFile };
