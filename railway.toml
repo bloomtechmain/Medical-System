@@ -1,8 +1,9 @@
 [build]
 builder = "dockerfile"
-# No dockerfilePath — each service finds its own Dockerfile from its Root Directory:
-#   server service  (Root Dir = server/) → server/Dockerfile
-#   client service  (Root Dir = client/) → client/Dockerfile
+dockerfilePath = "server/Dockerfile"
+# Root Directory must be blank (repo root) in Railway service settings.
+# Build context = entire repo so server/Dockerfile can access both
+# server/ and client/ source files.
 
 [deploy]
 # healthcheckPath is omitted — the shared value "/api/health" caused the
