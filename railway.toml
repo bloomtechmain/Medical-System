@@ -1,9 +1,9 @@
 [build]
 builder = "dockerfile"
-# dockerfilePath is intentionally omitted — Railway auto-detects the Dockerfile
-# from each service's Root Directory:
-#   backend service (Root Dir = server/) → server/Dockerfile
-#   frontend service (Root Dir = client/) → client/Dockerfile
+dockerfilePath = "server/Dockerfile"
+# Root Directory must be blank (repo root) in Railway service settings.
+# Build context = entire repo so server/Dockerfile can access both
+# server/ and client/ source files.
 
 [deploy]
 # healthcheckPath is omitted — the shared value "/api/health" caused the
