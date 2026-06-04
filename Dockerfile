@@ -19,13 +19,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # ── Server dependencies ──────────────────────────────────────────────────────
-# Copy package files first so this layer is cached unless deps change.
+# --include=dev overrides NODE_ENV=production so build tools (tsc, tsx)
+# are always installed even when Railway sets NODE_ENV=production at build time.
 COPY server/package*.json ./server/
-RUN npm install --prefix server
+RUN npm install --prefix server --include=dev
 
 # ── Client dependencies ───────────────────────────────────────────────────────
 COPY client/package*.json ./client/
-RUN npm install --prefix client
+RUN npm install --prefix client --include=dev
 
 # ── Source files ─────────────────────────────────────────────────────────────
 COPY server/ ./server/
