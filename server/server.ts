@@ -70,32 +70,17 @@ app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 );
 
-// Serve the React app — try all candidate paths and use the first that has index.html
-const candidatePaths = [
-  path.join(process.cwd(), 'client', 'dist'),       // /app → /app/client/dist
-  path.join(__dirname, '../client', 'dist'),          // /app/dist → /app/client/dist  ← server/Dockerfile
-  path.join(__dirname, '../../client', 'dist'),       // /app/server/dist → /app/client/dist  ← root Dockerfile
-  path.join(__dirname, '../../../client', 'dist'),    // deeper fallback
-];
-
-console.log('[Static] cwd:', process.cwd());
-console.log('[Static] __dirname:', __dirname);
-candidatePaths.forEach(p => console.log(`[Static] ${p} → exists:`, fs.existsSync(path.join(p, 'index.html'))));
-
-const clientDist = candidatePaths.find(p => fs.existsSync(path.join(p, 'index.html')));
+// Optional: serve built React app when client/dist exists (single-service mode).
+// In two-service mode this block is a no-op.
+const clientDist = [
+  path.join(process.cwd(), 'client', 'dist'),
+  path.join(__dirname, '../client', 'dist'),
+  path.join(__dirname, '../../client', 'dist'),
+].find(p => fs.existsSync(path.join(p, 'index.html')));
 
 if (clientDist) {
-  console.log('[Static] Serving React app from:', clientDist);
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
-} else {
-  console.warn('[Static] client/dist not found — frontend will not be served');
-  app.get('/', (_req, res) => res.status(200).send(`
-    <h2>Core Health API is running</h2>
-    <p>Frontend build not found. Searched:</p>
-    <ul>${candidatePaths.map(p => `<li>${p}</li>`).join('')}</ul>
-    <p>Try: <a href="/api/health">/api/health</a></p>
-  `));
 }
 
 app.use(errorHandler);

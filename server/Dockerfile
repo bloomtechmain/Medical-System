@@ -16,28 +16,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# ── Server ────────────────────────────────────────────────────────────────────
-# Build context is the REPO ROOT (set dockerfilePath in railway.toml).
-# Server source lands at /app/, client source at /app/client/.
-COPY server/package*.json ./
+# Build context is server/ (Root Dir = server/ in Railway).
+# --include=dev installs typescript, tsx etc. even when NODE_ENV=production.
+COPY package*.json ./
 RUN npm install --include=dev
 
-COPY server/ .
+COPY . .
 
+# Compile TypeScript → dist/
 RUN npm run build
 
-# ── Client ────────────────────────────────────────────────────────────────────
-COPY client/package*.json ./client/
-RUN npm install --prefix client --include=dev
-
-COPY client/ ./client/
-
-RUN npm run build --prefix client
-
-# ── Prune server devDeps ──────────────────────────────────────────────────────
+# Strip dev dependencies from the final image
 RUN npm prune --omit=dev
 
 EXPOSE 5000
 
-# __dirname = /app/dist  →  client/dist = /app/client/dist
 CMD ["node", "dist/server.js"]
