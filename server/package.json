@@ -13,7 +13,8 @@
     "db:migrate:patient-reports": "node dist/config/migratePatientReports.js",
     "db:migrate:access-requests": "node dist/config/migrateAccessRequests.js",
     "db:migrate:lab-view-requests": "node dist/config/migrateLabViewRequests.js",
-    "db:migrate:vitals": "node dist/config/migrateVitals.js"
+    "db:migrate:vitals": "node dist/config/migrateVitals.js",
+    "db:migrate:vitals-access": "node dist/config/migrateVitalsAccessType.js"
   },
   "dependencies": {
     "@types/pdf-parse": "^1.1.5",

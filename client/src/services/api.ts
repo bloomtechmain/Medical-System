@@ -101,11 +101,12 @@ export const labViewRequestApi = {
 };
 
 export const accessRequestApi = {
-  getAll:         (): Promise<any>                           => api.get('/access-requests'),
-  create:         (data: unknown): Promise<any>              => api.post('/access-requests', data),
-  respond:        (id: number, status: string): Promise<any> => api.patch(`/access-requests/${id}/respond`, { status }),
-  searchPatients: (q: string): Promise<any>                  => api.get('/access-requests/search-patients', { params: { q } }),
-  getPatientView: (patientId: number): Promise<any>          => api.get(`/access-requests/patient/${patientId}/view`),
+  getAll:           (): Promise<any>                                              => api.get('/access-requests'),
+  create:           (data: unknown): Promise<any>                                 => api.post('/access-requests', data),
+  respond:          (id: number, status: string): Promise<any>                    => api.patch(`/access-requests/${id}/respond`, { status }),
+  searchPatients:   (q: string): Promise<any>                                     => api.get('/access-requests/search-patients', { params: { q } }),
+  getPatientView:   (patientId: number): Promise<any>                             => api.get(`/access-requests/patient/${patientId}/view`),
+  getLabReportFile: (patientId: number, labRequestId: number): Promise<Blob>      => api.get(`/access-requests/patient/${patientId}/lab-report/${labRequestId}/file`, { responseType: 'blob' }),
 };
 
 export const patientReportApi = {
