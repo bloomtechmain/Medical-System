@@ -1,0 +1,9 @@
+[build]
+builder = "dockerfile"
+# Dockerfile is auto-detected from the Root Directory (/server) set in Railway dashboard.
+# Root Directory restricts the build context to server/ only — no client/ access needed.
+
+[deploy]
+healthcheckPath = "/api/health"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

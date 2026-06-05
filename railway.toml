@@ -1,13 +1,10 @@
-[build]
-builder = "dockerfile"
-dockerfilePath = "server/Dockerfile"
-# Root Directory must be blank (repo root) in Railway service settings.
-# Build context = entire repo so server/Dockerfile can access both
-# server/ and client/ source files.
-
-[deploy]
-# healthcheckPath is omitted — the shared value "/api/health" caused the
-# frontend (static site) health check to fail. Each service can set its
-# own health check path in the Railway dashboard if needed.
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 10
+# Two-service Railway deployment (BloomRx / production)
+#
+# This root-level file is NOT read by either service because each service has
+# its own Root Directory set in the Railway dashboard:
+#   server service  →  Root Directory = /server  →  reads server/railway.toml
+#   client service  →  Root Directory = /client  →  reads client/railway.toml
+#
+# Required Railway dashboard environment variables:
+#   server service:  DATABASE_URL, JWT_SECRET, CLIENT_URL (= client service public URL)
+#   client service:  VITE_API_URL (= server service public URL, e.g. https://server-xxx.up.railway.app)
