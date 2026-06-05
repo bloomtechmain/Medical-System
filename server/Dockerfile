@@ -16,28 +16,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# ── Server ────────────────────────────────────────────────────────────────────
-# Build context is the REPO ROOT (set dockerfilePath in railway.toml).
-# Server source lands at /app/, client source at /app/client/.
-COPY server/package*.json ./
+# Build context is the server/ directory (Railway Root Directory = /server).
+# Do NOT reference ../client here — the client is a separate Railway service.
+COPY package*.json ./
 RUN npm install --include=dev
 
-COPY server/ .
+COPY . .
 
 RUN npm run build
 
-# ── Client ────────────────────────────────────────────────────────────────────
-COPY client/package*.json ./client/
-RUN npm install --prefix client --include=dev
-
-COPY client/ ./client/
-
-RUN npm run build --prefix client
-
-# ── Prune server devDeps ──────────────────────────────────────────────────────
 RUN npm prune --omit=dev
 
 EXPOSE 5000
 
-# __dirname = /app/dist  →  client/dist = /app/client/dist
 CMD ["node", "dist/server.js"]

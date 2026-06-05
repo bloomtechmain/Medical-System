@@ -70,6 +70,10 @@ app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 );
 
+app.get('/', (_req, res) =>
+  res.json({ status: 'ok', service: 'BloomRx API', health: '/api/health' })
+);
+
 // Serve the built React app. Candidate paths cover both Dockerfile layouts.
 const clientDist = [
   path.join(process.cwd(), 'client', 'dist'),   // /app/client/dist  (primary)
