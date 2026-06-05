@@ -34,24 +34,33 @@ interface PrivateRouteProps {
 
 const PrivateRoute = ({ children, roles }: PrivateRouteProps) => {
   const { user, token } = useAuth();
-  if (!token) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user?.role as UserRole)) return <Navigate to="/" replace />;
+  if (!token || !user) return <Navigate to="/login" replace />;
+  if (roles && !roles.includes(user.role as UserRole)) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
+const ROLE_ROUTES: Record<string, string> = {
+  admin: '/admin', doctor: '/doctor', pharmacist: '/pharmacist',
+  patient: '/patient', laboratory: '/laboratory',
+};
+
 const RoleHome = () => {
-  const { user } = useAuth();
-  const routes: Record<string, string> = { admin: '/admin', doctor: '/doctor', pharmacist: '/pharmacist', patient: '/patient', laboratory: '/laboratory' };
-  return <Navigate to={routes[user?.role ?? ''] || '/login'} replace />;
+  const { user, logout } = useAuth();
+  const dest = user?.role ? ROLE_ROUTES[user.role] : null;
+  if (!dest) {
+    logout();
+    return <Navigate to="/login" replace />;
+  }
+  return <Navigate to={dest} replace />;
 };
 
 export default function App() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   return (
     <Routes>
-      <Route path="/login"    element={token ? <RoleHome /> : <Login />} />
-      <Route path="/register" element={token ? <RoleHome /> : <Register />} />
+      <Route path="/login"    element={token && user?.role ? <RoleHome /> : <Login />} />
+      <Route path="/register" element={token && user?.role ? <RoleHome /> : <Register />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={<PrivateRoute roles={['admin']}><Layout /></PrivateRoute>}>
@@ -100,7 +109,7 @@ export default function App() {
         <Route path="reports" element={<LaboratoryReports />} />
       </Route>
 
-      <Route path="/" element={token ? <RoleHome /> : <Navigate to="/login" replace />} />
+      <Route path="/" element={token && user?.role ? <RoleHome /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

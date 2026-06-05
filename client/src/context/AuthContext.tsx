@@ -11,7 +11,14 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(() => {
+    const t = localStorage.getItem('token');
+    const u = localStorage.getItem('user');
+    // Inconsistent state: token without user data → wipe both so the app can
+    // start clean rather than entering an infinite redirect loop at /login.
+    if (t && !u) { localStorage.removeItem('token'); return null; }
+    return t;
+  });
   const [user, setUser] = useState<User | null>(() => {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
   });
