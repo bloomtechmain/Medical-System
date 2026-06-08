@@ -4,8 +4,9 @@ import toast from 'react-hot-toast';
 import { labApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { FlaskConical, Upload, Eye, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { SERVER_ORIGIN } from '../env';
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 const STATUS_STYLE: Record<string, { badge: string; label: string }> = {
   pending:     { badge: 'bg-yellow-100 text-yellow-700', label: 'Pending'     },

@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
+import { SERVER_ORIGIN } from '../env';
 
 interface SocketContextValue {
   newPulse: number;
@@ -10,8 +11,7 @@ interface SocketContextValue {
 
 const SocketContext = createContext<SocketContextValue | null>(null);
 
-// VITE_API_URL is the bare backend origin (no /api suffix) in production.
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:5000';
+const SOCKET_URL = SERVER_ORIGIN || 'http://localhost:5000';
 
 const NOTIF_ICONS: Record<string, string> = {
   new_consultation:       '🩺',

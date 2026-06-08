@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { consultationApi, userApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import { SERVER_ORIGIN } from '../env';
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 function useDebounce(value: string, delay = 400) {
   const [deb, setDeb] = useState(value);

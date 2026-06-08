@@ -6,8 +6,9 @@ import {
 } from 'lucide-react';
 import { labApi, userApi, labViewRequestApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import { SERVER_ORIGIN } from '../env';
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 function useDebounce(v: string, ms = 350) {
   const [d, setD] = useState(v);
@@ -319,7 +320,7 @@ function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewReques
     setViewing(true);
     try {
       const token = localStorage.getItem('token');
-      const base  = import.meta.env.VITE_API_URL || '/api';
+      const base  = SERVER_ORIGIN ? `${SERVER_ORIGIN}/api` : '/api';
       const res   = await fetch(`${base}/lab-view-requests/${viewRequest.id}/file`, {
         headers: { Authorization: `Bearer ${token}` },
       });
