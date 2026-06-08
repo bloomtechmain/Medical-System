@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { labApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import { SERVER_ORIGIN } from '../env';
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 const STATUS_STYLE: Record<string, { badge: string; label: string; icon: string }> = {
   pending:     { badge: 'bg-yellow-100 text-yellow-700', label: 'Pending',     icon: '⏳' },

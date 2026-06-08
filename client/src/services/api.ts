@@ -1,11 +1,8 @@
 import axios from 'axios';
+import { SERVER_ORIGIN } from '../env';
 
-// In production VITE_API_URL is the bare backend origin, e.g. https://xyz.railway.app
-// All API routes are mounted under /api, so we append that here.
-// In development (no VITE_API_URL) Vite's proxy rewrites /api/* → localhost:5000/api/*.
-const BASE_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
-  : '/api';
+// In development SERVER_ORIGIN is empty → Vite proxy rewrites /api/* → localhost:5000/api/*.
+const BASE_URL = SERVER_ORIGIN ? `${SERVER_ORIGIN}/api` : '/api';
 
 const api = axios.create({
   baseURL: BASE_URL,

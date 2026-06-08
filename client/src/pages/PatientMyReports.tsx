@@ -7,8 +7,9 @@ import {
 } from 'lucide-react';
 import { patientReportApi, labApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import { SERVER_ORIGIN } from '../env';
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 // ── Report type definitions ───────────────────────────────────────────────────
 const PERSONAL_TYPES = [

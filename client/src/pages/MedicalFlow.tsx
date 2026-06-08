@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { authApi, consultationApi, labApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import { SERVER_ORIGIN } from '../env';
 
-const SERVER_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+const SERVER_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 const EV: Record<string, any> = {
   sick: { label: 'Reported Sick', icon: '🤒', dot: 'bg-orange-500 ring-orange-100', card: 'border-orange-200 bg-orange-50/40', badge: 'bg-orange-100 text-orange-700', heading: 'text-orange-700', group: 'visits' },

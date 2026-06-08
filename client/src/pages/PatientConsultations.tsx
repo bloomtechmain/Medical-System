@@ -8,8 +8,9 @@ import {
 } from 'lucide-react';
 import { consultationApi, labApi, userApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import { SERVER_ORIGIN } from '../env';
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 const PALETTES = [
   { grad: 'from-violet-500 to-purple-700',  step: 'bg-violet-500', accent: 'text-violet-600', badge: 'bg-violet-100 text-violet-700', light: 'bg-violet-50', line: 'border-violet-200' },
