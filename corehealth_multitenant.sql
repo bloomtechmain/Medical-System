@@ -86,17 +86,29 @@ CREATE INDEX idx_users_email ON public.users(email);
 CREATE INDEX idx_users_role  ON public.users(role);
 
 -- 2.2 organizations  (the TENANT REGISTRY — the thing leaks must not cross)
+--
+-- org_type values:
+--   hospital   : a hospital or clinic group that employs doctors/staff
+--   pharmacy   : a pharmacy that dispenses medicines (gets full tenant schema with orders/sales)
+--   laboratory : a diagnostic lab that processes tests
+--   clinic     : a doctor's own PERSONAL medical centre / private practice
+--               A doctor may belong to zero or many hospital orgs AND optionally
+--               own one or more personal clinics. Neither is mandatory.
 CREATE TABLE public.organizations (
-  id          SERIAL       PRIMARY KEY,
-  slug        VARCHAR(60)  NOT NULL UNIQUE,          -- used to build schema name
-  name        VARCHAR(200) NOT NULL,
-  org_type    VARCHAR(20)  NOT NULL
-              CHECK (org_type IN ('hospital','pharmacy','laboratory')),
-  schema_name VARCHAR(80),                           -- physical schema, if any
-  is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
-  created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  id            SERIAL       PRIMARY KEY,
+  slug          VARCHAR(60)  NOT NULL UNIQUE,          -- used to build schema name
+  name          VARCHAR(200) NOT NULL,
+  org_type      VARCHAR(20)  NOT NULL
+                CHECK (org_type IN ('hospital','pharmacy','laboratory','clinic')),
+  schema_name   VARCHAR(80),                           -- physical schema, if any
+  owner_user_id INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
+                                                       -- populated for 'clinic' type only;
+                                                       -- the doctor who owns this personal practice
+  is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_org_type ON public.organizations(org_type);
+CREATE INDEX idx_org_type  ON public.organizations(org_type);
+CREATE INDEX idx_org_owner ON public.organizations(owner_user_id);
 
 -- 2.3 organization_members  (which users belong to which org, in what role)
 CREATE TABLE public.organization_members (
@@ -250,20 +262,31 @@ CREATE TABLE clinical.consultation_medicines (
 );
 CREATE INDEX idx_cm_consultation ON clinical.consultation_medicines(consultation_id);
 
+-- lab_requests holds both the REQUEST and the RESULT in one place.
+-- This is the correct design because the report is patient PHI — it belongs to the
+-- patient, not to the lab organisation. Keeping it here means:
+--   • Patient always sees their own result (RLS: patient_id = app_uid())
+--   • Record survives if the lab org is removed
+--   • Doctor permission (lab_view_requests) and the data it gates are in the same schema
+--   • No cross-schema queries needed to serve a file
+-- The lab's OPERATIONAL data (test catalog, billing, sample tracking) lives in the
+-- lab's tenant schema — that is genuinely lab-owned, not patient-owned.
 CREATE TABLE clinical.lab_requests (
   id               SERIAL      PRIMARY KEY,
   doctor_id        INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
   patient_id       INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  laboratory_id    INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,  -- the lab (user)
-  organization_id  INTEGER     REFERENCES public.organizations(id) ON DELETE SET NULL,  -- the lab org
-  consultation_id  INTEGER,     -- SOFT ref into clinical.medical_consultations (kept; same schema so FK is safe)
+  laboratory_id    INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  organization_id  INTEGER     REFERENCES public.organizations(id) ON DELETE SET NULL,
+  consultation_id  INTEGER,
   test_description TEXT        NOT NULL,
   notes            TEXT,
   status           VARCHAR(20) NOT NULL DEFAULT 'pending'
                    CHECK (status IN ('pending','in_progress','completed')),
+  -- Result fields — populated by the lab when uploading the completed report
   report_file      VARCHAR(500),
   report_mimetype  VARCHAR(100),
   report_notes     TEXT,
+  vitals_extracted BOOLEAN     NOT NULL DEFAULT FALSE,  -- TRUE once backend ran OCR/PDF extraction
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_lr_consultation FOREIGN KEY (consultation_id)
@@ -298,7 +321,7 @@ CREATE TABLE clinical.data_access_requests (
   doctor_id    INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   patient_id   INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   access_type  VARCHAR(50) NOT NULL
-               CHECK (access_type IN ('lab_reports','medical_history','personal_reports','contact_info')),
+               CHECK (access_type IN ('lab_reports','medical_history','personal_reports','contact_info','vitals')),
   reason       TEXT,
   status       VARCHAR(20) NOT NULL DEFAULT 'pending'
                CHECK (status IN ('pending','accepted','declined')),
@@ -330,6 +353,51 @@ CREATE TABLE clinical.patient_reports (
 CREATE INDEX idx_pr_patient     ON clinical.patient_reports(patient_id);
 CREATE INDEX idx_pr_report_type ON clinical.patient_reports(report_type);
 CREATE INDEX idx_pr_issued_date ON clinical.patient_reports(issued_date);
+
+-- patient_vitals: auto-populated by the backend after a lab report is uploaded
+-- (OCR / PDF text extraction → regex parsing) or entered manually by the patient.
+-- source='lab_report' rows link back to the lab_request that generated them via
+-- lab_request_id (soft ref — the physical report file lives in the lab tenant schema).
+CREATE TABLE clinical.patient_vitals (
+  id                SERIAL        PRIMARY KEY,
+  patient_id        INTEGER       NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  -- CBC Panel
+  wbc               NUMERIC(7,2),
+  rbc               NUMERIC(7,2),
+  hemoglobin        NUMERIC(7,2),
+  hematocrit        NUMERIC(7,2),
+  mcv               NUMERIC(7,2),
+  mch               NUMERIC(7,2),
+  mchc              NUMERIC(7,2),
+  rdw               NUMERIC(7,2),
+  platelets         NUMERIC(8,2),
+  mpv               NUMERIC(7,2),
+  -- Metabolic Panel
+  blood_glucose     NUMERIC(7,2),
+  hba1c             NUMERIC(6,2),
+  creatinine        NUMERIC(6,2),
+  -- Lipid Panel
+  cholesterol       NUMERIC(7,2),
+  hdl               NUMERIC(7,2),
+  ldl               NUMERIC(7,2),
+  triglycerides     NUMERIC(7,2),
+  -- Basic Vitals
+  bp_systolic       INTEGER,
+  bp_diastolic      INTEGER,
+  heart_rate        INTEGER,
+  temperature       NUMERIC(5,2),
+  oxygen_saturation NUMERIC(5,2),
+  -- Metadata
+  source            VARCHAR(20)   NOT NULL DEFAULT 'manual'
+                    CHECK (source IN ('manual','lab_report')),
+  lab_request_id    INTEGER,                            -- soft ref: clinical.lab_requests(id)
+  notes             TEXT,
+  recorded_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_pv_patient    ON clinical.patient_vitals(patient_id);
+CREATE INDEX idx_pv_recorded   ON clinical.patient_vitals(recorded_at DESC);
+CREATE INDEX idx_pv_lab_req    ON clinical.patient_vitals(lab_request_id);
 
 CREATE TABLE clinical.notifications (
   id         SERIAL       PRIMARY KEY,
@@ -398,7 +466,7 @@ BEGIN
   FOR t IN SELECT unnest(ARRAY[
       'patient_profiles','medical_consultations','consultation_medicines',
       'lab_requests','lab_view_requests','data_access_requests',
-      'patient_reports','notifications'])
+      'patient_reports','patient_vitals','notifications'])
   LOOP
     EXECUTE format('ALTER TABLE clinical.%I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE clinical.%I FORCE  ROW LEVEL SECURITY', t);
@@ -489,6 +557,23 @@ CREATE POLICY prpt_mod ON clinical.patient_reports FOR ALL USING (
   public.app_role() = 'admin' OR patient_id = public.app_uid()
 );
 
+-- patient_vitals: patient sees own; doctor with accepted 'vitals' consent; the lab
+-- that generated a record (via lab_request_id lookup — soft ref checked in app layer); admin
+CREATE POLICY pv_sel ON clinical.patient_vitals FOR SELECT USING (
+  public.app_role() = 'admin'
+  OR patient_id = public.app_uid()
+  OR (public.app_role() = 'doctor' AND clinical.has_consent(patient_id, ARRAY['vitals','medical_history']))
+);
+CREATE POLICY pv_mod ON clinical.patient_vitals FOR ALL USING (
+  public.app_role() = 'admin'
+  OR patient_id = public.app_uid()
+  OR public.app_role() = 'laboratory'         -- lab inserts auto-extracted vitals after upload
+) WITH CHECK (
+  public.app_role() = 'admin'
+  OR patient_id = public.app_uid()
+  OR public.app_role() = 'laboratory'
+);
+
 -- notifications: owner only; admin
 CREATE POLICY notif_all ON clinical.notifications FOR ALL USING (
   public.app_role() = 'admin' OR user_id = public.app_uid()
@@ -520,23 +605,47 @@ ALTER ROLE corehealth_app SET search_path = public, clinical;
 -- =============================================================================
 -- 7. TENANT PROVISIONING  (physical schema-per-tenant for org-owned operations)
 -- =============================================================================
--- Creates: a schema tenant_<slug>, a dedicated DB role that can touch ONLY that
--- schema, and (for pharmacies) the operational tables. Hospitals/labs get a
--- reserved schema + role for any future org-local non-clinical data.
-CREATE OR REPLACE FUNCTION public.provision_tenant(p_slug text, p_name text, p_type text)
+-- Creates: a schema tenant_<slug>, a dedicated DB role, and type-specific tables.
+-- Every org type gets its own suitable table set:
+--   hospital   → appointments, admissions, invoices
+--   pharmacy   → orders, order_items, sales, sale_items, inventory_adjustments
+--   laboratory → test_catalog, sample_receipts, invoices
+--   clinic     → appointments, invoices
+--
+-- p_owner_id : optional. Set to the doctor's user_id when creating a personal clinic
+--              (org_type = 'clinic'). NULL for hospitals, pharmacies, and labs.
+--
+-- DOCTOR ↔ ORGANISATION rules:
+--   • A doctor may belong to ZERO or MANY hospital organisations (optional).
+--   • A doctor may own ZERO or MANY personal clinics (optional).
+--   • Both memberships are tracked via organization_members.
+--   • A personal clinic is just an org with org_type = 'clinic' and
+--     owner_user_id pointing to the owning doctor.
+CREATE OR REPLACE FUNCTION public.provision_tenant(
+    p_slug     text,
+    p_name     text,
+    p_type     text,
+    p_owner_id int DEFAULT NULL          -- doctor user_id, for clinic type only
+)
   RETURNS text LANGUAGE plpgsql AS
 $fn$
 DECLARE
   v_schema text := 'tenant_' || regexp_replace(lower(p_slug), '[^a-z0-9_]', '_', 'g');
   v_role   text := 'tn_' || regexp_replace(lower(p_slug), '[^a-z0-9_]', '_', 'g');
 BEGIN
-  IF p_type NOT IN ('hospital','pharmacy','laboratory') THEN
+  IF p_type NOT IN ('hospital','pharmacy','laboratory','clinic') THEN
     RAISE EXCEPTION 'Unknown org type: %', p_type;
   END IF;
 
-  INSERT INTO public.organizations (slug, name, org_type, schema_name)
-  VALUES (p_slug, p_name, p_type, v_schema)
-  ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, schema_name = EXCLUDED.schema_name;
+  IF p_type = 'clinic' AND p_owner_id IS NULL THEN
+    RAISE EXCEPTION 'owner_user_id is required when provisioning a clinic';
+  END IF;
+
+  INSERT INTO public.organizations (slug, name, org_type, schema_name, owner_user_id)
+  VALUES (p_slug, p_name, p_type, v_schema, p_owner_id)
+  ON CONFLICT (slug) DO UPDATE
+    SET name = EXCLUDED.name, schema_name = EXCLUDED.schema_name,
+        owner_user_id = EXCLUDED.owner_user_id;
 
   EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I', v_schema);
 
@@ -550,7 +659,60 @@ BEGIN
   EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', v_role);
   EXECUTE format('GRANT SELECT ON public.medicines, public.suppliers, public.users TO %I', v_role);
 
-  IF p_type = 'pharmacy' THEN
+  -- ---------------------------------------------------------------
+  -- Type-specific tables — every tenant gets its own suitable set
+  -- ---------------------------------------------------------------
+
+  IF p_type = 'hospital' THEN
+
+    -- Scheduled outpatient visits
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.appointments (
+        id           SERIAL       PRIMARY KEY,
+        patient_id   INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        doctor_id    INTEGER               REFERENCES public.users(id) ON DELETE SET NULL,
+        scheduled_at TIMESTAMPTZ  NOT NULL,
+        reason       TEXT,
+        status       VARCHAR(20)  NOT NULL DEFAULT 'scheduled'
+                     CHECK (status IN ('scheduled','completed','cancelled','no_show')),
+        notes        TEXT,
+        created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )$t$, v_schema);
+
+    -- Inpatient admissions
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.admissions (
+        id            SERIAL       PRIMARY KEY,
+        patient_id    INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        doctor_id     INTEGER               REFERENCES public.users(id) ON DELETE SET NULL,
+        admitted_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        discharged_at TIMESTAMPTZ,
+        ward          VARCHAR(100),
+        bed_number    VARCHAR(20),
+        reason        TEXT,
+        status        VARCHAR(20)  NOT NULL DEFAULT 'admitted'
+                      CHECK (status IN ('admitted','discharged','transferred')),
+        notes         TEXT
+      )$t$, v_schema);
+
+    -- Hospital billing — links to clinical consultation and/or local admission
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.invoices (
+        id              SERIAL        PRIMARY KEY,
+        patient_id      INTEGER       NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        consultation_id INTEGER       REFERENCES clinical.medical_consultations(id) ON DELETE SET NULL,
+        admission_id    INTEGER,      -- soft ref to local admissions(id)
+        amount          NUMERIC(12,2) NOT NULL DEFAULT 0,
+        description     TEXT,
+        status          VARCHAR(20)   NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','paid','cancelled')),
+        issued_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        paid_at         TIMESTAMPTZ
+      )$t$, v_schema);
+
+  ELSIF p_type = 'pharmacy' THEN
+
+    -- Stock purchase orders from suppliers
     EXECUTE format($t$
       CREATE TABLE IF NOT EXISTS %I.orders (
         id           SERIAL        PRIMARY KEY,
@@ -563,14 +725,17 @@ BEGIN
         ordered_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
         received_at  TIMESTAMPTZ
       )$t$, v_schema);
+
     EXECUTE format($t$
       CREATE TABLE IF NOT EXISTS %I.order_items (
         id          SERIAL        PRIMARY KEY,
-        order_id    INTEGER       NOT NULL REFERENCES %I.orders(id) ON DELETE CASCADE,
-        medicine_id INTEGER       NOT NULL REFERENCES public.medicines(id) ON DELETE CASCADE,
+        order_id    INTEGER       NOT NULL REFERENCES %I.orders(id)         ON DELETE CASCADE,
+        medicine_id INTEGER       NOT NULL REFERENCES public.medicines(id)  ON DELETE CASCADE,
         quantity    INTEGER       NOT NULL CHECK (quantity > 0),
         unit_cost   NUMERIC(10,2) NOT NULL CHECK (unit_cost >= 0)
       )$t$, v_schema, v_schema);
+
+    -- Dispensing sales to customers / patients
     EXECUTE format($t$
       CREATE TABLE IF NOT EXISTS %I.sales (
         id             SERIAL        PRIMARY KEY,
@@ -581,22 +746,112 @@ BEGIN
                        CHECK (payment_method IN ('cash','card','online')),
         sold_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
       )$t$, v_schema);
+
     EXECUTE format($t$
       CREATE TABLE IF NOT EXISTS %I.sale_items (
         id          SERIAL        PRIMARY KEY,
-        sale_id     INTEGER       NOT NULL REFERENCES %I.sales(id) ON DELETE CASCADE,
+        sale_id     INTEGER       NOT NULL REFERENCES %I.sales(id)         ON DELETE CASCADE,
         medicine_id INTEGER       NOT NULL REFERENCES public.medicines(id) ON DELETE CASCADE,
         quantity    INTEGER       NOT NULL CHECK (quantity > 0),
         unit_price  NUMERIC(10,2) NOT NULL CHECK (unit_price >= 0)
       )$t$, v_schema, v_schema);
 
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO %I', v_schema, v_role);
-    EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %I TO %I', v_schema, v_role);
-    -- app role can also reach tenant schemas (it sets search_path per request)
-    EXECUTE format('GRANT USAGE ON SCHEMA %I TO corehealth_app', v_schema);
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO corehealth_app', v_schema);
-    EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %I TO corehealth_app', v_schema);
+    -- Manual stock corrections (damaged goods, expiry write-offs, etc.)
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.inventory_adjustments (
+        id              SERIAL       PRIMARY KEY,
+        medicine_id     INTEGER      NOT NULL REFERENCES public.medicines(id) ON DELETE CASCADE,
+        quantity_change INTEGER      NOT NULL,  -- positive = stock in, negative = write-off
+        reason          VARCHAR(200),
+        adjusted_by     INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
+        adjusted_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )$t$, v_schema);
+
+  ELSIF p_type = 'laboratory' THEN
+
+    -- NOTE: lab report files (report_file, report_mimetype, report_notes) live in
+    -- clinical.lab_requests — not here — because the report is patient PHI that
+    -- belongs to the patient, survives lab org changes, and is governed by the
+    -- existing RLS + lab_view_requests permission system.
+    -- The tables below are the lab's own OPERATIONAL data (not patient-owned).
+
+    -- Tests this specific lab offers, with pricing and turnaround time
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.test_catalog (
+        id               SERIAL        PRIMARY KEY,
+        test_code        VARCHAR(50)   NOT NULL UNIQUE,
+        test_name        VARCHAR(200)  NOT NULL,
+        description      TEXT,
+        price            NUMERIC(10,2) NOT NULL DEFAULT 0,
+        turnaround_hours INTEGER,
+        is_active        BOOLEAN       NOT NULL DEFAULT TRUE,
+        created_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      )$t$, v_schema);
+
+    -- Record when a physical sample arrives at the lab for a request
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.sample_receipts (
+        id               SERIAL       PRIMARY KEY,
+        lab_request_id   INTEGER      NOT NULL,  -- soft ref: clinical.lab_requests(id)
+        received_by      INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
+        received_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        sample_type      VARCHAR(100),           -- blood, urine, tissue, swab, etc.
+        sample_condition VARCHAR(50)  DEFAULT 'good'
+                         CHECK (sample_condition IN ('good','haemolysed','insufficient','contaminated')),
+        notes            TEXT
+      )$t$, v_schema);
+
+    -- Lab billing per test request
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.invoices (
+        id             SERIAL        PRIMARY KEY,
+        lab_request_id INTEGER       NOT NULL,  -- soft ref: clinical.lab_requests(id)
+        patient_id     INTEGER       NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        amount         NUMERIC(10,2) NOT NULL DEFAULT 0,
+        status         VARCHAR(20)   NOT NULL DEFAULT 'pending'
+                       CHECK (status IN ('pending','paid','cancelled')),
+        issued_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        paid_at        TIMESTAMPTZ
+      )$t$, v_schema);
+
+  ELSIF p_type = 'clinic' THEN
+
+    -- Patient bookings at the doctor's personal clinic
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.appointments (
+        id           SERIAL       PRIMARY KEY,
+        patient_id   INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        scheduled_at TIMESTAMPTZ  NOT NULL,
+        reason       TEXT,
+        status       VARCHAR(20)  NOT NULL DEFAULT 'scheduled'
+                     CHECK (status IN ('scheduled','completed','cancelled','no_show')),
+        notes        TEXT,
+        created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )$t$, v_schema);
+
+    -- Clinic consultation billing
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.invoices (
+        id              SERIAL        PRIMARY KEY,
+        patient_id      INTEGER       NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        consultation_id INTEGER       REFERENCES clinical.medical_consultations(id) ON DELETE SET NULL,
+        appointment_id  INTEGER,      -- soft ref to local appointments(id)
+        amount          NUMERIC(10,2) NOT NULL DEFAULT 0,
+        description     TEXT,
+        status          VARCHAR(20)   NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','paid','cancelled')),
+        issued_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        paid_at         TIMESTAMPTZ
+      )$t$, v_schema);
+
   END IF;
+
+  -- Common grants for ALL types — runs after every branch above
+  EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA %I TO %I',            v_schema, v_role);
+  EXECUTE format('GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA %I TO %I',            v_schema, v_role);
+  EXECUTE format('GRANT USAGE                          ON SCHEMA %I TO corehealth_app',                 v_schema);
+  EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA %I TO corehealth_app',v_schema);
+  EXECUTE format('GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA %I TO corehealth_app',v_schema);
 
   RETURN v_schema;
 END;

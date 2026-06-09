@@ -50,6 +50,7 @@ import patientReportRoutes   from './routes/patientReportRoutes';
 import accessRequestRoutes   from './routes/accessRequestRoutes';
 import labViewRequestRoutes  from './routes/labViewRequestRoutes';
 import patientVitalsRoutes   from './routes/patientVitalsRoutes';
+import organizationRoutes    from './routes/organizationRoutes';
 
 app.use('/api/auth',              authRoutes);
 app.use('/api/users',             userRoutes);
@@ -65,6 +66,7 @@ app.use('/api/patient-reports',   patientReportRoutes);
 app.use('/api/access-requests',   accessRequestRoutes);
 app.use('/api/lab-view-requests', labViewRequestRoutes);
 app.use('/api/patient-vitals',    patientVitalsRoutes);
+app.use('/api/organizations',     organizationRoutes);
 
 app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
