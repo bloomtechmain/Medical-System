@@ -26,6 +26,7 @@ import Orders from './pages/Orders';
 import Sales from './pages/Sales';
 import Inventory from './pages/Inventory';
 import Users from './pages/Users';
+import Organizations from './pages/Organizations';
 
 interface PrivateRouteProps {
   children: ReactNode;
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="orders" element={<Orders />} />
         <Route path="sales" element={<Sales />} />
         <Route path="inventory" element={<Inventory />} />
+        <Route path="organizations" element={<Organizations />} />
       </Route>
 
       {/* Doctor routes */}

@@ -6,7 +6,7 @@ import { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Stethoscope, Activity, FlaskConical,
   FolderOpen, Users, Pill, Truck, ShoppingCart, Receipt, BarChart2,
-  ClipboardList, Microscope, LogOut, Settings, UserSearch, ShieldCheck,
+  ClipboardList, Microscope, LogOut, Settings, UserSearch, ShieldCheck, Building2,
 } from 'lucide-react';
 
 // ── 4-dot logo mark ───────────────────────────────────────────────────────────
@@ -32,13 +32,14 @@ interface NavItem {
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const NAV: Record<string, NavItem[]> = {
   admin: [
-    { to: '/admin',           label: 'Dashboard',       icon: LayoutDashboard, exact: true },
-    { to: '/admin/medicines', label: 'Medicines',        icon: Pill },
-    { to: '/admin/suppliers', label: 'Suppliers',        icon: Truck },
-    { to: '/admin/orders',    label: 'Orders',           icon: ShoppingCart },
-    { to: '/admin/sales',     label: 'Sales',            icon: Receipt },
-    { to: '/admin/inventory', label: 'Inventory',        icon: BarChart2 },
-    { to: '/admin/users',     label: 'Users',            icon: Users },
+    { to: '/admin',                label: 'Dashboard',     icon: LayoutDashboard, exact: true },
+    { to: '/admin/organizations',  label: 'Organizations', icon: Building2 },
+    { to: '/admin/users',          label: 'Users',         icon: Users },
+    { to: '/admin/medicines',      label: 'Medicines',     icon: Pill },
+    { to: '/admin/suppliers',      label: 'Suppliers',     icon: Truck },
+    { to: '/admin/orders',         label: 'Orders',        icon: ShoppingCart },
+    { to: '/admin/sales',          label: 'Sales',         icon: Receipt },
+    { to: '/admin/inventory',      label: 'Inventory',     icon: BarChart2 },
   ],
   pharmacist: [
     { to: '/pharmacist',               label: 'Dashboard',     icon: LayoutDashboard, exact: true },

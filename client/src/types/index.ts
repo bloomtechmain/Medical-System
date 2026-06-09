@@ -295,6 +295,32 @@ export interface InventorySummary {
   inventory_value: number;
 }
 
+export interface Organization {
+  id: number;
+  slug: string;
+  name: string;
+  org_type: 'hospital' | 'pharmacy' | 'laboratory' | 'clinic';
+  schema_name: string | null;
+  owner_user_id: number | null;
+  owner_name?: string | null;
+  owner_email?: string | null;
+  is_active: boolean;
+  created_at: string;
+  member_count?: number;
+}
+
+export interface OrganizationMember {
+  id: number;
+  organization_id?: number;
+  user_id: number;
+  member_role: 'doctor' | 'pharmacist' | 'laboratory' | 'staff' | 'owner';
+  created_at: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  is_active?: boolean;
+}
+
 export interface UserStats {
   users: {
     total_patients: number;
@@ -306,11 +332,46 @@ export interface UserStats {
     active_users: number;
     new_this_week: number;
   };
+  organizations: {
+    total_organizations: number;
+    total_hospitals: number;
+    total_pharmacies: number;
+    total_laboratories: number;
+    total_clinics: number;
+  };
   medicines: {
     total_medicines: number;
     low_stock: number;
     expired: number;
   };
+  consultations: {
+    total_consultations: number;
+    active_consultations: number;
+    completed_consultations: number;
+  };
+  labs: {
+    total_lab_requests: number;
+    pending_lab_requests: number;
+    completed_lab_requests: number;
+  };
+  sales: {
+    total_sales: number;
+    total_revenue: number;
+    sales_this_month: number;
+  };
+  appointments: {
+    total_appointments: number;
+    upcoming_appointments: number;
+    completed_appointments: number;
+  };
+  recentUsers: Array<{
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    is_active: boolean;
+    created_at: string;
+  }>;
 }
 
 export interface Toast {

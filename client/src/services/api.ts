@@ -18,7 +18,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && localStorage.getItem('token')) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -128,13 +128,24 @@ export const patientVitalsApi = {
   save:    (data: unknown): Promise<any> => api.post('/patient-vitals', data),
 };
 
+export const orgApi = {
+  getAll:       (): Promise<any>                                      => api.get('/organizations'),
+  provision:    (data: unknown): Promise<any>                        => api.post('/organizations', data),
+  getMembers:   (id: number): Promise<any>                          => api.get(`/organizations/${id}/members`),
+  addMember:    (id: number, data: unknown): Promise<any>           => api.post(`/organizations/${id}/members`, data),
+  removeMember: (id: number, userId: number): Promise<any>          => api.delete(`/organizations/${id}/members/${userId}`),
+  toggle:       (id: number): Promise<any>                          => api.patch(`/organizations/${id}/toggle`),
+};
+
 export const userApi = {
   getAll:              (params?: unknown): Promise<any>          => api.get('/users', { params }),
   searchPatients:      (q: string): Promise<any>                 => api.get('/users/patients', { params: { q } }),
   searchPharmacists:   (q: string): Promise<any>                 => api.get('/users/pharmacists', { params: { q } }),
   searchLaboratories:  (q: string): Promise<any>                 => api.get('/users/laboratories', { params: { q } }),
   getOne:              (id: number): Promise<any>                => api.get(`/users/${id}`),
+  getProfile:          (id: number): Promise<any>                => api.get(`/users/${id}/profile`),
   update:              (id: number, data: unknown): Promise<any> => api.put(`/users/${id}`, data),
+  updateProfile:       (id: number, data: unknown): Promise<any> => api.put(`/users/${id}/profile`, data),
   toggle:              (id: number): Promise<any>                => api.patch(`/users/${id}/toggle`),
   remove:              (id: number): Promise<any>                => api.delete(`/users/${id}`),
   getStats:            (): Promise<any>                          => api.get('/users/stats'),
