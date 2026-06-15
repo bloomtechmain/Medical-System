@@ -1,0 +1,32 @@
+name: Auto Tag
+
+on:
+  workflow_run:
+    workflows: ["CI - Check Code Quality"]
+    branches: [main]
+    types: [completed]
+
+jobs:
+  tag:
+    name: Auto Version Tag
+    runs-on: ubuntu-latest
+
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Auto bump version and tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          minor_string_token: "feat:"
+          major_string_token: "feat!:"
+          tag_prefix: v
