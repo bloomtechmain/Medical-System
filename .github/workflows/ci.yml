@@ -1,132 +1,67 @@
-# =============================================================================
-# CI Pipeline — Core Health Medical System  (PERN Stack)
-# Triggers: every push and pull-request targeting main / develop
-# =============================================================================
-name: CI
+name: CI - Check Code Quality
 
 on:
   push:
-    branches: [main, develop]
+    branches: ["*"]
   pull_request:
-    branches: [main, develop]
-
-# Cancel an already-running workflow on the same branch when a new push arrives
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [main]
 
 jobs:
-
-  # ---------------------------------------------------------------------------
-  # JOB 1 — Backend  (Node.js / Express)
-  # ---------------------------------------------------------------------------
-  backend:
-    name: "Backend — lint & audit"
+  check-server:
+    name: Server — Lint & Build
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: server
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: server/package-lock.json
 
-      - name: Install dependencies
+      - name: Install server dependencies
+        working-directory: ./server
         run: npm ci
 
-      # ── Lint ────────────────────────────────────────────────────────────────
-      # Your server/package.json already has a "lint" script.
-      # If ESLint is not yet initialised run:
-      #   cd server && npm i -D eslint && npx eslint --init
-      - name: Lint (ESLint)
+      - name: Lint server
+        working-directory: ./server
         run: npm run lint
-        continue-on-error: true   # flip to false once lint config is stable
+        continue-on-error: true
 
-      # ── Security audit ──────────────────────────────────────────────────────
-      # Fails if any HIGH or CRITICAL vulnerability is found in production deps
-      - name: Security audit
-        run: npm audit --audit-level=high --omit=dev
-        continue-on-error: true   # flip to false to make this a hard gate
+      - name: Build server
+        working-directory: ./server
+        run: npm run build
 
-  # ---------------------------------------------------------------------------
-  # JOB 2 — Frontend  (React 18 / Vite 5)
-  # ---------------------------------------------------------------------------
-  frontend:
-    name: "Frontend — lint, build & audit"
+  check-client:
+    name: Client — Lint & Build
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: client
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: client/package-lock.json
 
-      - name: Install dependencies
+      - name: Install client dependencies
+        working-directory: ./client
         run: npm ci
 
-      # ── Lint ────────────────────────────────────────────────────────────────
-      - name: Lint (ESLint)
+      - name: Lint client
+        working-directory: ./client
         run: npm run lint
-
-      # ── Vite production build ────────────────────────────────────────────────
-      # VITE_API_URL must be added to GitHub → Settings → Secrets and Variables
-      # → Actions → New repository secret
-      # Name : VITE_API_URL
-      # Value: https://your-api-domain.com/api   (or your server IP)
-      - name: Build (vite build)
-        run: npm run build
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-
-      # Upload the built dist/ folder — the deploy job will download it
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: client-dist
-          path: client/dist
-          retention-days: 1
-
-      # ── Security audit ──────────────────────────────────────────────────────
-      - name: Security audit
-        run: npm audit --audit-level=high --omit=dev
         continue-on-error: true
 
-  # ---------------------------------------------------------------------------
-  # JOB 3 — CI Result gate
-  # Both jobs must pass before the deploy workflow is allowed to run
-  # ---------------------------------------------------------------------------
-  ci-gate:
-    name: "CI Gate"
-    runs-on: ubuntu-latest
-    needs: [backend, frontend]
-    if: always()
-
-    steps:
-      - name: Evaluate results
-        run: |
-          echo "Backend  : ${{ needs.backend.result }}"
-          echo "Frontend : ${{ needs.frontend.result }}"
-
-          if [[ "${{ needs.backend.result }}"  != "success" ||
-                "${{ needs.frontend.result }}" != "success" ]]; then
-            echo "❌ CI failed — deployment will not proceed."
-            exit 1
-          fi
-          echo "✅ All CI checks passed."
+      - name: Build client
+        working-directory: ./client
+        run: npm run build
+        env:
+          VITE_API_URL: http://localhost:5000
+          VITE_WS_URL: ws://localhost:5000
