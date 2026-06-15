@@ -1,32 +1,32 @@
 name: Release
 
-  on:
-    push:
-      tags:
-        - "v*.*.*"
+on:
+  push:
+    tags:
+      - "v*.*.*"
 
-  jobs:
-    release:
-      name: Create GitHub Release
-      runs-on: ubuntu-latest
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
 
-      permissions:
-        contents: write
+    permissions:
+      contents: write
 
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-        - name: Create GitHub Release
-          uses: softprops/action-gh-release@v2
-          with:
-            name: Release ${{ github.ref_name }}
-            body: |
-              ## What's changed in ${{ github.ref_name }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## What's changed in ${{ github.ref_name }}
 
-              See the full commit history for details.
-            generate_release_notes: true
-            draft: false
-            prerelease: false
+            See the full commit history for details.
+          generate_release_notes: true
+          draft: false
+          prerelease: false
