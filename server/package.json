@@ -8,6 +8,7 @@
     "dev": "tsx watch server.ts",
     "build": "tsc",
     "lint": "eslint . --ext .ts --ignore-path .eslintignore",
+    "test": "jest",
     "db:migrate": "node dist/config/migrate.js",
     "db:seed": "node dist/config/seed.js",
     "db:migrate:patient-reports": "node dist/config/migratePatientReports.js",
@@ -37,11 +38,14 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.14.0",
     "eslint": "^8.57.0",
+    "jest": "^30.4.2",
     "nodemon": "^3.1.4",
+    "ts-jest": "^29.4.11",
     "tsx": "^4.15.0",
     "typescript": "^5.5.2"
   }
