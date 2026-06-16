@@ -35,6 +35,10 @@ jobs:
         working-directory: ./server
         run: npm run build
 
+      - name: Run controller tests
+        working-directory: ./server
+        run: npm test
+
   check-client:
     name: Client — Lint & Build
     runs-on: ubuntu-latest
