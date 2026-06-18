@@ -2,6 +2,16 @@
 
 export type UserRole = 'admin' | 'doctor' | 'pharmacist' | 'patient' | 'laboratory';
 
+export type OrgType = 'hospital' | 'clinic' | 'pharmacy' | 'laboratory';
+
+export interface UserOrganization {
+  id: number;
+  name: string;
+  org_type: OrgType;
+  slug: string;
+  is_active: boolean;
+}
+
 export interface User {
   id: number;
   name: string;
@@ -11,6 +21,7 @@ export interface User {
   created_at: string;
   updated_at: string;
   profile?: DoctorProfile | PatientProfile | PharmacistProfile | LaboratoryProfile | null;
+  organization?: UserOrganization | null;
 }
 
 export interface PatientProfile {

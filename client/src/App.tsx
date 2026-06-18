@@ -3,8 +3,12 @@ import { ReactNode } from 'react';
 import { useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 import Layout from './components/layout/Layout';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import OrgRegister from './pages/OrgRegister';
+import HospitalDashboard from './pages/HospitalDashboard';
+import ClinicDashboard from './pages/ClinicDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import DoctorDashboard from './pages/DoctorDashboard';
 import PharmacistDashboard from './pages/PharmacistDashboard';
@@ -45,9 +49,17 @@ const ROLE_ROUTES: Record<string, string> = {
   patient: '/patient', laboratory: '/laboratory',
 };
 
+const ORG_ROUTES: Record<string, string> = {
+  hospital: '/hospital', clinic: '/clinic',
+  pharmacy: '/pharmacist', laboratory: '/laboratory',
+};
+
 const RoleHome = () => {
   const { user, logout } = useAuth();
-  const dest = user?.role ? ROLE_ROUTES[user.role] : null;
+  const orgType = user?.organization?.org_type;
+  const dest = orgType
+    ? (ORG_ROUTES[orgType] ?? ROLE_ROUTES[user?.role ?? ''])
+    : (user?.role ? ROLE_ROUTES[user.role] : null);
   if (!dest) {
     logout();
     return <Navigate to="/login" replace />;
@@ -60,8 +72,10 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/login"    element={token && user?.role ? <RoleHome /> : <Login />} />
-      <Route path="/register" element={token && user?.role ? <RoleHome /> : <Register />} />
+      <Route path="/"           element={token && user?.role ? <RoleHome /> : <Landing />} />
+      <Route path="/login"      element={token && user?.role ? <RoleHome /> : <Login />} />
+      <Route path="/register"   element={token && user?.role ? <RoleHome /> : <Register />} />
+      <Route path="/org-register" element={token && user?.role ? <RoleHome /> : <OrgRegister />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={<PrivateRoute roles={['admin']}><Layout /></PrivateRoute>}>
@@ -73,6 +87,24 @@ export default function App() {
         <Route path="sales" element={<Sales />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="organizations" element={<Organizations />} />
+      </Route>
+
+      {/* Hospital routes */}
+      <Route path="/hospital" element={<PrivateRoute roles={['doctor']}><Layout /></PrivateRoute>}>
+        <Route index element={<HospitalDashboard />} />
+        <Route path="consultations"       element={<DoctorConsultations />} />
+        <Route path="lab-requests"        element={<DoctorLabRequests />} />
+        <Route path="patients/:patientId" element={<DoctorPatientView />} />
+        <Route path="requests"            element={<DoctorAccessRequests />} />
+      </Route>
+
+      {/* Clinic routes */}
+      <Route path="/clinic" element={<PrivateRoute roles={['doctor']}><Layout /></PrivateRoute>}>
+        <Route index element={<ClinicDashboard />} />
+        <Route path="consultations"       element={<DoctorConsultations />} />
+        <Route path="lab-requests"        element={<DoctorLabRequests />} />
+        <Route path="patients/:patientId" element={<DoctorPatientView />} />
+        <Route path="requests"            element={<DoctorAccessRequests />} />
       </Route>
 
       {/* Doctor routes */}
@@ -111,7 +143,6 @@ export default function App() {
         <Route path="reports" element={<LaboratoryReports />} />
       </Route>
 
-      <Route path="/" element={token && user?.role ? <RoleHome /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
