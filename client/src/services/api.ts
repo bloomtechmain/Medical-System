@@ -131,6 +131,7 @@ export const patientVitalsApi = {
 export const orgApi = {
   getAll:       (): Promise<any>                                      => api.get('/organizations'),
   provision:    (data: unknown): Promise<any>                        => api.post('/organizations', data),
+  register:     (data: unknown): Promise<any>                        => api.post('/organizations/register', data),
   getMembers:   (id: number): Promise<any>                          => api.get(`/organizations/${id}/members`),
   addMember:    (id: number, data: unknown): Promise<any>           => api.post(`/organizations/${id}/members`, data),
   removeMember: (id: number, userId: number): Promise<any>          => api.delete(`/organizations/${id}/members/${userId}`),

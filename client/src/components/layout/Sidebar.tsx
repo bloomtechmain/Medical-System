@@ -41,6 +41,18 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/admin/sales',          label: 'Sales',         icon: Receipt },
     { to: '/admin/inventory',      label: 'Inventory',     icon: BarChart2 },
   ],
+  hospital: [
+    { to: '/hospital',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
+    { to: '/hospital/consultations', label: 'Consultations',   icon: Stethoscope },
+    { to: '/hospital/lab-requests',  label: 'Lab Reports',     icon: Microscope },
+    { to: '/hospital/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
+  ],
+  clinic: [
+    { to: '/clinic',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
+    { to: '/clinic/consultations', label: 'Consultations',   icon: Stethoscope },
+    { to: '/clinic/lab-requests',  label: 'Lab Reports',     icon: Microscope },
+    { to: '/clinic/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
+  ],
   pharmacist: [
     { to: '/pharmacist',               label: 'Dashboard',     icon: LayoutDashboard, exact: true },
     { to: '/pharmacist/consultations', label: 'Prescriptions', icon: ClipboardList },
@@ -73,18 +85,27 @@ const NAV: Record<string, NavItem[]> = {
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin Panel', pharmacist: 'Pharmacist',
   doctor: 'Doctor Portal', patient: 'Patient Portal', laboratory: 'Laboratory',
+  hospital: 'Hospital Portal', clinic: 'Clinic Portal',
 };
 
 const ROLE_DOTS: Record<string, string> = {
   admin: 'bg-red-400', pharmacist: 'bg-purple-400',
   doctor: 'bg-primary-400', patient: 'bg-blue-400', laboratory: 'bg-cyan-400',
+  hospital: 'bg-blue-500', clinic: 'bg-teal-400',
+};
+
+const ORG_NAV_KEY: Record<string, string> = {
+  hospital: 'hospital', clinic: 'clinic',
+  pharmacy: 'pharmacist', laboratory: 'laboratory',
 };
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const items = NAV[user?.role ?? ''] || [];
+  const orgType = user?.organization?.org_type;
+  const navKey  = orgType ? (ORG_NAV_KEY[orgType] ?? user?.role ?? '') : (user?.role ?? '');
+  const items   = NAV[navKey] || [];
 
   // Fetch pending access-request counts for badge indicators
   const { data: accessRequests = [] } = useQuery({
@@ -142,13 +163,26 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* ── Role badge ── */}
+      {/* ── Role / Org badge ── */}
       <div className="px-3 pt-3 pb-1 shrink-0">
         <div className="flex items-center gap-3 bg-white/5 rounded-xl px-2.5 py-2 overflow-hidden">
-          <span className={`w-2 h-2 rounded-full shrink-0 ${ROLE_DOTS[user?.role ?? ''] || 'bg-gray-400'}`} />
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
-            {ROLE_LABELS[user?.role ?? ''] || ''}
-          </span>
+          <span className={`w-2 h-2 rounded-full shrink-0 ${ROLE_DOTS[navKey] || 'bg-gray-400'}`} />
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100 overflow-hidden">
+            {user?.organization ? (
+              <>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap leading-tight">
+                  {ROLE_LABELS[navKey] || ''}
+                </p>
+                <p className="text-[10px] text-slate-500 whitespace-nowrap truncate max-w-[148px]">
+                  {user.organization.name}
+                </p>
+              </>
+            ) : (
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                {ROLE_LABELS[navKey] || ''}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -216,7 +250,9 @@ export default function Sidebar() {
           {/* User info — fades in */}
           <div className="flex-1 min-w-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 overflow-hidden">
             <p className="text-xs font-semibold text-white truncate whitespace-nowrap leading-tight">{user?.name}</p>
-            <p className="text-[11px] text-slate-500 capitalize whitespace-nowrap">{user?.role}</p>
+            <p className="text-[11px] text-slate-500 capitalize whitespace-nowrap">
+              {user?.organization ? `${user.organization.org_type} owner` : user?.role}
+            </p>
           </div>
         </div>
 
