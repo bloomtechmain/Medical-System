@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { getAll, getMembers, addMember, removeMember, provision, toggleActive } from '../controllers/organizationController';
+import { getAll, getMembers, addMember, removeMember, provision, toggleActive, registerOrganization } from '../controllers/organizationController';
 import { protect, authorize } from '../middleware/auth';
 
 const router = Router();
+
+// Public — no auth required
+router.post('/register', registerOrganization);
 
 router.use(protect, authorize('admin'));
 

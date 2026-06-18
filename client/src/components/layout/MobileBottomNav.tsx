@@ -25,6 +25,24 @@ interface TabConfig {
 
 // ── Primary tabs (max 4) + overflow items per role ────────────────────────────
 const TABS: Record<string, TabConfig> = {
+  hospital: {
+    primary: [
+      { to: '/hospital',               label: 'Home',     icon: LayoutDashboard, exact: true },
+      { to: '/hospital/consultations', label: 'Consult',  icon: Stethoscope },
+      { to: '/hospital/lab-requests',  label: 'Labs',     icon: Microscope },
+      { to: '/hospital/requests',      label: 'Requests', icon: ShieldCheck, badge: 'drRequests' },
+    ],
+    more: [],
+  },
+  clinic: {
+    primary: [
+      { to: '/clinic',               label: 'Home',     icon: LayoutDashboard, exact: true },
+      { to: '/clinic/consultations', label: 'Consult',  icon: Stethoscope },
+      { to: '/clinic/lab-requests',  label: 'Labs',     icon: Microscope },
+      { to: '/clinic/requests',      label: 'Requests', icon: ShieldCheck, badge: 'drRequests' },
+    ],
+    more: [],
+  },
   patient: {
     primary: [
       { to: '/patient',               label: 'Home',     icon: LayoutDashboard, exact: true },
@@ -183,7 +201,9 @@ export default function MobileBottomNav() {
   const [showMore, setShowMore] = useState(false);
 
   const role      = user?.role || 'patient';
-  const tabConf   = TABS[role] || TABS.patient;
+  const orgType   = user?.organization?.org_type;
+  const tabKey    = orgType && TABS[orgType] ? orgType : role;
+  const tabConf   = TABS[tabKey] || TABS.patient;
   const primary   = tabConf.primary;
   const moreItems = tabConf.more;
   const hasMore   = moreItems.length > 0;
