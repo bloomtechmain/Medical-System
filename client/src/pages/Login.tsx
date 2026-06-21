@@ -154,6 +154,12 @@ export default function Login() {
                 Create account
               </Link>
             </p>
+            <p className="text-center text-sm text-gray-500 mt-2">
+              Registering an organization?{' '}
+              <Link to="/org-register" className="text-primary-600 font-medium hover:text-primary-700">
+                Register here
+              </Link>
+            </p>
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">
