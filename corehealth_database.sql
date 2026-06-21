@@ -689,14 +689,20 @@ BEGIN
   EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I', v_schema);
 
   -- dedicated role, isolated to its own schema
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_role) THEN
-    EXECUTE format('CREATE ROLE %I NOLOGIN', v_role);
-  END IF;
-  EXECUTE format('REVOKE ALL ON SCHEMA %I FROM PUBLIC', v_schema);
-  EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', v_schema, v_role);
-  -- read shared catalog/identity it needs to operate
-  EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', v_role);
-  EXECUTE format('GRANT SELECT ON public.medicines, public.suppliers, public.users TO %I', v_role);
+  -- Wrapped in a sub-block so that permission errors on managed PostgreSQL
+  -- (Railway, Supabase, etc.) don't abort the whole provisioning transaction.
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_role) THEN
+      EXECUTE format('CREATE ROLE %I NOLOGIN', v_role);
+    END IF;
+    EXECUTE format('REVOKE ALL ON SCHEMA %I FROM PUBLIC', v_schema);
+    EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', v_schema, v_role);
+    -- read shared catalog/identity it needs to operate
+    EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', v_role);
+    EXECUTE format('GRANT SELECT ON public.medicines, public.suppliers, public.users TO %I', v_role);
+  EXCEPTION WHEN OTHERS THEN
+    NULL;  -- role-level isolation unavailable; schema isolation still applies
+  END;
 
   -- ---------------------------------------------------------------
   -- Type-specific tables — every tenant gets its own suitable set
