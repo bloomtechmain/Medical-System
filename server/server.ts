@@ -36,6 +36,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/lab-reports', express.static(path.join(__dirname, 'uploads/lab-reports')));
 
+import { registerOrganization } from './controllers/organizationController';
 import authRoutes            from './routes/authRoutes';
 import userRoutes            from './routes/userRoutes';
 import consultationRoutes    from './routes/consultationRoutes';
@@ -66,6 +67,9 @@ app.use('/api/patient-reports',   patientReportRoutes);
 app.use('/api/access-requests',   accessRequestRoutes);
 app.use('/api/lab-view-requests', labViewRequestRoutes);
 app.use('/api/patient-vitals',    patientVitalsRoutes);
+// Public self-registration — mounted before the admin-gated organizations router
+// so it is never touched by the protect/authorize middleware.
+app.post('/api/organizations/register', registerOrganization);
 app.use('/api/organizations',     organizationRoutes);
 
 app.get('/api/health', (_req, res) =>
