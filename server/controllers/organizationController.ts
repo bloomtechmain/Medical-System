@@ -120,8 +120,9 @@ const ORG_OWNER_ROLE: Record<string, string> = {
 };
 
 const registerOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     const { org_name, slug, org_type, owner_name, owner_email, owner_password, profile } = req.body as {
       org_name: string; slug: string; org_type: string;
       owner_name: string; owner_email: string; owner_password: string;
@@ -165,10 +166,10 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
       message: 'Registration submitted. An administrator will review your organization and you’ll be able to sign in once it’s approved.',
     });
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK').catch(() => {});
     next(err);
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
 
