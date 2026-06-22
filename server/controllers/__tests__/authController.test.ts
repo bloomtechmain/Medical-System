@@ -41,8 +41,10 @@ describe('authController.login', () => {
   });
 
   it('returns the user (without password) and a token on success', async () => {
-    const user = { id: 1, email: 'x@x.com', password: 'hashed', role: 'patient' };
-    query.mockResolvedValue({ rows: [user] });
+    const user = { id: 1, email: 'x@x.com', password: 'hashed', role: 'patient', is_active: true };
+    query
+      .mockResolvedValueOnce({ rows: [user] })  // SELECT * FROM users WHERE email = ?
+      .mockResolvedValueOnce({ rows: [] });      // getOrgForUser → no org membership
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
     (jwt.sign as jest.Mock).mockReturnValue('fake-token');
 
@@ -50,7 +52,7 @@ describe('authController.login', () => {
     await login(mockRequest({ body: { email: 'x@x.com', password: 'correct' } }), res, next);
 
     expect(res.json).toHaveBeenCalledWith({
-      user: { id: 1, email: 'x@x.com', role: 'patient' },
+      user: { id: 1, email: 'x@x.com', role: 'patient', is_active: true, organization: null },
       token: 'fake-token',
     });
   });
