@@ -72,7 +72,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/"           element={token && user?.role ? <RoleHome /> : <Navigate to="/login" replace />} />
+      <Route path="/"           element={token && user?.role ? <RoleHome /> : <Landing />} />
       <Route path="/welcome"    element={<Landing />} />
       <Route path="/login"      element={token && user?.role ? <RoleHome /> : <Login />} />
       <Route path="/register"   element={token && user?.role ? <RoleHome /> : <Register />} />
