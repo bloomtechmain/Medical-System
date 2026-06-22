@@ -7,7 +7,7 @@ import {
   Users, Stethoscope, FlaskConical, Pill, Truck,
   ShoppingCart, BarChart2, Receipt, Activity, TrendingUp,
   AlertTriangle, Shield, UserCheck, Package, Building2,
-  Hospital, CalendarCheck,
+  Hospital, CalendarCheck, Clock,
 } from 'lucide-react';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -90,6 +90,27 @@ export default function AdminDashboard() {
           🛡️ System Administrator
         </span>
       </div>
+
+      {/* Pending organization approvals alert */}
+      {Number(org?.pending_organizations) > 0 && (
+        <Link
+          to="/admin/organizations"
+          className="flex items-center gap-4 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 hover:bg-amber-100 transition-colors"
+        >
+          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+            <Clock size={18} className="text-amber-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">
+              {org.pending_organizations} organization{Number(org.pending_organizations) > 1 ? 's' : ''} pending approval
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">Review and approve self-registered organizations</p>
+          </div>
+          <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200">
+            Review →
+          </span>
+        </Link>
+      )}
 
       {/* User stats */}
       <section>
