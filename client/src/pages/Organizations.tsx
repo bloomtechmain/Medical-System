@@ -8,7 +8,7 @@ import { formatDate } from '../utils/helpers';
 import {
   Building2, Hospital, FlaskConical, Pill, Stethoscope,
   ChevronDown, ChevronUp, Plus, Trash2, UserPlus, Power,
-  PowerOff, X, Users, Hash,
+  PowerOff, X, Users, Hash, CheckCircle, Clock,
 } from 'lucide-react';
 
 const ORG_TYPE_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -230,6 +230,8 @@ function OrgRow({ org }: { org: Organization }) {
   const [expanded, setExpanded] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
 
+  const isPending = !org.is_active && !org.approved_at;
+
   const { data: members = [], isLoading: membersLoading } = useQuery<OrganizationMember[]>({
     queryKey: ['org-members', org.id],
     queryFn: () => orgApi.getMembers(org.id),
@@ -241,9 +243,9 @@ function OrgRow({ org }: { org: Organization }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['organizations'] });
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
-      toast.success(`Organization ${org.is_active ? 'deactivated' : 'activated'}`);
+      toast.success(isPending ? 'Organization approved' : org.is_active ? 'Organization deactivated' : 'Organization activated');
     },
-    onError: () => toast.error('Failed to toggle organization'),
+    onError: () => toast.error('Failed to update organization'),
   });
 
   const removeMember = useMutation({
@@ -258,7 +260,9 @@ function OrgRow({ org }: { org: Organization }) {
 
   return (
     <>
-      <div className={`bg-white rounded-xl border transition-all ${org.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}>
+      <div className={`bg-white rounded-xl border transition-all ${
+        isPending ? 'border-amber-200 ring-1 ring-amber-100' : org.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'
+      }`}>
         <div className="flex items-center gap-4 px-5 py-4">
           {/* Type icon */}
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${ORG_TYPE_META[org.org_type]?.color ?? 'bg-gray-50 border-gray-200'}`}>
@@ -270,7 +274,12 @@ function OrgRow({ org }: { org: Organization }) {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-gray-900 text-sm">{org.name}</span>
               <OrgTypeBadge type={org.org_type} />
-              {!org.is_active && (
+              {isPending && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  <Clock size={9} /> PENDING APPROVAL
+                </span>
+              )}
+              {!org.is_active && !isPending && (
                 <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">INACTIVE</span>
               )}
             </div>
@@ -295,18 +304,30 @@ function OrgRow({ org }: { org: Organization }) {
           {/* Actions */}
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs text-gray-400 hidden sm:block">{formatDate(org.created_at)}</span>
-            <button
-              onClick={() => toggle.mutate()}
-              disabled={toggle.isPending}
-              className={`p-2 rounded-lg transition-colors ${
-                org.is_active
-                  ? 'text-yellow-500 hover:bg-yellow-50'
-                  : 'text-green-500 hover:bg-green-50'
-              }`}
-              title={org.is_active ? 'Deactivate' : 'Activate'}
-            >
-              {org.is_active ? <PowerOff size={15} /> : <Power size={15} />}
-            </button>
+            {isPending ? (
+              <button
+                onClick={() => toggle.mutate()}
+                disabled={toggle.isPending}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-colors disabled:opacity-50"
+                title="Approve organization"
+              >
+                <CheckCircle size={13} />
+                Approve
+              </button>
+            ) : (
+              <button
+                onClick={() => toggle.mutate()}
+                disabled={toggle.isPending}
+                className={`p-2 rounded-lg transition-colors ${
+                  org.is_active
+                    ? 'text-yellow-500 hover:bg-yellow-50'
+                    : 'text-green-500 hover:bg-green-50'
+                }`}
+                title={org.is_active ? 'Deactivate' : 'Activate'}
+              >
+                {org.is_active ? <PowerOff size={15} /> : <Power size={15} />}
+              </button>
+            )}
             <button
               onClick={() => setExpanded(e => !e)}
               className="p-2 rounded-lg text-gray-400 hover:bg-gray-50 transition-colors"
@@ -383,13 +404,17 @@ export default function Organizations() {
   });
 
   const filtered = (orgs as Organization[]).filter(o => {
+    if (filterType === 'pending') return !o.is_active && !o.approved_at;
     if (filterType !== 'all' && o.org_type !== filterType) return false;
     if (search && !o.name.toLowerCase().includes(search.toLowerCase()) && !o.slug.includes(search.toLowerCase())) return false;
     return true;
   });
 
+  const pendingCount = (orgs as Organization[]).filter(o => !o.is_active && !o.approved_at).length;
+
   const counts = {
     all:        (orgs as Organization[]).length,
+    pending:    pendingCount,
     hospital:   (orgs as Organization[]).filter(o => o.org_type === 'hospital').length,
     pharmacy:   (orgs as Organization[]).filter(o => o.org_type === 'pharmacy').length,
     laboratory: (orgs as Organization[]).filter(o => o.org_type === 'laboratory').length,
@@ -398,6 +423,7 @@ export default function Organizations() {
 
   const FILTERS = [
     { key: 'all',        label: 'All' },
+    { key: 'pending',    label: 'Pending' },
     { key: 'hospital',   label: 'Hospitals' },
     { key: 'pharmacy',   label: 'Pharmacies' },
     { key: 'laboratory', label: 'Laboratories' },
@@ -422,18 +448,22 @@ export default function Organizations() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
         {FILTERS.map(f => (
           <div
             key={f.key}
             onClick={() => setFilterType(f.key)}
             className={`rounded-xl border p-3 text-center cursor-pointer transition-all ${
-              filterType === f.key
-                ? 'bg-primary-50 border-primary-200 ring-2 ring-primary-200'
-                : 'bg-white border-gray-100 hover:border-gray-200'
+              f.key === 'pending' && counts.pending > 0 && filterType !== 'pending'
+                ? 'bg-amber-50 border-amber-200 hover:border-amber-300'
+                : filterType === f.key
+                  ? 'bg-primary-50 border-primary-200 ring-2 ring-primary-200'
+                  : 'bg-white border-gray-100 hover:border-gray-200'
             }`}
           >
-            <p className="text-2xl font-bold text-gray-900">{counts[f.key as keyof typeof counts]}</p>
+            <p className={`text-2xl font-bold ${f.key === 'pending' && counts.pending > 0 ? 'text-amber-600' : 'text-gray-900'}`}>
+              {counts[f.key as keyof typeof counts]}
+            </p>
             <p className="text-xs text-gray-500 mt-0.5">{f.label}</p>
           </div>
         ))}
