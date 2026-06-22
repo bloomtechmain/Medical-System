@@ -215,12 +215,13 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
       `),
       pool.query(`
         SELECT
-          COUNT(*) FILTER (WHERE org_type='hospital')   AS total_hospitals,
-          COUNT(*) FILTER (WHERE org_type='pharmacy')   AS total_pharmacies,
-          COUNT(*) FILTER (WHERE org_type='laboratory') AS total_laboratories,
-          COUNT(*) FILTER (WHERE org_type='clinic')     AS total_clinics,
-          COUNT(*)                                       AS total_organizations
-        FROM public.organizations WHERE is_active=TRUE
+          COUNT(*) FILTER (WHERE org_type='hospital'   AND is_active=TRUE) AS total_hospitals,
+          COUNT(*) FILTER (WHERE org_type='pharmacy'   AND is_active=TRUE) AS total_pharmacies,
+          COUNT(*) FILTER (WHERE org_type='laboratory' AND is_active=TRUE) AS total_laboratories,
+          COUNT(*) FILTER (WHERE org_type='clinic'     AND is_active=TRUE) AS total_clinics,
+          COUNT(*) FILTER (WHERE is_active=TRUE)                            AS total_organizations,
+          COUNT(*) FILTER (WHERE is_active=FALSE AND approved_at IS NULL)   AS pending_organizations
+        FROM public.organizations
       `),
       pool.query(`
         SELECT

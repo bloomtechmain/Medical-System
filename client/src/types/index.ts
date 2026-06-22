@@ -316,6 +316,7 @@ export interface Organization {
   owner_name?: string | null;
   owner_email?: string | null;
   is_active: boolean;
+  approved_at: string | null;
   created_at: string;
   member_count?: number;
 }
@@ -349,6 +350,7 @@ export interface UserStats {
     total_pharmacies: number;
     total_laboratories: number;
     total_clinics: number;
+    pending_organizations: number;
   };
   medicines: {
     total_medicines: number;
