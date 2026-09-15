@@ -1,8 +1,13 @@
 import path from 'path';
 import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
+
+// lab_requests / lab_view_requests live in the `clinical` schema behind
+// row-level security — every query against them must carry the acting
+// user's identity. See config/db.ts (queryAs).
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
 const userName = async (uid: number): Promise<string> =>
   (await pool.query('SELECT name FROM users WHERE id=$1', [uid])).rows[0]?.name || 'User';
@@ -12,7 +17,7 @@ const createRequest = async (req: Request, res: Response, next: NextFunction): P
     const { lab_request_id, message } = req.body;
     const doctorId = req.user.id;
 
-    const { rows: [labReq] } = await pool.query(
+    const { rows: [labReq] } = await queryAs(actor(req),
       "SELECT * FROM lab_requests WHERE id=$1 AND doctor_id=$2 AND status='completed'",
       [lab_request_id, doctorId]
     );
@@ -20,7 +25,7 @@ const createRequest = async (req: Request, res: Response, next: NextFunction): P
       res.status(404).json({ message: 'Lab report not found or not yet completed.' }); return;
     }
 
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       'SELECT * FROM lab_view_requests WHERE lab_request_id=$1 AND doctor_id=$2 ORDER BY created_at DESC LIMIT 1',
       [lab_request_id, doctorId]
     );
@@ -33,7 +38,7 @@ const createRequest = async (req: Request, res: Response, next: NextFunction): P
         res.status(409).json({ message: 'You already have access to this report.' }); return;
       }
 
-      const { rows: [updated] } = await pool.query(`
+      const { rows: [updated] } = await queryAs(actor(req), `
         UPDATE lab_view_requests
         SET status='pending', message=$1, responded_at=NULL, updated_at=NOW()
         WHERE id=$2 RETURNING *
@@ -43,7 +48,7 @@ const createRequest = async (req: Request, res: Response, next: NextFunction): P
       res.status(201).json(updated); return;
     }
 
-    const { rows: [request] } = await pool.query(`
+    const { rows: [request] } = await queryAs(actor(req), `
       INSERT INTO lab_view_requests (lab_request_id, doctor_id, patient_id, message)
       VALUES ($1,$2,$3,$4) RETURNING *
     `, [lab_request_id, doctorId, labReq.patient_id, message || null]);
@@ -76,7 +81,7 @@ const respond = async (req: Request, res: Response, next: NextFunction): Promise
       res.status(400).json({ message: 'Status must be accepted or declined.' }); return;
     }
 
-    const { rows: [existing] } = await pool.query(`
+    const { rows: [existing] } = await queryAs(actor(req), `
       SELECT lvr.*, lr.test_description, lr.laboratory_id
       FROM lab_view_requests lvr
       JOIN lab_requests lr ON lr.id = lvr.lab_request_id
@@ -87,7 +92,7 @@ const respond = async (req: Request, res: Response, next: NextFunction): Promise
       res.status(404).json({ message: 'Request not found or already responded to.' }); return;
     }
 
-    const { rows: [request] } = await pool.query(`
+    const { rows: [request] } = await queryAs(actor(req), `
       UPDATE lab_view_requests
       SET status=$1, responded_at=NOW(), updated_at=NOW()
       WHERE id=$2 RETURNING *
@@ -121,7 +126,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
     let rows: unknown[];
 
     if (role === 'doctor') {
-      ({ rows } = await pool.query(`
+      ({ rows } = await queryAs(actor(req), `
         SELECT lvr.*,
           lr.test_description, lr.report_notes, lr.report_file, lr.report_mimetype,
           lr.notes AS lab_notes, lr.created_at AS lab_created_at,
@@ -135,7 +140,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
         ORDER BY lvr.created_at DESC
       `, [id]));
     } else if (role === 'patient') {
-      ({ rows } = await pool.query(`
+      ({ rows } = await queryAs(actor(req), `
         SELECT lvr.*,
           lr.test_description, lr.report_notes,
           lp.lab_name,
@@ -161,7 +166,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 
 const serveFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rows: [viewReq] } = await pool.query(`
+    const { rows: [viewReq] } = await queryAs(actor(req), `
       SELECT lvr.*, lr.report_file, lr.report_mimetype
       FROM lab_view_requests lvr
       JOIN lab_requests lr ON lr.id = lvr.lab_request_id
