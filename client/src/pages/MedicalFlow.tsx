@@ -408,7 +408,7 @@ export default function MedicalFlow() {
 
   const { data: consultations = [] } = useQuery({ queryKey: ['consultations'],       queryFn: consultationApi.getAll });
   const { data: labReports    = [] } = useQuery({ queryKey: ['patient-lab-reports'], queryFn: labApi.getAll });
-  const { data: me }                 = useQuery({ queryKey: ['me'],                  queryFn: authApi.me });
+  useQuery({ queryKey: ['me'], queryFn: authApi.me }); // warms the shared 'me' cache for other components
 
   const allEvents = useMemo(() => buildEvents(consultations as any[], labReports as any[]), [consultations, labReports]);
 

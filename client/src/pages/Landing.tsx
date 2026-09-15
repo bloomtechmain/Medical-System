@@ -73,26 +73,10 @@ const ROLES = [
   { icon: '🔬', label: 'Laboratory',  desc: 'Receive lab requests and upload patient reports',          color: 'text-cyan-600 bg-cyan-100' },
 ];
 
-function useCountUp(target: number, duration = 2000, start = false) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!start) return;
-    let startTime: number | null = null;
-    const step = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      setCount(Math.floor(progress * target));
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [target, duration, start]);
-  return count;
-}
-
 export default function Landing() {
   const [scrolled, setScrolled] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
-  const [statsVisible, setStatsVisible] = useState(false);
+  const [, setStatsVisible] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
