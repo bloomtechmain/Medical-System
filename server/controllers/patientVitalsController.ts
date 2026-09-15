@@ -1,5 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { queryAs, RLSActor } from '../config/db';
+
+// patient_vitals lives in the `clinical` schema behind row-level security —
+// every query against it must carry the acting user's identity. See
+// config/db.ts (queryAs) for why plain pool.query() isn't enough.
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
 const VITAL_FIELDS = [
   'wbc','rbc','hemoglobin','hematocrit','mcv','mch','mchc','rdw','platelets','mpv',
@@ -11,7 +16,7 @@ const VITAL_FIELDS = [
 // GET /patient-vitals — latest vitals record for the current patient
 const getVitals = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rows } = await pool.query(
+    const { rows } = await queryAs(actor(req),
       `SELECT * FROM patient_vitals WHERE patient_id = $1 ORDER BY recorded_at DESC LIMIT 1`,
       [req.user.id]
     );
@@ -22,7 +27,7 @@ const getVitals = async (req: Request, res: Response, next: NextFunction): Promi
 // GET /patient-vitals/history
 const getVitalsHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rows } = await pool.query(
+    const { rows } = await queryAs(actor(req),
       `SELECT * FROM patient_vitals WHERE patient_id = $1 ORDER BY recorded_at DESC LIMIT 20`,
       [req.user.id]
     );
@@ -59,7 +64,7 @@ const saveVitals = async (req: Request, res: Response, next: NextFunction): Prom
 
     // Check for an existing manual record today to upsert into
     const today = new Date().toISOString().split('T')[0];
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       `SELECT id FROM patient_vitals
        WHERE patient_id = $1 AND source = 'manual' AND recorded_at::date = $2
        ORDER BY recorded_at DESC LIMIT 1`,
@@ -72,7 +77,7 @@ const saveVitals = async (req: Request, res: Response, next: NextFunction): Prom
       // ── UPDATE existing record ──────────────────────────────────────────
       // $1 = record id, $2...$N = field values
       const setClauses = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
-      const { rows } = await pool.query(
+      const { rows } = await queryAs(actor(req),
         `UPDATE patient_vitals
          SET ${setClauses}, updated_at = NOW()
          WHERE id = $1
@@ -85,7 +90,7 @@ const saveVitals = async (req: Request, res: Response, next: NextFunction): Prom
       // $1 = patient_id, $2...$N = field values (source is hardcoded)
       const colList     = ['patient_id', 'source', ...fields];
       const placeholders = fields.map((_, i) => `$${i + 2}`).join(', ');
-      const { rows } = await pool.query(
+      const { rows } = await queryAs(actor(req),
         `INSERT INTO patient_vitals (${colList.join(', ')})
          VALUES ($1, 'manual', ${placeholders})
          RETURNING *`,
@@ -112,8 +117,13 @@ export const saveVitalsFromLab = async (
 
     const vals = fields.map(f => vitalsData[f]);
 
+    // Runs from a background job after a lab report upload — there's no
+    // req.user here, but the pv_mod RLS policy explicitly allows role
+    // 'laboratory' regardless of patient_id, so a fixed lab actor is correct.
+    const labActor: RLSActor = { role: 'laboratory' };
+
     // Check for existing record tied to this lab request
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(labActor,
       `SELECT id FROM patient_vitals WHERE lab_request_id = $1 LIMIT 1`,
       [labRequestId]
     );
@@ -121,7 +131,7 @@ export const saveVitalsFromLab = async (
     if (existing.length > 0) {
       // UPDATE — $1 = record id, $2...$N = vitals values
       const setClauses = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
-      await pool.query(
+      await queryAs(labActor,
         `UPDATE patient_vitals SET ${setClauses}, updated_at = NOW() WHERE id = $1`,
         [existing[0].id, ...vals]
       );
@@ -129,7 +139,7 @@ export const saveVitalsFromLab = async (
       // INSERT — $1=patient_id, $2=lab_request_id, $3...$N=vitals values
       const colList      = ['patient_id', 'lab_request_id', 'source', ...fields];
       const placeholders = fields.map((_, i) => `$${i + 3}`).join(', ');
-      await pool.query(
+      await queryAs(labActor,
         `INSERT INTO patient_vitals (${colList.join(', ')})
          VALUES ($1, $2, 'lab_report', ${placeholders})`,
         [patientId, labRequestId, ...vals]

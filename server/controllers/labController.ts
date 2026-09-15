@@ -1,10 +1,15 @@
 import path from 'path';
 import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
 import { extractVitalsFromText, extractTextFromPDF } from '../utils/labVitalsParser';
 import { saveVitalsFromLab } from './patientVitalsController';
+
+// lab_requests lives in the `clinical` schema behind row-level security —
+// every query against it must carry the acting user's identity. See
+// config/db.ts (queryAs) for why plain pool.query() isn't enough.
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
 /** Run OCR on an image file; skip PDFs (handled by pdfjs separately). */
 const runOCROnLabFile = async (filePath: string): Promise<string> => {
@@ -47,11 +52,11 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     if (!laboratory_id) { res.status(400).json({ message: 'Laboratory selection is required' }); return; }
 
     let doctorId  = isDoctor ? req.user.id : null;
-    let patientId = isDoctor ? patient_id  : req.user.id;
+    const patientId = isDoctor ? patient_id  : req.user.id;
     let testDesc  = test_description;
 
     if (isPatient && consultation_id) {
-      const { rows: [cons] } = await pool.query(
+      const { rows: [cons] } = await queryAs(actor(req),
         'SELECT doctor_id, lab_tests_requested FROM medical_consultations WHERE id=$1 AND patient_id=$2',
         [consultation_id, patientId]
       );
@@ -64,14 +69,14 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     if (!testDesc)  { res.status(400).json({ message: 'Test description is required' }); return; }
 
     if (consultation_id && isPatient) {
-      const { rows: dup } = await pool.query(
+      const { rows: dup } = await queryAs(actor(req),
         'SELECT id FROM lab_requests WHERE consultation_id=$1 AND patient_id=$2',
         [consultation_id, patientId]
       );
       if (dup.length) { res.status(409).json({ message: 'Lab request already sent for this consultation' }); return; }
     }
 
-    const { rows: [request] } = await pool.query(`
+    const { rows: [request] } = await queryAs(actor(req), `
       INSERT INTO lab_requests
         (doctor_id, patient_id, laboratory_id, consultation_id, test_description, notes)
       VALUES ($1,$2,$3,$4,$5,$6)
@@ -115,7 +120,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
     const cond = condMap[role];
     if (!cond) { res.json([]); return; }
 
-    const { rows } = await pool.query(`
+    const { rows } = await queryAs(actor(req), `
       SELECT lr.*,
         dr.name  AS doctor_name,
         pt.name  AS patient_name,
@@ -146,7 +151,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
     const cond = condMap[role];
     if (!cond) { res.status(403).json({ message: 'Forbidden' }); return; }
 
-    const { rows } = await pool.query(`
+    const { rows } = await queryAs(actor(req), `
       SELECT lr.*,
         dr.name  AS doctor_name,
         pt.name  AS patient_name,
@@ -173,7 +178,7 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
     };
     const labId = req.user.id;
 
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       'SELECT * FROM lab_requests WHERE id=$1 AND laboratory_id=$2',
       [req.params.id, labId]
     );
@@ -187,7 +192,7 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
     }
 
     // Save the report record immediately
-    const { rows: [request] } = await pool.query(`
+    const { rows: [request] } = await queryAs(actor(req), `
       UPDATE lab_requests
       SET report_file=$1, report_mimetype=$2, report_notes=$3,
           status='completed', updated_at=NOW()
@@ -273,7 +278,7 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
 const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { status } = req.body;
-    const { rows } = await pool.query(
+    const { rows } = await queryAs(actor(req),
       `UPDATE lab_requests SET status=$1, updated_at=NOW()
        WHERE id=$2 AND laboratory_id=$3 RETURNING *`,
       [status, req.params.id, req.user.id]
@@ -285,7 +290,7 @@ const updateStatus = async (req: Request, res: Response, next: NextFunction): Pr
 
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rows } = await pool.query(
+    const { rows } = await queryAs(actor(req),
       'SELECT report_file FROM lab_requests WHERE id=$1 AND doctor_id=$2',
       [req.params.id, req.user.id]
     );
@@ -296,7 +301,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
       if (fs.existsSync(fp)) fs.unlinkSync(fp);
     }
 
-    await pool.query('DELETE FROM lab_requests WHERE id=$1', [req.params.id]);
+    await queryAs(actor(req), 'DELETE FROM lab_requests WHERE id=$1', [req.params.id]);
     res.status(204).end();
   } catch (err) { next(err); }
 };

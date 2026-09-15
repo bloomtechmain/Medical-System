@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
-import { pool } from '../config/db';
+import { pool, queryAs, RLSActor } from '../config/db';
+
+// clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
+// live behind row-level security — queries against them must carry the
+// acting user's identity. See config/db.ts (queryAs).
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -35,7 +40,7 @@ const getOneWithProfile = async (req: Request, res: Response, next: NextFunction
     const user = rows[0];
     let profile: Record<string, unknown> | null = null;
     if (user.role === 'patient') {
-      const { rows: p } = await pool.query('SELECT * FROM clinical.patient_profiles WHERE user_id = $1', [user.id]);
+      const { rows: p } = await queryAs(actor(req), 'SELECT * FROM clinical.patient_profiles WHERE user_id = $1', [user.id]);
       profile = p[0] || null;
     } else if (user.role === 'doctor') {
       const { rows: p } = await pool.query('SELECT * FROM public.doctor_profiles WHERE user_id = $1', [user.id]);
@@ -84,11 +89,20 @@ const updateWithProfile = async (req: Request, res: Response, next: NextFunction
     }
     params.push(req.params.id);
 
+    await client.query('BEGIN');
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+      [String(req.user.id), req.user.role]
+    );
+
     const { rows } = await client.query(
       `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${params.length} RETURNING id, name, email, role, is_active`,
       params
     );
-    if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ message: 'User not found' }); return;
+    }
     const user = rows[0];
 
     if (profile && Object.keys(profile).length) {
@@ -145,8 +159,14 @@ const updateWithProfile = async (req: Request, res: Response, next: NextFunction
       updatedProfile = p[0] || null;
     }
 
+    await client.query('COMMIT');
     res.json({ ...user, profile: updatedProfile });
-  } catch (err) { next(err); } finally { client.release(); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 };
 
 const toggleActive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -230,14 +250,14 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
           COUNT(*) FILTER (WHERE expiry_date < NOW())         AS expired
         FROM public.medicines WHERE is_active=TRUE
       `),
-      pool.query(`
+      queryAs(actor(req), `
         SELECT
           COUNT(*)                                          AS total_consultations,
           COUNT(*) FILTER (WHERE status='active')           AS active_consultations,
           COUNT(*) FILTER (WHERE status='completed')        AS completed_consultations
         FROM clinical.medical_consultations
       `),
-      pool.query(`
+      queryAs(actor(req), `
         SELECT
           COUNT(*)                                          AS total_lab_requests,
           COUNT(*) FILTER (WHERE status='pending')          AS pending_lab_requests,
@@ -268,7 +288,7 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
 const searchPatients = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
-    const { rows } = await pool.query(`
+    const { rows } = await queryAs(actor(req), `
       SELECT u.id, u.name, u.email, u.is_active,
              p.phone, p.date_of_birth, p.blood_type, p.gender
       FROM public.users u
