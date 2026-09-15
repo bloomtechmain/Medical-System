@@ -9,6 +9,7 @@ const run = async (): Promise<void> => {
     await client.query(`ALTER TABLE medical_consultations ADD COLUMN IF NOT EXISTS doctor_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
     await client.query(`ALTER TABLE medical_consultations ADD COLUMN IF NOT EXISTS assigned_pharmacist_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
     await client.query(`ALTER TABLE medical_consultations ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','dispensed','completed'))`);
+    await client.query(`ALTER TABLE medical_consultations ADD COLUMN IF NOT EXISTS lab_tests_requested TEXT`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS notifications (
