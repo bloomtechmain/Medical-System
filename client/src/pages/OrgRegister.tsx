@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { orgApi } from '../services/api';
 
@@ -80,7 +80,6 @@ export default function OrgRegister() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
-  const navigate = useNavigate();
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm();
   const password = watch('owner_password');

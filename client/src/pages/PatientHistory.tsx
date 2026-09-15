@@ -220,7 +220,7 @@ function PatientSearch({ onSelect }: PatientSearchProps) {
 export default function PatientHistory() {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['patient-history', selectedPatient?.id],
     queryFn:  () => consultationApi.getPatientHistory(selectedPatient.id),
     enabled:  !!selectedPatient,

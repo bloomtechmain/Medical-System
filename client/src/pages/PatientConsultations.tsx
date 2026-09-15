@@ -1,13 +1,12 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Stethoscope, Thermometer, CheckCircle2, Clock, Package, Pill,
+  Stethoscope, Thermometer, CheckCircle2, Package, Pill,
   MapPin, Calendar, ChevronDown, Pencil, X, Plus, Building2,
   ArrowUpRight, Info, FlaskConical, Send, Search, FileImage,
   Eye, Download, ExternalLink, Microscope, Activity, FileText,
 } from 'lucide-react';
 import { consultationApi, labApi, userApi } from '../services/api';
-import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';

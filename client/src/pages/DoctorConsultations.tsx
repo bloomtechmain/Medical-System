@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { consultationApi, userApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
@@ -434,25 +434,18 @@ function EditConsultationModal({ consultation: c, onClose, onSaved }: EditConsul
       duration:      m.duration      || '',
     }))
   );
-  const [selectedPharmacist, setSelectedPharmacist] = useState<any>(
+  const [selectedPharmacist, _setSelectedPharmacist] = useState<any>(
     c.assigned_pharmacist_id
       ? { id: c.assigned_pharmacist_id, pharmacy_name: c.pharmacy_name, pharmacy_address: c.pharmacy_address, name: c.pharmacist_name }
       : null
   );
-  const [file, setFile]       = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [file] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const sf = (k: string, v: string) => setFields(p => ({ ...p, [k]: v }));
   const addMed    = () => setMedicines((p: any[]) => [...p, { medicine_name:'', dosage:'', frequency:'', duration:'' }]);
   const removeMed = (i: number) => setMedicines((p: any[]) => p.filter((_: any, idx: number) => idx !== i));
   const changeMed = (i: number, k: string, v: string) => setMedicines((p: any[]) => p.map((m: any, idx: number) => idx === i ? { ...m, [k]: v } : m));
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    setFile(f); setPreview(URL.createObjectURL(f));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

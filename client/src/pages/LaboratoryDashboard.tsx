@@ -3,23 +3,6 @@ import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/helpers';
 
-const SERVICES_LIST = [
-  'Blood Tests (CBC, LFT, KFT)',
-  'Lipid Profile',
-  'Thyroid Function',
-  'Urine Analysis',
-  'Stool Analysis',
-  'X-Ray',
-  'Ultrasound',
-  'MRI',
-  'CT Scan',
-  'ECG / EEG',
-  'Pathology / Biopsy',
-  'Microbiology Culture',
-  'COVID-19 PCR',
-  'Hormone Tests',
-];
-
 export default function LaboratoryDashboard() {
   const { user } = useAuth();
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: authApi.me });
@@ -47,37 +30,27 @@ export default function LaboratoryDashboard() {
   return (
     <div className="space-y-6">
 
-      {/* Welcome banner */}
-      <div className="bg-gradient-to-r from-cyan-600 to-cyan-900 rounded-2xl p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-cyan-200 text-sm font-medium">Welcome,</p>
-            <h1 className="text-2xl font-bold mt-0.5">{profile?.lab_name || firstName} 🔬</h1>
-            <p className="text-cyan-200 text-sm mt-2">
-              {profile?.lab_type || 'Diagnostic Laboratory'} · Core Health Portal
-            </p>
-          </div>
-          <div className="hidden sm:flex flex-col items-center bg-white/10 rounded-xl p-4">
-            <span className="text-4xl">🔬</span>
-            <p className="text-xs mt-1 text-cyan-200">Laboratory</p>
-          </div>
-        </div>
-      </div>
+      {/* Welcome banner + stats list */}
+      <div className="w-full lg:w-3/4 bg-gradient-to-r from-cyan-600 to-cyan-900 rounded-2xl p-6 text-white">
+        <p className="text-cyan-200 text-sm font-medium">Welcome,</p>
+        <h1 className="text-2xl font-bold mt-0.5">{profile?.lab_name || firstName} 🔬</h1>
+        <p className="text-cyan-200 text-sm mt-2">
+          {profile?.lab_type || 'Diagnostic Laboratory'} · Core Health Portal
+        </p>
 
-      {/* Quick stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { icon: '🏥', label: 'Lab Name',    value: profile?.lab_name       || '—', bg: 'bg-cyan-50   border-cyan-100'   },
-          { icon: '🧪', label: 'Lab Types',   value: labTypes.length ? `${labTypes.length} type${labTypes.length > 1 ? 's' : ''}` : '—', bg: 'bg-blue-50   border-blue-100'   },
-          { icon: '📋', label: 'License',     value: profile?.license_number || '—', bg: 'bg-purple-50 border-purple-100' },
-          { icon: '⭐', label: 'Accreditations', value: accreditations.length ? `${accreditations.length} certification${accreditations.length > 1 ? 's' : ''}` : '—', bg: 'bg-green-50  border-green-100'  },
-        ].map(c => (
-          <div key={c.label} className={`rounded-xl border p-4 ${c.bg}`}>
-            <span className="text-2xl">{c.icon}</span>
-            <p className="text-xs text-gray-500 font-medium mt-2">{c.label}</p>
-            <p className="text-sm font-bold text-gray-900 mt-0.5 truncate">{c.value}</p>
-          </div>
-        ))}
+        <div className="mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
+          {[
+            { label: 'Lab Name',        value: profile?.lab_name       || '—' },
+            { label: 'Lab Types',       value: labTypes.length ? `${labTypes.length} type${labTypes.length > 1 ? 's' : ''}` : '—' },
+            { label: 'License',         value: profile?.license_number || '—' },
+            { label: 'Accreditations',  value: accreditations.length ? `${accreditations.length} certification${accreditations.length > 1 ? 's' : ''}` : '—' },
+          ].map((c) => (
+            <div key={c.label} className="flex items-center gap-3 px-6 py-3 max-w-md">
+              <span className="flex-1 text-sm text-cyan-100">{c.label}</span>
+              <span className="text-base font-bold text-white">{c.value}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Profile + services */}

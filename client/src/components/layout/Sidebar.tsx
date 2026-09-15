@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { accessRequestApi, labViewRequestApi } from '../../services/api';
 import { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, Stethoscope, Activity, FlaskConical,
+  LayoutDashboard, Stethoscope, Activity,
   FolderOpen, Users, Pill, Truck, ShoppingCart, Receipt, BarChart2,
   ClipboardList, Microscope, LogOut, Settings, UserSearch, ShieldCheck, Building2,
 } from 'lucide-react';
@@ -70,7 +70,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/doctor/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
   ],
   patient: [
-    { to: '/patient',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
+    { to: '/patient',               label: 'Patient Information', icon: LayoutDashboard, exact: true },
     { to: '/patient/consultations', label: 'Consultations',   icon: Stethoscope },
     { to: '/patient/medical-flow',  label: 'Medical Flow',    icon: Activity },
     { to: '/patient/my-reports',    label: 'My Reports',      icon: FolderOpen },
