@@ -87,20 +87,29 @@ export default function ClinicDashboard() {
 
         {/* Stats list */}
         <div className="relative mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
-          {[
-            { label: 'Active Consultations', value: activeConsultations, icon: Stethoscope },
-            { label: 'Completed Today',      value: completedToday,      icon: CheckCircle2 },
-            { label: 'Pending Lab Tests',    value: pendingLabs,         icon: FlaskConical },
-            { label: 'Access Requests',      value: pendingRequests,     icon: ShieldCheck  },
-          ].map(({ label, value, icon: Icon }) => (
-            <div key={label} className="flex items-center gap-3 px-6 py-3 max-w-md">
-              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                <Icon size={16} className="text-white" />
+          {(() => {
+            const fields = [
+              { label: 'Active Consultations', value: activeConsultations, icon: Stethoscope },
+              { label: 'Completed Today',      value: completedToday,      icon: CheckCircle2 },
+              { label: 'Pending Lab Tests',    value: pendingLabs,         icon: FlaskConical },
+              { label: 'Access Requests',      value: pendingRequests,     icon: ShieldCheck  },
+            ];
+            const rows = [];
+            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
+            return rows.map((row, i) => (
+              <div key={i} className="grid grid-cols-2 divide-x divide-white/10 max-w-2xl">
+                {row.map(({ label, value, icon: Icon }) => (
+                  <div key={label} className="flex items-center gap-3 px-6 py-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                      <Icon size={16} className="text-white" />
+                    </div>
+                    <span className="flex-1 text-sm text-teal-100 truncate">{label}</span>
+                    <span className="text-base font-bold text-white shrink-0">{value}</span>
+                  </div>
+                ))}
               </div>
-              <span className="flex-1 text-sm text-teal-100">{label}</span>
-              <span className="text-base font-bold text-white">{value}</span>
-            </div>
-          ))}
+            ));
+          })()}
         </div>
       </div>
 

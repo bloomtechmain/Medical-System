@@ -377,20 +377,29 @@ export default function DoctorDashboard() {
       {/* Doctor profile */}
       <div className="ios-tile p-5">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Professional Profile</p>
-        <div className="space-y-3">
-          {[
-            { label: 'Full Name',     value: me?.name },
-            { label: 'Email',         value: me?.email },
-            { label: 'Phone',         value: profile?.phone },
-            { label: 'License No.',  value: profile?.license_number },
-            { label: 'Medical School',value: profile?.medical_school },
-            { label: 'Affiliation',  value: profile?.hospital_affiliation },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex justify-between text-sm">
-              <span className="text-gray-400 w-36 shrink-0">{label}</span>
-              <span className="text-gray-900 font-semibold text-right">{value || <span className="text-gray-300">—</span>}</span>
-            </div>
-          ))}
+        <div className="divide-y divide-gray-100">
+          {(() => {
+            const fields = [
+              { label: 'Full Name',      value: me?.name },
+              { label: 'Email',          value: me?.email },
+              { label: 'Phone',          value: profile?.phone },
+              { label: 'License No.',    value: profile?.license_number },
+              { label: 'Medical School', value: profile?.medical_school },
+              { label: 'Affiliation',    value: profile?.hospital_affiliation },
+            ];
+            const rows = [];
+            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
+            return rows.map((row, i) => (
+              <div key={i} className={`grid gap-x-6 divide-x divide-gray-100 py-2.5 first:pt-0 last:pb-0 ${row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {row.map(({ label, value }) => (
+                  <div key={label} className="flex justify-between text-sm gap-3 min-w-0 pl-3 first:pl-0">
+                    <span className="text-gray-400 shrink-0">{label}</span>
+                    <span className="text-gray-900 font-semibold text-right truncate">{value || <span className="text-gray-300">—</span>}</span>
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
         </div>
         {profile?.bio && (
           <div className="mt-4 pt-4 border-t border-gray-50">

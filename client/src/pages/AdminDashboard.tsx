@@ -116,19 +116,27 @@ export default function AdminDashboard() {
       <section>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">User Overview</h2>
 
-        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
-          {userCards.map((card) => {
-            const Icon = card.icon;
-            return (
-              <div key={card.label} className="flex items-center gap-3 px-4 py-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${card.bg} ${card.border}`}>
-                  <Icon size={16} className={card.fg} />
-                </div>
-                <span className="flex-1 text-sm text-gray-600">{card.label}</span>
-                <span className="text-base font-bold text-gray-900">{card.value}</span>
+        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
+          {(() => {
+            const rows = [];
+            for (let i = 0; i < userCards.length; i += 2) rows.push(userCards.slice(i, i + 2));
+            return rows.map((row, i) => (
+              <div key={i} className="grid grid-cols-2 divide-x divide-gray-100">
+                {row.map((card) => {
+                  const Icon = card.icon;
+                  return (
+                    <div key={card.label} className="flex items-center gap-3 px-4 py-3 min-w-0">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${card.bg} ${card.border}`}>
+                        <Icon size={16} className={card.fg} />
+                      </div>
+                      <span className="flex-1 text-sm text-gray-600 truncate">{card.label}</span>
+                      <span className="text-base font-bold text-gray-900 shrink-0">{card.value}</span>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            ));
+          })()}
         </div>
       </section>
 
@@ -139,74 +147,93 @@ export default function AdminDashboard() {
           <Link to="/admin/organizations" className="text-xs text-primary-600 hover:text-primary-700 font-medium">Manage →</Link>
         </div>
 
-        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
-          {orgCards.map((card) => (
-            <div key={card.label} className="flex items-center gap-3 px-4 py-3">
-              <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-lg ${card.color}`}>{card.emoji}</span>
-              <span className="flex-1 text-sm text-gray-600">{card.label}</span>
-              <span className="text-base font-bold text-gray-900">{card.value}</span>
-            </div>
-          ))}
+        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
+          {(() => {
+            const rows = [];
+            for (let i = 0; i < orgCards.length; i += 2) rows.push(orgCards.slice(i, i + 2));
+            return rows.map((row, i) => (
+              <div key={i} className={`grid gap-x-0 divide-x divide-gray-100 ${row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {row.map((card) => (
+                  <div key={card.label} className="flex items-center gap-3 px-4 py-3 min-w-0">
+                    <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-lg ${card.color}`}>{card.emoji}</span>
+                    <span className="flex-1 text-sm text-gray-600 truncate">{card.label}</span>
+                    <span className="text-base font-bold text-gray-900 shrink-0">{card.value}</span>
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
         </div>
       </section>
 
       {/* System activity list */}
       <section>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">System Activity</h2>
-        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
-          {[
-            {
-              label: 'Consultations', icon: Stethoscope, bg: 'bg-teal-50', fg: 'text-teal-600',
-              total: c?.total_consultations ?? '—',
-              subs: [
-                { label: 'Active',    value: c?.active_consultations    ?? '—', color: 'text-teal-600'  },
-                { label: 'Completed', value: c?.completed_consultations ?? '—', color: 'text-green-600' },
-              ],
-            },
-            {
-              label: 'Lab Requests', icon: FlaskConical, bg: 'bg-cyan-50', fg: 'text-cyan-600',
-              total: l?.total_lab_requests ?? '—',
-              subs: [
-                { label: 'Pending',   value: l?.pending_lab_requests   ?? '—', color: 'text-yellow-600' },
-                { label: 'Completed', value: l?.completed_lab_requests ?? '—', color: 'text-green-600'  },
-              ],
-            },
-            {
-              label: 'Appointments', icon: CalendarCheck, bg: 'bg-blue-50', fg: 'text-blue-600',
-              total: a?.total_appointments ?? '—',
-              subs: [
-                { label: 'Upcoming',  value: a?.upcoming_appointments  ?? '—', color: 'text-blue-600'  },
-                { label: 'Completed', value: a?.completed_appointments ?? '—', color: 'text-green-600' },
-              ],
-            },
-            {
-              label: 'Pharmacy Sales', icon: TrendingUp, bg: 'bg-green-50', fg: 'text-green-600',
-              total: s?.total_sales ?? '—',
-              subs: [
-                { label: 'Revenue',    value: s ? formatCurrency(Number(s.total_revenue)) : '—', color: 'text-green-600' },
-                { label: 'This Month', value: s?.sales_this_month ?? '—',                        color: 'text-blue-600'  },
-              ],
-            },
-          ].map((row) => {
-            const Icon = row.icon;
-            return (
-              <div key={row.label} className="flex items-center gap-3 px-4 py-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${row.bg}`}>
-                  <Icon size={16} className={row.fg} />
-                </div>
-                <span className="flex-1 text-sm text-gray-600">{row.label}</span>
-                <div className="flex items-center gap-5 shrink-0">
-                  {row.subs.map((sub) => (
-                    <div key={sub.label} className="text-right">
-                      <p className="text-[10px] text-gray-400">{sub.label}</p>
-                      <p className={`text-xs font-semibold ${sub.color}`}>{sub.value}</p>
+        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
+          {(() => {
+            const items = [
+              {
+                label: 'Consultations', icon: Stethoscope, bg: 'bg-teal-50', fg: 'text-teal-600',
+                total: c?.total_consultations ?? '—',
+                subs: [
+                  { label: 'Active',    value: c?.active_consultations    ?? '—', color: 'text-teal-600'  },
+                  { label: 'Completed', value: c?.completed_consultations ?? '—', color: 'text-green-600' },
+                ],
+              },
+              {
+                label: 'Lab Requests', icon: FlaskConical, bg: 'bg-cyan-50', fg: 'text-cyan-600',
+                total: l?.total_lab_requests ?? '—',
+                subs: [
+                  { label: 'Pending',   value: l?.pending_lab_requests   ?? '—', color: 'text-yellow-600' },
+                  { label: 'Completed', value: l?.completed_lab_requests ?? '—', color: 'text-green-600'  },
+                ],
+              },
+              {
+                label: 'Appointments', icon: CalendarCheck, bg: 'bg-blue-50', fg: 'text-blue-600',
+                total: a?.total_appointments ?? '—',
+                subs: [
+                  { label: 'Upcoming',  value: a?.upcoming_appointments  ?? '—', color: 'text-blue-600'  },
+                  { label: 'Completed', value: a?.completed_appointments ?? '—', color: 'text-green-600' },
+                ],
+              },
+              {
+                label: 'Pharmacy Sales', icon: TrendingUp, bg: 'bg-green-50', fg: 'text-green-600',
+                total: s?.total_sales ?? '—',
+                subs: [
+                  { label: 'Revenue',    value: s ? formatCurrency(Number(s.total_revenue)) : '—', color: 'text-green-600' },
+                  { label: 'This Month', value: s?.sales_this_month ?? '—',                        color: 'text-blue-600'  },
+                ],
+              },
+            ];
+            const rows = [];
+            for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2));
+            return rows.map((row, i) => (
+              <div key={i} className={`grid divide-x divide-gray-100 ${row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {row.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.label} className="px-4 py-3 min-w-0">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${item.bg}`}>
+                          <Icon size={16} className={item.fg} />
+                        </div>
+                        <span className="flex-1 text-sm text-gray-600 truncate">{item.label}</span>
+                        <span className="text-base font-bold text-gray-900 shrink-0">{item.total}</span>
+                      </div>
+                      <div className="flex items-center gap-4 pl-12 mt-1.5">
+                        {item.subs.map((sub) => (
+                          <div key={sub.label}>
+                            <p className="text-[10px] text-gray-400">{sub.label}</p>
+                            <p className={`text-xs font-semibold ${sub.color}`}>{sub.value}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                  <span className="text-base font-bold text-gray-900 w-10 text-right">{row.total}</span>
-                </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            ));
+          })()}
         </div>
       </section>
 
