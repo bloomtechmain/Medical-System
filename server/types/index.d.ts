@@ -1,5 +1,3 @@
-import { Request } from 'express';
-
 export type UserRole = 'admin' | 'doctor' | 'pharmacist' | 'patient' | 'laboratory';
 
 export interface JwtUser {

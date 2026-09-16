@@ -6,10 +6,9 @@ import {
   ClipboardList, FolderOpen, Phone, Pill, Calendar, UserRound,
   AlertTriangle, Stethoscope, ChevronDown, ChevronUp,
   MapPin, Shield, Send, X, Activity, FileText, Eye, Loader2,
-  Droplets, Heart, Thermometer, Wind, TestTube2,
+  Droplets, Heart, TestTube2,
 } from 'lucide-react';
 import { accessRequestApi, patientReportApi } from '../services/api';
-import { formatDate } from '../utils/helpers';
 
 const ACCESS_TYPES = [
   { key: 'lab_reports',      label: 'Lab Reports',               desc: 'Hospital & clinic laboratory test results',          Icon: FlaskConical,  grad: 'from-blue-500 to-indigo-600',   light: 'bg-blue-50',   accent: 'text-blue-600'   },

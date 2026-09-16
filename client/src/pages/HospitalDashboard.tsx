@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Stethoscope, FlaskConical, ShieldCheck, Users, ArrowUpRight, Clock, CheckCircle2, AlertCircle } from 'lucide-react';

@@ -30,7 +30,7 @@ function extractMedicines(rawText: string): OcrMedicine[] {
     const freqs     = [...line.matchAll(FREQUENCY_RE)].map((m) => m[0]).join(', ');
     const durations = [...line.matchAll(DURATION_RE)] .map((m) => m[0]).join(', ');
 
-    let name = line
+    const name = line
       .replace(/^\d+[\.\)\-]\s*/, '')
       .replace(/^[Rr]\s*[\/x]\s*/i, '')
       .replace(/^Rx\.?\s*/i, '')

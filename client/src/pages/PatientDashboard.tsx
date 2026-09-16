@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import {
-  Stethoscope, HeartPulse, CheckCircle2, FlaskConical, Pill, UserRound,
-  ArrowUpRight, Download, Calendar, MapPin, Building2, ChevronDown,
+  Stethoscope, CheckCircle2, Pill,
+  ArrowUpRight, Download, Calendar, Building2, ChevronDown,
   Thermometer, Microscope, Package, Clock,
 } from 'lucide-react';
 import { authApi, consultationApi, labApi } from '../services/api';
@@ -155,39 +155,6 @@ function StatusBadge({ status }: { status: string }) {
       <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
       {m.label}
     </span>
-  );
-}
-
-const STAT_THEMES: Record<string, { grad: string; glow: string }> = {
-  teal:   { grad:'from-teal-400 to-teal-600',     glow:'shadow-teal-200/60'   },
-  blue:   { grad:'from-blue-400 to-blue-600',     glow:'shadow-blue-200/60'   },
-  purple: { grad:'from-violet-400 to-purple-600', glow:'shadow-violet-200/60' },
-  green:  { grad:'from-emerald-400 to-green-600', glow:'shadow-emerald-200/60'},
-  yellow: { grad:'from-amber-400 to-orange-500',  glow:'shadow-amber-200/60'  },
-  cyan:   { grad:'from-cyan-400 to-sky-600',      glow:'shadow-cyan-200/60'   },
-  red:    { grad:'from-rose-400 to-red-600',      glow:'shadow-rose-200/60'   },
-};
-
-interface StatCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  sub?: string;
-  color: string;
-}
-
-function StatCard({ icon, label, value, sub, color }: StatCardProps) {
-  const t = STAT_THEMES[color] || STAT_THEMES.teal;
-  return (
-    <div className="ios-stat-tile relative overflow-hidden">
-      <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${t.grad} opacity-10`} />
-      <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${t.grad} flex items-center justify-center mb-3 shadow-lg ${t.glow} relative`}>
-        <span className="text-white [&>svg]:stroke-2">{icon}</span>
-      </div>
-      <p className="text-[32px] font-bold text-gray-900 tracking-tight leading-none relative">{value}</p>
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 relative">{label}</p>
-      {sub && <p className="text-[11px] text-gray-400 mt-0.5 relative">{sub}</p>}
-    </div>
   );
 }
 
@@ -556,9 +523,9 @@ export default function PatientDashboard() {
   return (
     <div className="space-y-6">
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-10 items-start">
 
-        <div className="lg:col-span-2 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="w-full lg:w-3/4 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-6 text-white relative overflow-hidden">
           <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full" />
           <div className="absolute -bottom-12 -right-4 w-56 h-56 bg-white/5 rounded-full" />
 
@@ -590,24 +557,7 @@ export default function PatientDashboard() {
               </div>
             </div>
 
-            <div className="flex items-end justify-between flex-wrap gap-3">
-              <div className="flex gap-5">
-                <div>
-                  <p className="text-2xl font-bold">{(consultations as any[]).length}</p>
-                  <p className="text-xs text-primary-300 mt-0.5">Total Visits</p>
-                </div>
-                <div className="w-px bg-white/10" />
-                <div>
-                  <p className="text-2xl font-bold">{doctors.length}</p>
-                  <p className="text-xs text-primary-300 mt-0.5">Doctors</p>
-                </div>
-                <div className="w-px bg-white/10" />
-                <div>
-                  <p className="text-2xl font-bold">{(labReports as any[]).length}</p>
-                  <p className="text-xs text-primary-300 mt-0.5">Lab Tests</p>
-                </div>
-              </div>
-
+            <div className="flex justify-end">
               <button
                 onClick={handleDownload}
                 disabled={downloading || !me}
@@ -620,10 +570,26 @@ export default function PatientDashboard() {
                 {downloading ? 'Generating…' : 'Health Report'}
               </button>
             </div>
+
+            <div className="-mx-6 border-t border-white/15 divide-y divide-white/10">
+              {[
+                { label: 'Doctor Visits',     value: (consultations as any[]).length },
+                { label: 'Active Treatments', value: activeConsultations.length },
+                { label: 'Resolved',          value: diseases.filter((d: any) => d.status === 'completed').length },
+                { label: 'Lab Tests',         value: (labReports as any[]).length },
+                { label: 'Medicines',         value: medCount.length },
+                { label: 'Doctors Seen',      value: doctors.length },
+              ].map((s) => (
+                <div key={s.label} className="flex items-center gap-3 px-6 py-3 max-w-sm">
+                  <span className="flex-1 text-sm text-primary-100">{s.label}</span>
+                  <span className="text-base font-bold text-white">{s.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="hidden lg:block lg:col-span-1">
+        <div className="hidden lg:block shrink-0 w-[26rem]">
           <MiniCalendar highlightDates={visitDates} title="My Schedule" />
           {activeConsultations.length > 0 && (
             <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
@@ -648,6 +614,37 @@ export default function PatientDashboard() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        <SectionTitle>Health Profile</SectionTitle>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: 'Blood Type', value: profile?.blood_type || '—', icon: '🩸', color: 'bg-red-50    text-red-800    border-red-100'    },
+            { label: 'Age',        value: age ? `${age} yrs` : '—',  icon: '🎂', color: 'bg-blue-50   text-blue-800   border-blue-100'   },
+            { label: 'Gender',     value: profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : '—', icon: '👤', color: 'bg-purple-50 text-purple-800 border-purple-100' },
+            { label: 'Insurance',  value: profile?.insurance_provider || '—', icon: '🛡️', color: 'bg-green-50  text-green-800  border-green-100'  },
+          ].map(({ label, value, icon, color }) => (
+            <div key={label} className={`rounded-xl border p-3 ${color}`}>
+              <p className="text-xs font-medium opacity-60">{icon} {label}</p>
+              <p className="text-sm font-bold mt-0.5 truncate">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-2 pt-1">
+          {[
+            { label: 'Phone',      value: profile?.phone },
+            { label: 'Address',    value: profile?.address },
+            { label: 'Policy No.', value: profile?.insurance_policy_number },
+            { label: 'DOB',        value: profile?.date_of_birth ? formatDate(profile.date_of_birth) : null },
+          ].map(({ label, value }) => (
+            <div key={label} className="grid grid-cols-[110px_1fr] gap-3 text-sm">
+              <span className="text-gray-400">{label}</span>
+              <span className="text-gray-800 font-medium">{value || <span className="text-gray-300">—</span>}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -703,15 +700,6 @@ export default function PatientDashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
-        <StatCard icon={<Stethoscope size={14} />}   label="Doctor Visits"     value={(consultations as any[]).length}                                                    color="teal"   />
-        <StatCard icon={<HeartPulse size={14} />}    label="Active Treatments" value={activeConsultations.length}                                                          color="yellow" />
-        <StatCard icon={<CheckCircle2 size={14} />}  label="Resolved"          value={diseases.filter((d: any) => d.status === 'completed').length}                        color="green"  />
-        <StatCard icon={<FlaskConical size={14} />}  label="Lab Tests"         value={(labReports as any[]).length}                                                        color="cyan"   />
-        <StatCard icon={<Pill size={14} />}          label="Medicines"         value={medCount.length}                                                                    color="purple" />
-        <StatCard icon={<UserRound size={14} />}     label="Doctors Seen"      value={doctors.length}                                                                     color="blue"   />
-      </div>
-
       {(consultations as any[]).length > 0 && (
         <DashboardDoctorTiles consultations={consultations as any[]} />
       )}
@@ -746,73 +734,40 @@ export default function PatientDashboard() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-          <SectionTitle>Health Profile</SectionTitle>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Blood Type', value: profile?.blood_type || '—', icon: '🩸', color: 'bg-red-50    text-red-800    border-red-100'    },
-              { label: 'Age',        value: age ? `${age} yrs` : '—',  icon: '🎂', color: 'bg-blue-50   text-blue-800   border-blue-100'   },
-              { label: 'Gender',     value: profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : '—', icon: '👤', color: 'bg-purple-50 text-purple-800 border-purple-100' },
-              { label: 'Insurance',  value: profile?.insurance_provider || '—', icon: '🛡️', color: 'bg-green-50  text-green-800  border-green-100'  },
-            ].map(({ label, value, icon, color }) => (
-              <div key={label} className={`rounded-xl border p-3 ${color}`}>
-                <p className="text-xs font-medium opacity-60">{icon} {label}</p>
-                <p className="text-sm font-bold mt-0.5 truncate">{value}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-2 pt-1">
-            {[
-              { label: 'Phone',      value: profile?.phone },
-              { label: 'Address',    value: profile?.address },
-              { label: 'Policy No.', value: profile?.insurance_policy_number },
-              { label: 'DOB',        value: profile?.date_of_birth ? formatDate(profile.date_of_birth) : null },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex justify-between text-sm">
-                <span className="text-gray-400 w-24 shrink-0">{label}</span>
-                <span className="text-gray-800 font-medium text-right">{value || <span className="text-gray-300">—</span>}</span>
-              </div>
-            ))}
-          </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <SectionTitle>Chronic Conditions</SectionTitle>
+          {conditions.length === 0 ? (
+            <div className="flex items-center gap-2 text-green-600">
+              <span className="text-xl">✅</span>
+              <p className="text-sm font-medium">No chronic conditions recorded</p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {conditions.map((c: string) => (
+                <span key={c} className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-800 text-xs font-semibold px-3 py-1.5 rounded-full">
+                  📋 {c}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <SectionTitle>Chronic Conditions</SectionTitle>
-            {conditions.length === 0 ? (
-              <div className="flex items-center gap-2 text-green-600">
-                <span className="text-xl">✅</span>
-                <p className="text-sm font-medium">No chronic conditions recorded</p>
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5">
+          <SectionTitle>🆘 Emergency Contact</SectionTitle>
+          {profile?.emergency_contact_name ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-orange-600 font-medium">Name</span>
+                <span className="text-gray-900 font-bold">{profile.emergency_contact_name}</span>
               </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {conditions.map((c: string) => (
-                  <span key={c} className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-800 text-xs font-semibold px-3 py-1.5 rounded-full">
-                    📋 {c}
-                  </span>
-                ))}
+              <div className="flex justify-between text-sm">
+                <span className="text-orange-600 font-medium">Phone</span>
+                <span className="text-gray-900 font-bold">{profile.emergency_contact_phone || '—'}</span>
               </div>
-            )}
-          </div>
-
-          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5">
-            <SectionTitle>🆘 Emergency Contact</SectionTitle>
-            {profile?.emergency_contact_name ? (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-orange-600 font-medium">Name</span>
-                  <span className="text-gray-900 font-bold">{profile.emergency_contact_name}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-orange-600 font-medium">Phone</span>
-                  <span className="text-gray-900 font-bold">{profile.emergency_contact_phone || '—'}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-orange-600">No emergency contact provided.</p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <p className="text-sm text-orange-600">No emergency contact provided.</p>
+          )}
         </div>
       </div>
 

@@ -2,13 +2,11 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, X, Search, FlaskConical, CheckCircle2, Clock, XCircle,
-  Eye, Lock, Send, ArrowUpRight, Microscope, FileText,
+  Eye, Lock, Send, ArrowUpRight, Microscope,
 } from 'lucide-react';
 import { labApi, userApi, labViewRequestApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
-
-const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 function useDebounce(v: string, ms = 350) {
   const [d, setD] = useState(v);

@@ -102,7 +102,7 @@ export default function Register() {
   const onSubmit = async (data: Record<string, any>) => {
     setLoading(true);
     try {
-      const { name, email, password, confirmPassword, ...profileData } = data;
+      const { name, email, password, confirmPassword: _confirmPassword, ...profileData } = data;
 
       const profile: Record<string, unknown> = {};
       Object.entries(profileData).forEach(([k, v]) => {
