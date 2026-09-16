@@ -525,7 +525,8 @@ export default function PatientDashboard() {
 
       <div className="flex flex-col lg:flex-row gap-4 lg:gap-10 items-start">
 
-        <div className="w-full lg:w-3/4 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="w-full lg:w-3/4 space-y-4">
+        <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-6 text-white relative overflow-hidden">
           <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full" />
           <div className="absolute -bottom-12 -right-4 w-56 h-56 bg-white/5 rounded-full" />
 
@@ -572,6 +573,43 @@ export default function PatientDashboard() {
             </div>
 
             <div className="-mx-6 border-t border-white/15 divide-y divide-white/10">
+              {(() => {
+                const fields = [
+                  { label: 'Blood Type', value: profile?.blood_type || '—' },
+                  { label: 'Age',        value: age ? `${age} yrs` : '—' },
+                  { label: 'Gender',     value: profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : '—' },
+                  { label: 'Insurance',  value: profile?.insurance_provider || '—' },
+                  { label: 'Phone',      value: profile?.phone || '—' },
+                  { label: 'Address',    value: profile?.address || '—' },
+                  { label: 'Policy No.', value: profile?.insurance_policy_number || '—' },
+                  { label: 'DOB',        value: profile?.date_of_birth ? formatDate(profile.date_of_birth) : '—' },
+                ];
+                const rows = [];
+                for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
+                return rows.map((row, i) => (
+                  <div key={i} className="grid grid-cols-2 divide-x divide-white/10">
+                    {row.map((s) => (
+                      <div key={s.label} className="grid grid-cols-[100px_1fr] items-center gap-3 px-6 py-3 min-w-0">
+                        <span className="text-sm text-primary-100">{s.label}</span>
+                        <span className="text-base font-bold text-white truncate text-right">{s.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+
+        <VitalsOverview />
+        </div>
+
+        <div className="hidden lg:block shrink-0 w-[26rem] space-y-3">
+          <MiniCalendar highlightDates={visitDates} title="My Schedule" />
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Health Summary</p>
+            <div className="divide-y divide-gray-100">
               {[
                 { label: 'Doctor Visits',     value: (consultations as any[]).length },
                 { label: 'Active Treatments', value: activeConsultations.length },
@@ -580,17 +618,14 @@ export default function PatientDashboard() {
                 { label: 'Medicines',         value: medCount.length },
                 { label: 'Doctors Seen',      value: doctors.length },
               ].map((s) => (
-                <div key={s.label} className="flex items-center gap-3 px-6 py-3 max-w-sm">
-                  <span className="flex-1 text-sm text-primary-100">{s.label}</span>
-                  <span className="text-base font-bold text-white">{s.value}</span>
+                <div key={s.label} className="grid grid-cols-[110px_1fr] gap-3 text-sm py-2 first:pt-0 last:pb-0">
+                  <span className="text-gray-400">{s.label}</span>
+                  <span className="text-gray-800 font-medium">{s.value}</span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-        <div className="hidden lg:block shrink-0 w-[26rem]">
-          <MiniCalendar highlightDates={visitDates} title="My Schedule" />
           {activeConsultations.length > 0 && (
             <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Active Treatments</p>
@@ -616,40 +651,6 @@ export default function PatientDashboard() {
           )}
         </div>
       </div>
-
-      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-        <SectionTitle>Health Profile</SectionTitle>
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: 'Blood Type', value: profile?.blood_type || '—', icon: '🩸', color: 'bg-red-50    text-red-800    border-red-100'    },
-            { label: 'Age',        value: age ? `${age} yrs` : '—',  icon: '🎂', color: 'bg-blue-50   text-blue-800   border-blue-100'   },
-            { label: 'Gender',     value: profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : '—', icon: '👤', color: 'bg-purple-50 text-purple-800 border-purple-100' },
-            { label: 'Insurance',  value: profile?.insurance_provider || '—', icon: '🛡️', color: 'bg-green-50  text-green-800  border-green-100'  },
-          ].map(({ label, value, icon, color }) => (
-            <div key={label} className={`rounded-xl border p-3 ${color}`}>
-              <p className="text-xs font-medium opacity-60">{icon} {label}</p>
-              <p className="text-sm font-bold mt-0.5 truncate">{value}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-2 pt-1">
-          {[
-            { label: 'Phone',      value: profile?.phone },
-            { label: 'Address',    value: profile?.address },
-            { label: 'Policy No.', value: profile?.insurance_policy_number },
-            { label: 'DOB',        value: profile?.date_of_birth ? formatDate(profile.date_of_birth) : null },
-          ].map(({ label, value }) => (
-            <div key={label} className="grid grid-cols-[110px_1fr] gap-3 text-sm">
-              <span className="text-gray-400">{label}</span>
-              <span className="text-gray-800 font-medium">{value || <span className="text-gray-300">—</span>}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Vitals Overview ── */}
-      <VitalsOverview />
 
       <div className="space-y-3">
         {allergies.length > 0 && (

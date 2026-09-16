@@ -29,20 +29,29 @@ export default function PharmacistDashboard() {
         </p>
 
         <div className="mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
-          {[
-            { label: 'Total Medicines',  value: summary?.total_medicines ?? '—',  sub: null },
-            { label: 'Low Stock Items',  value: summary?.low_stock_count ?? '—',  sub: null },
-            { label: 'Expired Items',    value: summary?.expired_count   ?? '—',  sub: null },
-            { label: "Today's Revenue",  value: formatCurrency(todayRevenue),     sub: `${todaySales.length} sales` },
-          ].map((c) => (
-            <div key={c.label} className="flex items-center gap-3 px-6 py-3 max-w-md">
-              <span className="flex-1 text-sm text-purple-100">{c.label}</span>
-              <span>
-                <span className="block text-base font-bold text-white">{c.value}</span>
-                {c.sub && <span className="block text-xs text-purple-300">{c.sub}</span>}
-              </span>
-            </div>
-          ))}
+          {(() => {
+            const fields = [
+              { label: 'Total Medicines',  value: summary?.total_medicines ?? '—',  sub: null },
+              { label: 'Low Stock Items',  value: summary?.low_stock_count ?? '—',  sub: null },
+              { label: 'Expired Items',    value: summary?.expired_count   ?? '—',  sub: null },
+              { label: "Today's Revenue",  value: formatCurrency(todayRevenue),     sub: `${todaySales.length} sales` },
+            ];
+            const rows = [];
+            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
+            return rows.map((row, i) => (
+              <div key={i} className="grid grid-cols-2 divide-x divide-white/10 max-w-2xl">
+                {row.map((c) => (
+                  <div key={c.label} className="flex items-center gap-3 px-6 py-3 min-w-0">
+                    <span className="flex-1 text-sm text-purple-100 truncate">{c.label}</span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-base font-bold text-white">{c.value}</span>
+                      {c.sub && <span className="block text-xs text-purple-300">{c.sub}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
         </div>
       </div>
 
