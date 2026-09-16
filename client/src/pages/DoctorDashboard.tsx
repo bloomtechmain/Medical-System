@@ -9,7 +9,6 @@ import { authApi, accessRequestApi, consultationApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/helpers';
 import { useDebounce } from '../hooks/useDebounce';
-import { DoctorProfile } from '../types';
 
 const STAT_THEMES: Record<string, string> = {
   blue:   'from-blue-500 to-indigo-600',

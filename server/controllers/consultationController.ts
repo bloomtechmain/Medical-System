@@ -1,9 +1,21 @@
 import path from 'path';
 import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { pool, queryAs, RLSActor } from '../config/db';
 import { extractMedicines } from '../utils/ocrParser';
 import { sendNotification } from '../utils/notify';
+
+// medical_consultations / consultation_medicines / patient_profiles live in
+// the `clinical` schema and are gated by row-level security — every query
+// against them must run with the acting user's identity set via queryAs()
+// (or, inside an already-open transaction, a SELECT set_config(...) call
+// right after BEGIN). See config/db.ts for why.
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
+const setRLSContext = (client: { query: (t: string, v?: unknown[]) => Promise<unknown> }, a: RLSActor) =>
+  client.query(
+    `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+    [a.id != null ? String(a.id) : '', a.role || '']
+  );
 
 const runOCR = async (filePath: string): Promise<string> => {
   try {
@@ -44,6 +56,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     }
 
     await client.query('BEGIN');
+    await setRLSContext(client, actor(req));
 
     const labId = isDoctor ? (assigned_laboratory_id || null) : null;
 
@@ -159,7 +172,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       }
     }
 
-    const { rows: medicines } = await pool.query(
+    const { rows: medicines } = await queryAs(actor(req),
       'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY source DESC, id',
       [consultation.id]
     );
@@ -241,7 +254,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       res.json([]); return;
     }
 
-    const { rows } = await pool.query(query, params);
+    const { rows } = await queryAs(actor(req), query, params);
     res.json(rows);
   } catch (err) { next(err); }
 };
@@ -254,7 +267,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
     else if (role === 'doctor')condition = 'c.doctor_id  = $2';
     else                       condition = 'c.assigned_pharmacist_id = $2';
 
-    const { rows } = await pool.query(`
+    const { rows } = await queryAs(actor(req), `
       SELECT c.*,
         pt.name AS patient_name, pt.email AS patient_email,
         u.name  AS doctor_display_name,
@@ -272,7 +285,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
-    const { rows: medicines } = await pool.query(
+    const { rows: medicines } = await queryAs(actor(req),
       'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY source DESC, id',
       [req.params.id]
     );
@@ -284,7 +297,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { status } = req.body;
-    const { rows } = await pool.query(
+    const { rows } = await queryAs(actor(req),
       `UPDATE medical_consultations SET status=$1, updated_at=NOW()
        WHERE id=$2 AND assigned_pharmacist_id=$3
        RETURNING *`,
@@ -327,7 +340,7 @@ const updateStatus = async (req: Request, res: Response, next: NextFunction): Pr
 const update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       'SELECT * FROM medical_consultations WHERE id=$1 AND doctor_id=$2',
       [req.params.id, req.user.id]
     );
@@ -355,6 +368,7 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
     }
 
     await client.query('BEGIN');
+    await setRLSContext(client, actor(req));
 
     const { rows: [consultation] } = await client.query(`
       UPDATE medical_consultations SET
@@ -404,7 +418,7 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
 
     await client.query('COMMIT');
 
-    const { rows: medicines } = await pool.query(
+    const { rows: medicines } = await queryAs(actor(req),
       'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY source DESC, id',
       [req.params.id]
     );
@@ -422,7 +436,7 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
   try {
     const patientId = req.params.patientId;
 
-    const { rows: patRows } = await pool.query(`
+    const { rows: patRows } = await queryAs(actor(req), `
       SELECT u.id, u.name, u.email, u.created_at,
              p.phone, p.date_of_birth, p.gender,
              p.blood_type, p.allergies, p.chronic_conditions,
@@ -435,7 +449,7 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
 
     if (!patRows.length) { res.status(404).json({ message: 'Patient not found' }); return; }
 
-    const { rows: consultations } = await pool.query(`
+    const { rows: consultations } = await queryAs(actor(req), `
       SELECT c.*,
         u.name  AS doctor_display_name,
         dp.specialization AS doctor_specialization,
@@ -487,7 +501,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
   try {
     const { id, role } = req.user;
     const condition = role === 'doctor' ? 'doctor_id=$2' : 'patient_id=$2 AND doctor_id IS NULL';
-    const { rows } = await pool.query(
+    const { rows } = await queryAs(actor(req),
       `SELECT prescription_file FROM medical_consultations WHERE id=$1 AND ${condition}`,
       [req.params.id, id]
     );
@@ -498,7 +512,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
       if (fs.existsSync(fp)) fs.unlinkSync(fp);
     }
 
-    await pool.query('DELETE FROM medical_consultations WHERE id=$1', [req.params.id]);
+    await queryAs(actor(req), 'DELETE FROM medical_consultations WHERE id=$1', [req.params.id]);
     res.status(204).end();
   } catch (err) { next(err); }
 };
@@ -506,7 +520,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
 const updateByPatient = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       'SELECT * FROM medical_consultations WHERE id=$1 AND patient_id=$2 AND doctor_id IS NULL',
       [req.params.id, req.user.id]
     );
@@ -520,6 +534,7 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
     } = req.body;
 
     await client.query('BEGIN');
+    await setRLSContext(client, actor(req));
 
     const { rows: [consultation] } = await client.query(`
       UPDATE medical_consultations SET
@@ -558,7 +573,7 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
 
     await client.query('COMMIT');
 
-    const { rows: updatedMeds } = await pool.query(
+    const { rows: updatedMeds } = await queryAs(actor(req),
       'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY id',
       [req.params.id]
     );
@@ -579,7 +594,7 @@ const assignPharmacy = async (req: Request, res: Response, next: NextFunction): 
 
     if (!pharmacist_id) { res.status(400).json({ message: 'pharmacist_id is required' }); return; }
 
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       'SELECT * FROM medical_consultations WHERE id=$1 AND patient_id=$2',
       [req.params.id, patientId]
     );
@@ -599,7 +614,7 @@ const assignPharmacy = async (req: Request, res: Response, next: NextFunction): 
     );
     if (!phRows.length) { res.status(404).json({ message: 'Pharmacist not found' }); return; }
 
-    const { rows: [updated] } = await pool.query(
+    const { rows: [updated] } = await queryAs(actor(req),
       'UPDATE medical_consultations SET assigned_pharmacist_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
       [pharmacist_id, req.params.id]
     );

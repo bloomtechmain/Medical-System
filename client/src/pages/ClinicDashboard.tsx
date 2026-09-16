@@ -38,7 +38,7 @@ export default function ClinicDashboard() {
     <div className="space-y-6">
 
       {/* Welcome banner */}
-      <div className="relative bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 rounded-2xl p-6 overflow-hidden text-white">
+      <div className="relative w-full lg:w-3/4 bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 rounded-2xl p-6 overflow-hidden text-white">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-20 translate-x-20" />
         <div className="absolute bottom-0 left-32 w-48 h-48 bg-white/5 rounded-full translate-y-16" />
         <div className="relative flex items-start justify-between gap-4">
@@ -57,10 +57,6 @@ export default function ClinicDashboard() {
             {profile?.specialization && (
               <p className="text-teal-300 text-xs mt-1">{profile.specialization}</p>
             )}
-          </div>
-          <div className="hidden sm:flex flex-col items-center bg-white/10 rounded-xl p-4 shrink-0">
-            <span className="text-4xl">🩺</span>
-            <p className="text-xs mt-1 text-teal-200">Clinic</p>
           </div>
         </div>
 
@@ -88,24 +84,24 @@ export default function ClinicDashboard() {
             )}
           </Link>
         </div>
-      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        {[
-          { label: 'Active Consultations', value: activeConsultations, icon: Stethoscope, bg: 'bg-teal-50',   text: 'text-teal-600'   },
-          { label: 'Completed Today',      value: completedToday,      icon: CheckCircle2, bg: 'bg-emerald-50', text: 'text-emerald-600' },
-          { label: 'Pending Lab Tests',    value: pendingLabs,         icon: FlaskConical, bg: 'bg-purple-50', text: 'text-purple-600' },
-          { label: 'Access Requests',      value: pendingRequests,     icon: ShieldCheck,  bg: 'bg-amber-50',  text: 'text-amber-600'  },
-        ].map(({ label, value, icon: Icon, bg, text }) => (
-          <div key={label} className={`rounded-xl border p-5 ${bg}`}>
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${bg} border`}>
-              <Icon size={16} className={text} />
+        {/* Stats list */}
+        <div className="relative mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
+          {[
+            { label: 'Active Consultations', value: activeConsultations, icon: Stethoscope },
+            { label: 'Completed Today',      value: completedToday,      icon: CheckCircle2 },
+            { label: 'Pending Lab Tests',    value: pendingLabs,         icon: FlaskConical },
+            { label: 'Access Requests',      value: pendingRequests,     icon: ShieldCheck  },
+          ].map(({ label, value, icon: Icon }) => (
+            <div key={label} className="flex items-center gap-3 px-6 py-3 max-w-md">
+              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                <Icon size={16} className="text-white" />
+              </div>
+              <span className="flex-1 text-sm text-teal-100">{label}</span>
+              <span className="text-base font-bold text-white">{value}</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500 mt-1">{label}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

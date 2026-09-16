@@ -1,8 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
-import { DbUser, JwtUser } from '../types';
+import { pool, queryAs } from '../config/db';
+import { DbUser } from '../types';
 
 const generateToken = (user: Pick<DbUser, 'id' | 'email' | 'role'>): string =>
   jwt.sign(
@@ -130,6 +130,15 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
       [name, email, hash, role]
     );
 
+    // patient_profiles lives in the `clinical` schema behind row-level
+    // security. There's no authenticated session during registration, but
+    // the user we just created *is* the actor for their own profile row,
+    // so set the RLS context to them before inserting it.
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+      [String(user.id), role]
+    );
+
     if (profile) await createProfile(client, role, user.id, profile);
 
     await client.query('COMMIT');
@@ -177,7 +186,7 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
     let profile: Record<string, unknown> | null = null;
 
     if (user.role === 'patient') {
-      const { rows: p } = await pool.query('SELECT * FROM patient_profiles WHERE user_id = $1', [user.id]);
+      const { rows: p } = await queryAs({ id: req.user.id, role: req.user.role }, 'SELECT * FROM patient_profiles WHERE user_id = $1', [user.id]);
       profile = p[0] || null;
     } else if (user.role === 'doctor') {
       const { rows: p } = await pool.query('SELECT * FROM doctor_profiles WHERE user_id = $1', [user.id]);

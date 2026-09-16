@@ -1,4 +1,4 @@
-import { pool } from '../config/db';
+import { queryAs } from '../config/db';
 import { emitToUser } from '../config/socket';
 import { Notification } from '../types';
 
@@ -10,7 +10,12 @@ const sendNotification = async (
   data: Record<string, unknown> = {}
 ): Promise<Notification | undefined> => {
   try {
-    const { rows: [notif] } = await pool.query<Notification>(
+    // Notifications are written by the system on behalf of whichever user
+    // triggered the event, addressed to a *different* recipient — so the
+    // RLS check "user_id = app_uid()" can never pass for the acting user.
+    // Run this one insert with an admin context, which the notif_all
+    // policy explicitly allows.
+    const { rows: [notif] } = await queryAs<Notification>({ role: 'admin' },
       `INSERT INTO notifications (user_id, type, title, message, data)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [userId, type, title, message, JSON.stringify(data)]

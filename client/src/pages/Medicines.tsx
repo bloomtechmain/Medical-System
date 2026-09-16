@@ -24,7 +24,7 @@ export default function Medicines() {
   });
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: supplierApi.getAll });
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset } = useForm();
 
   const saveMutation = useMutation({
     mutationFn: (data: any) =>

@@ -34,14 +34,6 @@ export default function Sales() {
     onError: (err: any) => toast.error(err.message || 'Failed to record sale'),
   });
 
-  const handleMedicineChange = (idx: number, medId: string) => {
-    const med = (medicines as any[]).find((m) => String(m.id) === String(medId));
-    if (med) {
-      const itemsEl = document.querySelectorAll('[name]');
-      // price auto-fill via react-hook-form setValue would need useFormContext; handled below
-    }
-  };
-
   const columns = [
     { key: 'id', header: '#' },
     { key: 'customer_name', header: 'Customer', render: (r: any) => r.customer_name || 'Walk-in' },

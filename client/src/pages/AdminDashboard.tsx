@@ -7,7 +7,7 @@ import {
   Users, Stethoscope, FlaskConical, Pill, Truck,
   ShoppingCart, BarChart2, Receipt, Activity, TrendingUp,
   AlertTriangle, Shield, UserCheck, Package, Building2,
-  Hospital, CalendarCheck, Clock,
+  CalendarCheck, Clock,
 } from 'lucide-react';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -115,14 +115,17 @@ export default function AdminDashboard() {
       {/* User stats */}
       <section>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">User Overview</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
           {userCards.map((card) => {
             const Icon = card.icon;
             return (
-              <div key={card.label} className={`rounded-xl border p-4 ${card.bg} ${card.border}`}>
-                <Icon size={15} className={`${card.fg} opacity-50 mb-3`} />
-                <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-                <p className="text-xs text-gray-500 mt-1">{card.label}</p>
+              <div key={card.label} className="flex items-center gap-3 px-4 py-3">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${card.bg} ${card.border}`}>
+                  <Icon size={16} className={card.fg} />
+                </div>
+                <span className="flex-1 text-sm text-gray-600">{card.label}</span>
+                <span className="text-base font-bold text-gray-900">{card.value}</span>
               </div>
             );
           })}
@@ -135,107 +138,75 @@ export default function AdminDashboard() {
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tenant Organizations</h2>
           <Link to="/admin/organizations" className="text-xs text-primary-600 hover:text-primary-700 font-medium">Manage →</Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+
+        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
           {orgCards.map((card) => (
-            <div key={card.label} className={`rounded-xl p-4 ${card.color} border border-white/50`}>
-              <span className="text-xl mb-2 block">{card.emoji}</span>
-              <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-              <p className="text-xs text-gray-500 mt-1">{card.label}</p>
+            <div key={card.label} className="flex items-center gap-3 px-4 py-3">
+              <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-lg ${card.color}`}>{card.emoji}</span>
+              <span className="flex-1 text-sm text-gray-600">{card.label}</span>
+              <span className="text-base font-bold text-gray-900">{card.value}</span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* System activity row */}
+      {/* System activity list */}
       <section>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">System Activity</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-
-          {/* Consultations */}
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center shrink-0">
-                <Stethoscope size={16} className="text-teal-600" />
+        <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
+          {[
+            {
+              label: 'Consultations', icon: Stethoscope, bg: 'bg-teal-50', fg: 'text-teal-600',
+              total: c?.total_consultations ?? '—',
+              subs: [
+                { label: 'Active',    value: c?.active_consultations    ?? '—', color: 'text-teal-600'  },
+                { label: 'Completed', value: c?.completed_consultations ?? '—', color: 'text-green-600' },
+              ],
+            },
+            {
+              label: 'Lab Requests', icon: FlaskConical, bg: 'bg-cyan-50', fg: 'text-cyan-600',
+              total: l?.total_lab_requests ?? '—',
+              subs: [
+                { label: 'Pending',   value: l?.pending_lab_requests   ?? '—', color: 'text-yellow-600' },
+                { label: 'Completed', value: l?.completed_lab_requests ?? '—', color: 'text-green-600'  },
+              ],
+            },
+            {
+              label: 'Appointments', icon: CalendarCheck, bg: 'bg-blue-50', fg: 'text-blue-600',
+              total: a?.total_appointments ?? '—',
+              subs: [
+                { label: 'Upcoming',  value: a?.upcoming_appointments  ?? '—', color: 'text-blue-600'  },
+                { label: 'Completed', value: a?.completed_appointments ?? '—', color: 'text-green-600' },
+              ],
+            },
+            {
+              label: 'Pharmacy Sales', icon: TrendingUp, bg: 'bg-green-50', fg: 'text-green-600',
+              total: s?.total_sales ?? '—',
+              subs: [
+                { label: 'Revenue',    value: s ? formatCurrency(Number(s.total_revenue)) : '—', color: 'text-green-600' },
+                { label: 'This Month', value: s?.sales_this_month ?? '—',                        color: 'text-blue-600'  },
+              ],
+            },
+          ].map((row) => {
+            const Icon = row.icon;
+            return (
+              <div key={row.label} className="flex items-center gap-3 px-4 py-3">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${row.bg}`}>
+                  <Icon size={16} className={row.fg} />
+                </div>
+                <span className="flex-1 text-sm text-gray-600">{row.label}</span>
+                <div className="flex items-center gap-5 shrink-0">
+                  {row.subs.map((sub) => (
+                    <div key={sub.label} className="text-right">
+                      <p className="text-[10px] text-gray-400">{sub.label}</p>
+                      <p className={`text-xs font-semibold ${sub.color}`}>{sub.value}</p>
+                    </div>
+                  ))}
+                  <span className="text-base font-bold text-gray-900 w-10 text-right">{row.total}</span>
+                </div>
               </div>
-              <p className="text-sm font-semibold text-gray-800">Consultations</p>
-            </div>
-            <p className="text-3xl font-bold text-gray-900 mb-3">{c?.total_consultations ?? '—'}</p>
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Active</span>
-                <span className="font-semibold text-teal-600">{c?.active_consultations ?? '—'}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Completed</span>
-                <span className="font-semibold text-green-600">{c?.completed_consultations ?? '—'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Lab Requests */}
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-cyan-50 rounded-lg flex items-center justify-center shrink-0">
-                <FlaskConical size={16} className="text-cyan-600" />
-              </div>
-              <p className="text-sm font-semibold text-gray-800">Lab Requests</p>
-            </div>
-            <p className="text-3xl font-bold text-gray-900 mb-3">{l?.total_lab_requests ?? '—'}</p>
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Pending</span>
-                <span className="font-semibold text-yellow-600">{l?.pending_lab_requests ?? '—'}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Completed</span>
-                <span className="font-semibold text-green-600">{l?.completed_lab_requests ?? '—'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Appointments (cross-tenant) */}
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
-                <CalendarCheck size={16} className="text-blue-600" />
-              </div>
-              <p className="text-sm font-semibold text-gray-800">Appointments</p>
-            </div>
-            <p className="text-3xl font-bold text-gray-900 mb-3">{a?.total_appointments ?? '—'}</p>
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Upcoming</span>
-                <span className="font-semibold text-blue-600">{a?.upcoming_appointments ?? '—'}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Completed</span>
-                <span className="font-semibold text-green-600">{a?.completed_appointments ?? '—'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Pharmacy Sales (cross-tenant) */}
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center shrink-0">
-                <TrendingUp size={16} className="text-green-600" />
-              </div>
-              <p className="text-sm font-semibold text-gray-800">Pharmacy Sales</p>
-            </div>
-            <p className="text-3xl font-bold text-gray-900 mb-3">{s?.total_sales ?? '—'}</p>
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Revenue</span>
-                <span className="font-semibold text-green-600">
-                  {s ? formatCurrency(Number(s.total_revenue)) : '—'}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">This Month</span>
-                <span className="font-semibold text-blue-600">{s?.sales_this_month ?? '—'}</span>
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </section>
 

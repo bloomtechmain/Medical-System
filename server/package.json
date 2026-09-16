@@ -42,11 +42,18 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.0",
     "jest": "^30.4.2",
     "nodemon": "^3.1.4",
     "ts-jest": "^29.4.11",
     "tsx": "^4.15.0",
     "typescript": "^5.5.2"
+  },
+  "allowScripts": {
+    "canvas@3.2.3": true,
+    "esbuild@0.28.0": true,
+    "tesseract.js@7.0.0": true
   }
 }
