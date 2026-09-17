@@ -39,17 +39,26 @@ export default function LaboratoryDashboard() {
         </p>
 
         <div className="mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
-          {[
-            { label: 'Lab Name',        value: profile?.lab_name       || '—' },
-            { label: 'Lab Types',       value: labTypes.length ? `${labTypes.length} type${labTypes.length > 1 ? 's' : ''}` : '—' },
-            { label: 'License',         value: profile?.license_number || '—' },
-            { label: 'Accreditations',  value: accreditations.length ? `${accreditations.length} certification${accreditations.length > 1 ? 's' : ''}` : '—' },
-          ].map((c) => (
-            <div key={c.label} className="flex items-center gap-3 px-6 py-3 max-w-md">
-              <span className="flex-1 text-sm text-cyan-100">{c.label}</span>
-              <span className="text-base font-bold text-white">{c.value}</span>
-            </div>
-          ))}
+          {(() => {
+            const fields = [
+              { label: 'Lab Name',        value: profile?.lab_name       || '—' },
+              { label: 'Lab Types',       value: labTypes.length ? `${labTypes.length} type${labTypes.length > 1 ? 's' : ''}` : '—' },
+              { label: 'License',         value: profile?.license_number || '—' },
+              { label: 'Accreditations',  value: accreditations.length ? `${accreditations.length} certification${accreditations.length > 1 ? 's' : ''}` : '—' },
+            ];
+            const rows = [];
+            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
+            return rows.map((row, i) => (
+              <div key={i} className="grid grid-cols-2 divide-x divide-white/10 max-w-2xl">
+                {row.map((c) => (
+                  <div key={c.label} className="flex items-center gap-3 px-6 py-3 min-w-0">
+                    <span className="flex-1 text-sm text-cyan-100 truncate">{c.label}</span>
+                    <span className="text-base font-bold text-white shrink-0 truncate">{c.value}</span>
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
         </div>
       </div>
 
