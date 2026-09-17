@@ -45,7 +45,10 @@ const userName = async (uid: number): Promise<string> =>
 
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { patient_id, laboratory_id, consultation_id, test_description, notes } = req.body;
+    const {
+      patient_id, laboratory_id, consultation_id, test_description, notes,
+      report_type, scheduled_at,
+    } = req.body;
     const isDoctor  = req.user.role === 'doctor';
     const isPatient = req.user.role === 'patient';
 
@@ -78,10 +81,13 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     const { rows: [request] } = await queryAs(actor(req), `
       INSERT INTO lab_requests
-        (doctor_id, patient_id, laboratory_id, consultation_id, test_description, notes)
-      VALUES ($1,$2,$3,$4,$5,$6)
+        (doctor_id, patient_id, laboratory_id, consultation_id, test_description, notes,
+         report_type, scheduled_at, referral_file, referral_mimetype)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *
-    `, [doctorId, patientId, laboratory_id, consultation_id || null, testDesc, notes || null]);
+    `, [doctorId, patientId, laboratory_id, consultation_id || null, testDesc, notes || null,
+        report_type || null, scheduled_at || null,
+        req.file?.filename || null, req.file?.mimetype || null]);
 
     const lName  = await labName(laboratory_id);
     const ptName = await userName(patientId);
@@ -170,6 +176,86 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
+/**
+ * Runs after the HTTP response is sent so OCR/PDF parsing never blocks the
+ * upload: extracts vitals (manual entry > PDF/OCR text > notes text) and
+ * notifies the doctor and patient at the same time.
+ */
+const finalizeReport = (
+  labId: number,
+  request: { id: number; patient_id: number; doctor_id: number | null },
+  reportFilename: string,
+  report_notes: string | undefined,
+  vitals_data: string | undefined
+): void => {
+  setImmediate(async () => {
+    try {
+      const lName  = await labName(labId);
+      const ptName = await userName(request.patient_id);
+
+      // Priority 1: manually entered values from the lab upload form
+      let vitalsToSave: Record<string, number | undefined | null> = {};
+
+      if (vitals_data) {
+        try {
+          const parsed = JSON.parse(vitals_data) as Record<string, number>;
+          const valid  = Object.entries(parsed).filter(([, v]) => typeof v === 'number' && isFinite(v) && v > 0);
+          if (valid.length > 0) {
+            vitalsToSave = Object.fromEntries(valid);
+            console.log(`[Vitals] ${valid.length} manual values saved for report #${request.id}`);
+          }
+        } catch { /* ignore bad JSON */ }
+      }
+
+      // Priority 2: PDF text extraction (pdfjs) OR image OCR (tesseract)
+      if (Object.keys(vitalsToSave).length === 0) {
+        const filePath   = path.join(__dirname, '../uploads/lab-reports', reportFilename);
+        const reportText = await extractReportText(filePath);
+        if (reportText.trim().length > 20) {
+          const extracted = extractVitalsFromText(reportText);
+          if (Object.keys(extracted).length > 0) {
+            vitalsToSave = extracted as Record<string, number | undefined>;
+            console.log(`[Vitals] ${Object.keys(extracted).length} auto-extracted values for report #${request.id}`);
+          }
+        }
+      }
+
+      // Priority 3: parse report_notes text
+      if (Object.keys(vitalsToSave).length === 0 && report_notes) {
+        const extracted = extractVitalsFromText(report_notes);
+        if (Object.keys(extracted).length > 0) {
+          vitalsToSave = extracted as Record<string, number | undefined>;
+          console.log(`[Vitals] ${Object.keys(extracted).length} notes values for report #${request.id}`);
+        }
+      }
+
+      if (Object.keys(vitalsToSave).length > 0) {
+        await saveVitalsFromLab(request.patient_id, vitalsToSave, request.id);
+      }
+
+      // Notify doctor and patient at the same time
+      await Promise.all([
+        request.doctor_id && sendNotification(
+          request.doctor_id,
+          'lab_report_ready',
+          'Lab Report Ready 🔬',
+          `Lab report for patient ${ptName} is ready. ${lName} has uploaded the results.`,
+          { lab_request_id: request.id }
+        ),
+        sendNotification(
+          request.patient_id,
+          'lab_report_ready',
+          'Your Lab Report is Ready 🔬',
+          `Your lab report from ${lName} is now available. View and download it from your portal.`,
+          { lab_request_id: request.id }
+        ),
+      ]);
+    } catch (bgErr) {
+      console.error('[finalizeReport]', (bgErr as Error).message);
+    }
+  });
+};
+
 const uploadReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { report_notes, vitals_data } = req.body as {
@@ -200,88 +286,65 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
       RETURNING *
     `, [req.file.filename, req.file.mimetype, report_notes || null, req.params.id]);
 
-    // ── Respond to client right away — don't block on OCR ──────────────
+    // Respond right away — don't block on OCR
     res.json(request);
 
-    // ── Background: vitals extraction + notifications ───────────────────
-    // Runs after response is sent so it never blocks the upload
-    setImmediate(async () => {
-      try {
-        const lName  = await labName(labId);
-        const ptName = await userName(request.patient_id);
+    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data);
+  } catch (err) { next(err); }
+};
 
-        // Priority 1: manually entered values from the lab upload form
-        let vitalsToSave: Record<string, number | undefined | null> = {};
+/**
+ * Lab-initiated report: the lab picks a patient + a doctor directly (no
+ * prior request from either) and uploads the report in one step. Creates
+ * the lab_requests record already completed and notifies both parties.
+ */
+const createDirect = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const {
+      patient_id, doctor_id, test_description, report_type, notes, report_notes, vitals_data,
+      sample_id, sample_collected_at,
+    } = req.body as {
+      patient_id?: string; doctor_id?: string; test_description?: string; report_type?: string;
+      notes?: string; report_notes?: string; vitals_data?: string;
+      sample_id?: string; sample_collected_at?: string;
+    };
+    const labId = req.user.id;
 
-        if (vitals_data) {
-          try {
-            const parsed = JSON.parse(vitals_data) as Record<string, number>;
-            const valid  = Object.entries(parsed).filter(([, v]) => typeof v === 'number' && isFinite(v) && v > 0);
-            if (valid.length > 0) {
-              vitalsToSave = Object.fromEntries(valid);
-              console.log(`[Vitals] ${valid.length} manual values saved for report #${request.id}`);
-            }
-          } catch { /* ignore bad JSON */ }
-        }
+    if (!patient_id)       { res.status(400).json({ message: 'Patient is required' }); return; }
+    if (!doctor_id)        { res.status(400).json({ message: 'Doctor is required' }); return; }
+    if (!test_description) { res.status(400).json({ message: 'Test description is required' }); return; }
+    if (!req.file)         { res.status(400).json({ message: 'Report file is required' }); return; }
 
-        // Priority 2: PDF text extraction (pdfjs) OR image OCR (tesseract)
-        if (Object.keys(vitalsToSave).length === 0) {
-          const filePath   = path.join(__dirname, '../uploads/lab-reports', req.file!.filename);
-          const reportText = await extractReportText(filePath);
-          if (reportText.trim().length > 20) {
-            const extracted = extractVitalsFromText(reportText);
-            if (Object.keys(extracted).length > 0) {
-              vitalsToSave = extracted as Record<string, number | undefined>;
-              console.log(`[Vitals] ${Object.keys(extracted).length} auto-extracted values for report #${request.id}`);
-            }
-          }
-        }
+    const { rows: [request] } = await queryAs(actor(req), `
+      INSERT INTO lab_requests
+        (doctor_id, patient_id, laboratory_id, test_description, report_type, notes,
+         report_file, report_mimetype, report_notes, status,
+         sample_id, sample_collected_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'completed',$10,$11)
+      RETURNING *
+    `, [doctor_id, patient_id, labId, test_description, report_type || null, notes || null,
+        req.file.filename, req.file.mimetype, report_notes || null,
+        sample_id || null, sample_collected_at || null]);
 
-        // Priority 3: parse report_notes text
-        if (Object.keys(vitalsToSave).length === 0 && report_notes) {
-          const extracted = extractVitalsFromText(report_notes);
-          if (Object.keys(extracted).length > 0) {
-            vitalsToSave = extracted as Record<string, number | undefined>;
-            console.log(`[Vitals] ${Object.keys(extracted).length} notes values for report #${request.id}`);
-          }
-        }
+    res.status(201).json(request);
 
-        if (Object.keys(vitalsToSave).length > 0) {
-          await saveVitalsFromLab(request.patient_id, vitalsToSave, request.id);
-        }
-
-        // Notifications
-        await Promise.all([
-          request.doctor_id && sendNotification(
-            request.doctor_id,
-            'lab_report_ready',
-            'Lab Report Ready 🔬',
-            `Lab report for patient ${ptName} is ready. ${lName} has uploaded the results.`,
-            { lab_request_id: request.id }
-          ),
-          sendNotification(
-            request.patient_id,
-            'lab_report_ready',
-            'Your Lab Report is Ready 🔬',
-            `Your lab report from ${lName} is now available. View and download it from your portal.`,
-            { lab_request_id: request.id }
-          ),
-        ]);
-      } catch (bgErr) {
-        console.error('[uploadReport background]', (bgErr as Error).message);
-      }
-    });
-
+    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data);
   } catch (err) { next(err); }
 };
 
 const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { status } = req.body;
+    const { status, sample_id, sample_collected_at } = req.body as {
+      status: string; sample_id?: string; sample_collected_at?: string;
+    };
     const { rows } = await queryAs(actor(req),
-      `UPDATE lab_requests SET status=$1, updated_at=NOW()
-       WHERE id=$2 AND laboratory_id=$3 RETURNING *`,
-      [status, req.params.id, req.user.id]
+      `UPDATE lab_requests
+       SET status=$1, updated_at=NOW(),
+           sample_id           = COALESCE($2, sample_id),
+           sample_collected_at = COALESCE($3, sample_collected_at)
+       WHERE id=$4 AND laboratory_id=$5 RETURNING *`,
+      [status, sample_id || null, sample_collected_at || null,
+       req.params.id, req.user.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
     res.json(rows[0]);
@@ -306,4 +369,4 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
-export { create, getAll, getOne, uploadReport, updateStatus, remove };
+export { create, getAll, getOne, uploadReport, createDirect, updateStatus, remove };

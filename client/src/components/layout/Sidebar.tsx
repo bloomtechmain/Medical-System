@@ -73,6 +73,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/patient',               label: 'Patient Information', icon: LayoutDashboard, exact: true },
     { to: '/patient/consultations', label: 'Consultations',   icon: Stethoscope },
     { to: '/patient/medical-flow',  label: 'Medical Flow',    icon: Activity },
+    { to: '/patient/lab-tests',     label: 'Lab Tests',       icon: Microscope },
     { to: '/patient/my-reports',    label: 'My Reports',      icon: FolderOpen },
     { to: '/patient/requests',      label: 'Doctor Requests', icon: ShieldCheck, badge: 'ptRequests' },
   ],

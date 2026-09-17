@@ -20,6 +20,7 @@ import DoctorLabRequests from './pages/DoctorLabRequests';
 import MedicalFlow from './pages/MedicalFlow';
 import LaboratoryReports from './pages/LaboratoryReports';
 import PatientMyReports from './pages/PatientMyReports';
+import PatientLabReports from './pages/PatientLabReports';
 import PatientConsultations from './pages/PatientConsultations';
 import PatientAccessRequests from './pages/PatientAccessRequests';
 import DoctorPatientView from './pages/DoctorPatientView';
@@ -134,6 +135,7 @@ export default function App() {
         <Route index element={<PatientDashboard />} />
         <Route path="medical-flow" element={<MedicalFlow />} />
         <Route path="consultations" element={<PatientConsultations />} />
+        <Route path="lab-tests"    element={<PatientLabReports />} />
         <Route path="my-reports"   element={<PatientMyReports />} />
         <Route path="requests"     element={<PatientAccessRequests />} />
       </Route>

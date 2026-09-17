@@ -1,13 +1,15 @@
 import { Router } from 'express';
-import { getAll, getOne, getOneWithProfile, update, updateWithProfile, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories } from '../controllers/userController';
+import { getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors } from '../controllers/userController';
 import { protect, authorize } from '../middleware/auth';
 
 const router = Router();
 
 router.get('/stats',        protect, authorize('admin'),                                getStats);
-router.get('/patients',     protect, authorize('admin', 'doctor'),                     searchPatients);
+router.get('/patients',     protect, authorize('admin', 'doctor', 'laboratory'),       searchPatients);
 router.get('/pharmacists',  protect, authorize('admin', 'doctor', 'patient'),          searchPharmacists);
 router.get('/laboratories', protect, authorize('admin', 'doctor', 'patient'),          searchLaboratories);
+router.get('/doctors',      protect, authorize('admin', 'laboratory', 'patient'),      searchDoctors);
+router.put('/me/profile',   protect,                                                   updateMyProfile);
 
 router.use(protect, authorize('admin'));
 router.get('/', getAll);
