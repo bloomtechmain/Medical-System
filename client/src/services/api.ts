@@ -85,9 +85,12 @@ export const consultationApi = {
 export const labApi = {
   getAll:       (): Promise<any>                               => api.get('/lab-requests'),
   getOne:       (id: number): Promise<any>                     => api.get(`/lab-requests/${id}`),
-  create:       (data: unknown): Promise<any>                  => api.post('/lab-requests', data),
+  create:       (data: unknown): Promise<any>                  => data instanceof FormData
+    ? api.post('/lab-requests', data, { headers: { 'Content-Type': 'multipart/form-data' } })
+    : api.post('/lab-requests', data),
+  createDirect: (formData: FormData): Promise<any>             => api.post('/lab-requests/direct', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   uploadReport: (id: number, formData: FormData): Promise<any> => api.patch(`/lab-requests/${id}/report`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  updateStatus: (id: number, status: string): Promise<any>     => api.patch(`/lab-requests/${id}/status`, { status }),
+  updateStatus: (id: number, status: string, extra?: Record<string, unknown>): Promise<any> => api.patch(`/lab-requests/${id}/status`, { status, ...extra }),
   remove:       (id: number): Promise<any>                     => api.delete(`/lab-requests/${id}`),
 };
 
@@ -143,10 +146,12 @@ export const userApi = {
   searchPatients:      (q: string): Promise<any>                 => api.get('/users/patients', { params: { q } }),
   searchPharmacists:   (q: string): Promise<any>                 => api.get('/users/pharmacists', { params: { q } }),
   searchLaboratories:  (q: string): Promise<any>                 => api.get('/users/laboratories', { params: { q } }),
+  searchDoctors:       (q: string): Promise<any>                 => api.get('/users/doctors', { params: { q } }),
   getOne:              (id: number): Promise<any>                => api.get(`/users/${id}`),
   getProfile:          (id: number): Promise<any>                => api.get(`/users/${id}/profile`),
   update:              (id: number, data: unknown): Promise<any> => api.put(`/users/${id}`, data),
   updateProfile:       (id: number, data: unknown): Promise<any> => api.put(`/users/${id}/profile`, data),
+  updateMyProfile:     (data: unknown): Promise<any>              => api.put('/users/me/profile', data),
   toggle:              (id: number): Promise<any>                => api.patch(`/users/${id}/toggle`),
   remove:              (id: number): Promise<any>                => api.delete(`/users/${id}`),
   getStats:            (): Promise<any>                          => api.get('/users/stats'),
