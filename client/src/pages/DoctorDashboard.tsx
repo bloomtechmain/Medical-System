@@ -3,12 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search, UserRound, Stethoscope, ArrowUpRight, ChevronDown,
-  FlaskConical, Pill, Clock, Activity,
+  FlaskConical, Pill, Clock, Activity, Plus, AlertTriangle, Send, Eye, Users,
 } from 'lucide-react';
-import { authApi, accessRequestApi, consultationApi } from '../services/api';
+import { authApi, accessRequestApi, consultationApi, labApi, labViewRequestApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../utils/helpers';
+import { formatDate, formatDateTime } from '../utils/helpers';
 import { useDebounce } from '../hooks/useDebounce';
+
+const daysSince = (dateStr: string | null | undefined): number => {
+  if (!dateStr) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24)));
+};
+
+const waitColor = (days: number): string => {
+  if (days >= 7) return 'bg-red-100 text-red-700';
+  if (days >= 3) return 'bg-orange-100 text-orange-700';
+  return 'bg-amber-100 text-amber-700';
+};
 
 const STAT_THEMES: Record<string, string> = {
   blue:   'from-blue-500 to-indigo-600',
@@ -201,6 +212,9 @@ export default function DoctorDashboard() {
 
   const { data: me }      = useQuery({ queryKey: ['me'], queryFn: authApi.me });
   const { data: requests = [] } = useQuery({ queryKey: ['access-requests'], queryFn: accessRequestApi.getAll });
+  const { data: labRequests = [] } = useQuery({ queryKey: ['lab-requests'], queryFn: labApi.getAll });
+  const { data: labViewRequests = [] } = useQuery({ queryKey: ['lab-view-requests'], queryFn: labViewRequestApi.getAll });
+  const { data: consultations = [] } = useQuery({ queryKey: ['doctor-consultations'], queryFn: consultationApi.getAll });
 
   const { data: searchResults = [], isLoading: searching } = useQuery({
     queryKey: ['patient-search', debouncedQ],
@@ -213,6 +227,43 @@ export default function DoctorDashboard() {
 
   const pendingRequests = requests.filter(r => r.status === 'pending').length;
   const accepted        = requests.filter(r => r.status === 'accepted').length;
+
+  const pendingLabResults = (labRequests as any[])
+    .filter((r: any) => r.status !== 'completed')
+    .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const agingConsultations = (consultations as any[])
+    .filter((c: any) => c.status === 'active')
+    .sort((a: any, b: any) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
+
+  const pendingAccessRequests = (requests as any[]).filter((r: any) => r.status === 'pending');
+  const pendingViewRequests   = (labViewRequests as any[]).filter((r: any) => r.status === 'pending');
+
+  const recentActivity = [
+    ...(labRequests as any[]).filter((r: any) => r.status === 'completed').map((r: any) => ({
+      at: r.updated_at || r.created_at, icon: '🧪',
+      title: `Lab result ready — ${r.patient_name}`, sub: r.test_description,
+    })),
+    ...(consultations as any[]).filter((c: any) => c.status === 'dispensed').map((c: any) => ({
+      at: c.updated_at || c.visit_date, icon: '💊',
+      title: `Prescription dispensed — ${c.patient_name}`, sub: c.pharmacy_name,
+    })),
+    ...(requests as any[]).filter((r: any) => r.status !== 'pending' && r.responded_at).map((r: any) => ({
+      at: r.responded_at, icon: r.status === 'accepted' ? '✅' : '❌',
+      title: `${r.patient_name} ${r.status} your access request`, sub: r.access_type?.replace('_', ' '),
+    })),
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 8);
+
+  const recentPatients = Object.values(
+    (consultations as any[]).reduce((acc: Record<number, any>, c: any) => {
+      if (!acc[c.patient_id] || new Date(c.visit_date) > new Date(acc[c.patient_id].visit_date)) {
+        acc[c.patient_id] = c;
+      }
+      return acc;
+    }, {})
+  )
+    .sort((a: any, b: any) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())
+    .slice(0, 6);
 
   function calcAge(dob: string | null | undefined): number | null {
     if (!dob) return null;
@@ -269,6 +320,125 @@ export default function DoctorDashboard() {
         <StatTile label="License No."   value={profile?.license_number  || '—'} color="blue"   />
         <StatTile label="Consultation"  value={profile?.consultation_fee ? `LKR ${Number(profile.consultation_fee).toLocaleString()}` : '—'} color="green"  />
         <StatTile label="Affiliation"   value={profile?.hospital_affiliation ? profile.hospital_affiliation.split(' ').slice(0,2).join(' ') + '…' : '—'} color="purple" />
+      </div>
+
+      {/* ── Quick Actions ── */}
+      <div className="ios-tile p-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => navigate('/doctor/consultations', { state: { autoOpen: true } })}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl shadow-sm hover:opacity-90 transition-opacity"
+        >
+          <Plus size={15} strokeWidth={2.5} /> New Consultation
+        </button>
+        <button
+          onClick={() => navigate('/doctor/lab-requests', { state: { autoOpen: true } })}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-primary-700 bg-primary-50 border border-primary-100 rounded-2xl hover:bg-primary-100 transition-colors"
+        >
+          <FlaskConical size={15} strokeWidth={2.5} /> New Lab Request
+        </button>
+        <button
+          onClick={() => navigate('/doctor/requests')}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-gray-700 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-gray-100 transition-colors"
+        >
+          <Send size={15} strokeWidth={2.5} /> View Requests
+        </button>
+      </div>
+
+      {/* ── Operational Alerts ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="ios-tile p-5">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <FlaskConical size={12} strokeWidth={2.5} /> Pending Lab Results
+          </p>
+          {pendingLabResults.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No lab tests awaiting results.</p>
+          ) : (
+            <ul className="space-y-2">
+              {pendingLabResults.slice(0, 6).map((r: any) => {
+                const d = daysSince(r.created_at);
+                return (
+                  <li key={r.id} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-800 truncate">{r.patient_name}</p>
+                      <p className="text-xs text-gray-400 truncate">{r.test_description} · {r.lab_name || 'Lab'}</p>
+                    </div>
+                    <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${waitColor(d)}`}>{d}d waiting</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="ios-tile p-5">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <AlertTriangle size={12} strokeWidth={2.5} /> Active Consultations Aging
+          </p>
+          {agingConsultations.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No consultations awaiting dispensing.</p>
+          ) : (
+            <ul className="space-y-2">
+              {agingConsultations.slice(0, 6).map((c: any) => {
+                const d = daysSince(c.visit_date);
+                return (
+                  <li key={c.id} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-800 truncate">{c.patient_name}</p>
+                      <p className="text-xs text-gray-400 truncate">{c.diagnosis || 'No diagnosis recorded'}</p>
+                    </div>
+                    <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${waitColor(d)}`}>{d}d active</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="ios-tile p-5">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Send size={12} strokeWidth={2.5} /> Access Requests Awaiting Patient
+          </p>
+          {pendingAccessRequests.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No pending access requests.</p>
+          ) : (
+            <ul className="space-y-2">
+              {pendingAccessRequests.slice(0, 6).map((r: any) => (
+                <li key={r.id} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-800 truncate">{r.patient_name}</p>
+                    <p className="text-xs text-gray-400 truncate capitalize">{r.access_type?.replace('_', ' ')}</p>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    {daysSince(r.created_at)}d ago
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="ios-tile p-5">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Eye size={12} strokeWidth={2.5} /> Report View Requests Awaiting Patient
+          </p>
+          {pendingViewRequests.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No pending report view requests.</p>
+          ) : (
+            <ul className="space-y-2">
+              {pendingViewRequests.slice(0, 6).map((r: any) => (
+                <li key={r.id} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-800 truncate">{r.patient_name}</p>
+                    <p className="text-xs text-gray-400 truncate">{r.test_description} · {r.lab_name || 'Lab'}</p>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    {daysSince(r.created_at)}d ago
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       {/* ── Patient Search ── */}
@@ -372,6 +542,59 @@ export default function DoctorDashboard() {
             Start typing to search across all registered patients — click a result to view their history
           </p>
         )}
+      </div>
+
+      {/* ── Recently Seen Patients + Activity ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="ios-tile p-5">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Users size={12} strokeWidth={2.5} /> Recently Seen Patients
+          </p>
+          {recentPatients.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No consultations recorded yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {recentPatients.map((c: any) => (
+                <li key={c.patient_id}>
+                  <button
+                    onClick={() => navigate(`/doctor/patients/${c.patient_id}`)}
+                    className="w-full flex items-center gap-3 text-left py-1.5 hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                      {c.patient_name?.charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-gray-800 truncate">{c.patient_name}</p>
+                      <p className="text-xs text-gray-400 truncate">{formatDate(c.visit_date)}{c.diagnosis ? ` · ${c.diagnosis}` : ''}</p>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="ios-tile p-5">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Activity size={12} strokeWidth={2.5} /> Recent Activity
+          </p>
+          {recentActivity.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No recent activity.</p>
+          ) : (
+            <ul className="space-y-2">
+              {recentActivity.map((a, i) => (
+                <li key={i} className="flex items-start gap-2.5 py-1.5 border-b border-gray-50 last:border-0">
+                  <span className="text-base shrink-0">{a.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-gray-800 truncate">{a.title}</p>
+                    <p className="text-xs text-gray-400 truncate">{a.sub}</p>
+                  </div>
+                  <span className="shrink-0 text-[10px] text-gray-400">{formatDateTime(a.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       {/* Doctor profile */}
