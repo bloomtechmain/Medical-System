@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { consultationApi, userApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
@@ -687,11 +688,21 @@ export default function DoctorConsultations() {
   const [selected, setSelected]   = useState<any>(null);
   const [editing,  setEditing]    = useState<any>(null);
   const qc = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const { data: consultations = [], isLoading } = useQuery({
     queryKey: ['doctor-consultations'],
     queryFn: consultationApi.getAll,
   });
+
+  useEffect(() => {
+    if ((location.state as any)?.autoOpen) {
+      setShowForm(true);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openDetail = async (id: number) => {
     try {
