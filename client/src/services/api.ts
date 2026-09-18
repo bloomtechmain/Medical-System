@@ -59,9 +59,10 @@ export const orderApi = {
 };
 
 export const saleApi = {
-  getAll: (): Promise<any>              => api.get('/sales'),
-  getOne: (id: number): Promise<any>    => api.get(`/sales/${id}`),
-  create: (data: unknown): Promise<any> => api.post('/sales', data),
+  getAll:     (): Promise<any>              => api.get('/sales'),
+  getOne:     (id: number): Promise<any>    => api.get(`/sales/${id}`),
+  create:     (data: unknown): Promise<any> => api.post('/sales', data),
+  analytics:  (): Promise<any>              => api.get('/sales/analytics'),
 };
 
 export const inventoryApi = {
