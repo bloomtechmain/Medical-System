@@ -294,7 +294,10 @@ export default function AdminDashboard() {
       <div className="bg-white rounded-xl border border-gray-100">
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Recent Registrations</h2>
-          <Link to="/admin/users" className="text-xs text-primary-600 hover:text-primary-700 font-medium">
+          <Link
+            to="/admin/users"
+            className="text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-full shadow-sm transition-colors"
+          >
             View all →
           </Link>
         </div>
