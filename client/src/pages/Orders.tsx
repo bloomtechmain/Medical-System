@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { orderApi, supplierApi, medicineApi } from '../services/api';
 import { useModal } from '../hooks/useModal';
@@ -17,6 +19,8 @@ const STATUS_COLORS: Record<string, string> = {
 export default function Orders() {
   const qc = useQueryClient();
   const formModal = useModal();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['orders'], queryFn: orderApi.getAll });
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: supplierApi.getAll });
@@ -26,6 +30,15 @@ export default function Orders() {
     defaultValues: { items: [{ medicine_id: '', quantity: 1, unit_cost: 0 }] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+
+  useEffect(() => {
+    if ((location.state as any)?.autoOpen) {
+      reset({ items: [{ medicine_id: '', quantity: 1, unit_cost: 0 }] });
+      formModal.open();
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const createMutation = useMutation({
     mutationFn: orderApi.create,

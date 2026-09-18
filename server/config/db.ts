@@ -70,6 +70,26 @@ const queryAs = async <T extends QueryResultRow = any>(
   }
 };
 
+// Pharmacy/hospital/lab/clinic operational data (orders, sales, appointments, ...)
+// lives in a per-organization `tenant_<slug>` schema — never in `public`/`clinical`,
+// so it's outside the fixed search_path above. Callers must resolve the schema for
+// the current user and qualify table names with it explicitly.
+const SCHEMA_NAME_RE = /^[a-z_][a-z0-9_]*$/;
+
+const getTenantSchema = async (userId: number): Promise<string | null> => {
+  const { rows } = await pool.query(
+    `SELECT o.schema_name
+     FROM public.organizations o
+     JOIN public.organization_members om ON om.organization_id = o.id
+     WHERE om.user_id = $1 AND o.schema_name IS NOT NULL
+     LIMIT 1`,
+    [userId]
+  );
+  const schema = rows[0]?.schema_name as string | undefined;
+  if (!schema || !SCHEMA_NAME_RE.test(schema)) return null;
+  return schema;
+};
+
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const connectDB = async (retries = 8, baseDelay = 3000): Promise<void> => {
@@ -94,5 +114,5 @@ const connectDB = async (retries = 8, baseDelay = 3000): Promise<void> => {
   }
 };
 
-export { pool, connectDB, queryAs };
+export { pool, connectDB, queryAs, getTenantSchema };
 export type { RLSActor };
