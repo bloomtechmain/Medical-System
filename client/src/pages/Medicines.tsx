@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { medicineApi, supplierApi } from '../services/api';
 import { useModal } from '../hooks/useModal';
@@ -15,7 +16,9 @@ export default function Medicines() {
   const qc = useQueryClient();
   const formModal = useModal<any>();
   const deleteModal = useModal<any>();
-  const [search, setSearch] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState((location.state as any)?.search || '');
   const debouncedSearch = useDebounce(search);
 
   const { data: medicines = [], isLoading } = useQuery({
@@ -25,6 +28,18 @@ export default function Medicines() {
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: supplierApi.getAll });
 
   const { register, handleSubmit, reset } = useForm();
+
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.autoOpen) {
+      reset({});
+      formModal.open(null);
+    }
+    if (state?.autoOpen || state?.search) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saveMutation = useMutation({
     mutationFn: (data: any) =>

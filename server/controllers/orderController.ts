@@ -1,11 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { pool, getTenantSchema } from '../config/db';
 
-const getAll = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+const requireSchema = async (req: Request, res: Response): Promise<string | null> => {
+  const schema = await getTenantSchema(req.user.id);
+  if (!schema) {
+    res.status(400).json({ message: 'No pharmacy organization is linked to this account.' });
+    return null;
+  }
+  return schema;
+};
+
+const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const { rows } = await pool.query(`
       SELECT o.*, s.name AS supplier_name, u.name AS ordered_by_name
-      FROM orders o
+      FROM "${schema}".orders o
       LEFT JOIN suppliers s ON o.supplier_id = s.id
       LEFT JOIN users u ON o.ordered_by = u.id
       ORDER BY o.ordered_at DESC
@@ -16,15 +28,18 @@ const getAll = async (_req: Request, res: Response, next: NextFunction): Promise
 
 const getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const order = await pool.query(
-      `SELECT o.*, s.name AS supplier_name FROM orders o
+      `SELECT o.*, s.name AS supplier_name FROM "${schema}".orders o
        LEFT JOIN suppliers s ON o.supplier_id = s.id WHERE o.id = $1`,
       [req.params.id]
     );
     if (!order.rows.length) { res.status(404).json({ message: 'Order not found' }); return; }
 
     const items = await pool.query(
-      `SELECT oi.*, m.name AS medicine_name FROM order_items oi
+      `SELECT oi.*, m.name AS medicine_name FROM "${schema}".order_items oi
        JOIN medicines m ON oi.medicine_id = m.id WHERE oi.order_id = $1`,
       [req.params.id]
     );
@@ -33,6 +48,9 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 };
 
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const schema = await requireSchema(req, res);
+  if (!schema) return;
+
   const client = await pool.connect();
   try {
     const { supplier_id, notes, items } = req.body as {
@@ -44,7 +62,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     const total = items.reduce((sum, i) => sum + i.quantity * i.unit_cost, 0);
     const order = await client.query(
-      `INSERT INTO orders (supplier_id, ordered_by, total_amount, notes)
+      `INSERT INTO "${schema}".orders (supplier_id, ordered_by, total_amount, notes)
        VALUES ($1,$2,$3,$4) RETURNING *`,
       [supplier_id, req.user.id, total, notes]
     );
@@ -52,7 +70,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     for (const item of items) {
       await client.query(
-        'INSERT INTO order_items (order_id, medicine_id, quantity, unit_cost) VALUES ($1,$2,$3,$4)',
+        `INSERT INTO "${schema}".order_items (order_id, medicine_id, quantity, unit_cost) VALUES ($1,$2,$3,$4)`,
         [orderId, item.medicine_id, item.quantity, item.unit_cost]
       );
     }
@@ -67,11 +85,14 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 };
 
 const receive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const schema = await requireSchema(req, res);
+  if (!schema) return;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows: items } = await client.query(
-      'SELECT * FROM order_items WHERE order_id = $1', [req.params.id]
+      `SELECT * FROM "${schema}".order_items WHERE order_id = $1`, [req.params.id]
     );
     for (const item of items) {
       await client.query(
@@ -80,7 +101,7 @@ const receive = async (req: Request, res: Response, next: NextFunction): Promise
       );
     }
     const { rows } = await client.query(
-      `UPDATE orders SET status='received', received_at=NOW() WHERE id=$1 RETURNING *`,
+      `UPDATE "${schema}".orders SET status='received', received_at=NOW() WHERE id=$1 RETURNING *`,
       [req.params.id]
     );
     await client.query('COMMIT');
