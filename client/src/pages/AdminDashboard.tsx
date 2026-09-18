@@ -142,9 +142,14 @@ export default function AdminDashboard() {
 
       {/* Organizations */}
       <section>
-        <div className="flex items-center justify-between mb-3">
+        <div className="w-full lg:w-3/4 flex items-center justify-between mb-3">
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tenant Organizations</h2>
-          <Link to="/admin/organizations" className="text-xs text-primary-600 hover:text-primary-700 font-medium">Manage →</Link>
+          <Link
+            to="/admin/organizations"
+            className="text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-full shadow-sm transition-colors"
+          >
+            Manage →
+          </Link>
         </div>
 
         <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
