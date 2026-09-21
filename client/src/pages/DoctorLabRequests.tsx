@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus, X, Search, FlaskConical, CheckCircle2, Clock, XCircle,
   Eye, Lock, Send, ArrowUpRight, Microscope,
@@ -397,9 +398,19 @@ export default function DoctorLabRequests() {
   const [toast,            setToast]            = useState<string | null>(null);
   const [viewModalLabId,   setViewModalLabId]   = useState<number | null>(null);
   const qc = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const { data: labRequests  = [], isLoading: loadingLab  } = useQuery({ queryKey: ['lab-requests'],      queryFn: labApi.getAll });
   const { data: viewRequests = [], isLoading: loadingView } = useQuery({ queryKey: ['lab-view-requests'], queryFn: labViewRequestApi.getAll });
+
+  useEffect(() => {
+    if ((location.state as any)?.autoOpen) {
+      setShowForm(true);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const viewMap = useMemo(() => {
     const map: Record<number, any> = {};
