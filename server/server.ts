@@ -28,7 +28,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Ensure upload directories exist (Railway has ephemeral FS)
-['uploads', 'uploads/prescriptions', 'uploads/lab-reports', 'uploads/patient-reports'].forEach(dir => {
+['uploads', 'uploads/prescriptions', 'uploads/lab-reports', 'uploads/lab-referrals', 'uploads/patient-reports'].forEach(dir => {
   const p = path.join(__dirname, dir);
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 });
