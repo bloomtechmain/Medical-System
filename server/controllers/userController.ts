@@ -71,6 +71,67 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
+/** Upserts the role-specific profile row. Shared by admin edit (any user) and self-service edit (own profile). */
+const upsertRoleProfile = async (
+  client: import('pg').PoolClient,
+  userId: number,
+  role: string,
+  profile: Record<string, string>
+): Promise<void> => {
+  if (role === 'doctor') {
+    await client.query(`
+      INSERT INTO public.doctor_profiles (user_id, phone, specialization, license_number, medical_school, years_experience, hospital_affiliation, consultation_fee, bio)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ON CONFLICT (user_id) DO UPDATE SET
+        phone=$2, specialization=$3, license_number=$4, medical_school=$5,
+        years_experience=$6, hospital_affiliation=$7, consultation_fee=$8, bio=$9, updated_at=NOW()
+    `, [userId, profile.phone||null, profile.specialization||null, profile.license_number||null,
+        profile.medical_school||null, parseInt(profile.years_experience)||0,
+        profile.hospital_affiliation||null, parseFloat(profile.consultation_fee)||0, profile.bio||null]);
+  } else if (role === 'pharmacist') {
+    await client.query(`
+      INSERT INTO public.pharmacist_profiles (user_id, phone, license_number, pharmacy_name, pharmacy_address, years_experience, specialization_area)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      ON CONFLICT (user_id) DO UPDATE SET
+        phone=$2, license_number=$3, pharmacy_name=$4, pharmacy_address=$5, years_experience=$6, specialization_area=$7, updated_at=NOW()
+    `, [userId, profile.phone||null, profile.license_number||null, profile.pharmacy_name||null,
+        profile.pharmacy_address||null, parseInt(profile.years_experience)||0, profile.specialization_area||null]);
+  } else if (role === 'patient') {
+    await client.query(`
+      INSERT INTO clinical.patient_profiles (user_id, date_of_birth, gender, phone, address, blood_type, allergies, chronic_conditions)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (user_id) DO UPDATE SET
+        date_of_birth=$2, gender=$3, phone=$4, address=$5, blood_type=$6, allergies=$7, chronic_conditions=$8, updated_at=NOW()
+    `, [userId, profile.date_of_birth||null, profile.gender||null, profile.phone||null,
+        profile.address||null, profile.blood_type||null, profile.allergies||null, profile.chronic_conditions||null]);
+  } else if (role === 'laboratory') {
+    await client.query(`
+      INSERT INTO public.laboratory_profiles (user_id, phone, lab_name, lab_type, license_number, accreditation, address, services_offered, operating_hours)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ON CONFLICT (user_id) DO UPDATE SET
+        phone=$2, lab_name=$3, lab_type=$4, license_number=$5, accreditation=$6, address=$7, services_offered=$8, operating_hours=$9, updated_at=NOW()
+    `, [userId, profile.phone||null, profile.lab_name||null, profile.lab_type||null,
+        profile.license_number||null, profile.accreditation||null, profile.address||null,
+        profile.services_offered||null, profile.operating_hours||null]);
+  }
+};
+
+const fetchRoleProfile = async (
+  client: import('pg').PoolClient,
+  userId: number,
+  role: string
+): Promise<Record<string, unknown> | null> => {
+  const table = ({
+    doctor:     'public.doctor_profiles',
+    pharmacist: 'public.pharmacist_profiles',
+    patient:    'clinical.patient_profiles',
+    laboratory: 'public.laboratory_profiles',
+  } as Record<string, string>)[role];
+  if (!table) return null;
+  const { rows } = await client.query(`SELECT * FROM ${table} WHERE user_id = $1`, [userId]);
+  return rows[0] || null;
+};
+
 const updateWithProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
@@ -106,58 +167,47 @@ const updateWithProfile = async (req: Request, res: Response, next: NextFunction
     const user = rows[0];
 
     if (profile && Object.keys(profile).length) {
-      if (user.role === 'doctor') {
-        await client.query(`
-          INSERT INTO public.doctor_profiles (user_id, phone, specialization, license_number, medical_school, years_experience, hospital_affiliation, consultation_fee, bio)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-          ON CONFLICT (user_id) DO UPDATE SET
-            phone=$2, specialization=$3, license_number=$4, medical_school=$5,
-            years_experience=$6, hospital_affiliation=$7, consultation_fee=$8, bio=$9, updated_at=NOW()
-        `, [user.id, profile.phone||null, profile.specialization||null, profile.license_number||null,
-            profile.medical_school||null, parseInt(profile.years_experience)||0,
-            profile.hospital_affiliation||null, parseFloat(profile.consultation_fee)||0, profile.bio||null]);
-      } else if (user.role === 'pharmacist') {
-        await client.query(`
-          INSERT INTO public.pharmacist_profiles (user_id, phone, license_number, pharmacy_name, pharmacy_address, years_experience, specialization_area)
-          VALUES ($1,$2,$3,$4,$5,$6,$7)
-          ON CONFLICT (user_id) DO UPDATE SET
-            phone=$2, license_number=$3, pharmacy_name=$4, pharmacy_address=$5, years_experience=$6, specialization_area=$7, updated_at=NOW()
-        `, [user.id, profile.phone||null, profile.license_number||null, profile.pharmacy_name||null,
-            profile.pharmacy_address||null, parseInt(profile.years_experience)||0, profile.specialization_area||null]);
-      } else if (user.role === 'patient') {
-        await client.query(`
-          INSERT INTO clinical.patient_profiles (user_id, date_of_birth, gender, phone, address, blood_type, allergies, chronic_conditions)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-          ON CONFLICT (user_id) DO UPDATE SET
-            date_of_birth=$2, gender=$3, phone=$4, address=$5, blood_type=$6, allergies=$7, chronic_conditions=$8, updated_at=NOW()
-        `, [user.id, profile.date_of_birth||null, profile.gender||null, profile.phone||null,
-            profile.address||null, profile.blood_type||null, profile.allergies||null, profile.chronic_conditions||null]);
-      } else if (user.role === 'laboratory') {
-        await client.query(`
-          INSERT INTO public.laboratory_profiles (user_id, phone, lab_name, lab_type, license_number, accreditation, address, services_offered, operating_hours)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-          ON CONFLICT (user_id) DO UPDATE SET
-            phone=$2, lab_name=$3, lab_type=$4, license_number=$5, accreditation=$6, address=$7, services_offered=$8, operating_hours=$9, updated_at=NOW()
-        `, [user.id, profile.phone||null, profile.lab_name||null, profile.lab_type||null,
-            profile.license_number||null, profile.accreditation||null, profile.address||null,
-            profile.services_offered||null, profile.operating_hours||null]);
-      }
+      await upsertRoleProfile(client, user.id, user.role, profile);
     }
 
-    let updatedProfile: Record<string, unknown> | null = null;
-    if (user.role === 'doctor') {
-      const { rows: p } = await client.query('SELECT * FROM public.doctor_profiles WHERE user_id = $1', [user.id]);
-      updatedProfile = p[0] || null;
-    } else if (user.role === 'pharmacist') {
-      const { rows: p } = await client.query('SELECT * FROM public.pharmacist_profiles WHERE user_id = $1', [user.id]);
-      updatedProfile = p[0] || null;
-    } else if (user.role === 'patient') {
-      const { rows: p } = await client.query('SELECT * FROM clinical.patient_profiles WHERE user_id = $1', [user.id]);
-      updatedProfile = p[0] || null;
-    } else if (user.role === 'laboratory') {
-      const { rows: p } = await client.query('SELECT * FROM public.laboratory_profiles WHERE user_id = $1', [user.id]);
-      updatedProfile = p[0] || null;
+    const updatedProfile = await fetchRoleProfile(client, user.id, user.role);
+
+    await client.query('COMMIT');
+    res.json({ ...user, profile: updatedProfile });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+/** Self-service profile edit: any logged-in user editing their own name + role profile fields. No email/password/role/is_active — those stay admin-only. */
+const updateMyProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    const { name, profile } = req.body as { name?: string; profile?: Record<string, string> };
+    const userId = req.user.id;
+    const role   = req.user.role;
+
+    await client.query('BEGIN');
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+      [String(userId), role]
+    );
+
+    if (name && name.trim()) {
+      await client.query('UPDATE users SET name=$1, updated_at=NOW() WHERE id=$2', [name.trim(), userId]);
     }
+
+    if (profile && Object.keys(profile).length) {
+      await upsertRoleProfile(client, userId, role, profile);
+    }
+
+    const { rows: [user] } = await client.query(
+      'SELECT id, name, email, role, is_active FROM users WHERE id=$1', [userId]
+    );
+    const updatedProfile = await fetchRoleProfile(client, userId, role);
 
     await client.query('COMMIT');
     res.json({ ...user, profile: updatedProfile });
@@ -319,6 +369,23 @@ const searchPharmacists = async (req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 };
 
+const searchDoctors = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { q = '' } = req.query as { q?: string };
+    const { rows } = await pool.query(`
+      SELECT u.id, u.name, u.email, u.is_active,
+             p.specialization, p.hospital_affiliation, p.phone, p.license_number
+      FROM public.users u
+      LEFT JOIN public.doctor_profiles p ON p.user_id = u.id
+      WHERE u.role = 'doctor' AND u.is_active = TRUE
+        AND (u.name ILIKE $1 OR p.specialization ILIKE $1
+             OR p.hospital_affiliation ILIKE $1 OR u.email ILIKE $1)
+      ORDER BY u.name LIMIT 20
+    `, [`%${q}%`]);
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
 const searchLaboratories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
@@ -338,4 +405,4 @@ const searchLaboratories = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-export { getAll, getOne, getOneWithProfile, update, updateWithProfile, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories };
+export { getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors };

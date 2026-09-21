@@ -318,6 +318,7 @@ CREATE TABLE clinical.lab_requests (
   organization_id  INTEGER     REFERENCES public.organizations(id) ON DELETE SET NULL,
   consultation_id  INTEGER,
   test_description TEXT        NOT NULL,
+  report_type      VARCHAR(100),          -- e.g. one of the lab's own services_offered (Full Blood Count, X-Ray, ...)
   notes            TEXT,
   status           VARCHAR(20) NOT NULL DEFAULT 'pending'
                    CHECK (status IN ('pending','in_progress','completed')),
@@ -326,6 +327,13 @@ CREATE TABLE clinical.lab_requests (
   report_mimetype  VARCHAR(100),
   report_notes     TEXT,
   vitals_extracted BOOLEAN     NOT NULL DEFAULT FALSE,  -- TRUE once backend ran OCR/PDF extraction
+  -- Sample intake metadata — logged by the lab when it starts processing (pending -> in_progress)
+  sample_id            VARCHAR(100),
+  sample_collected_at  TIMESTAMPTZ,
+  -- Patient self-booking metadata (set at booking time, before the lab ever touches the request)
+  scheduled_at         TIMESTAMPTZ,     -- patient's preferred walk-in / home-collection date-time
+  referral_file        VARCHAR(500),    -- optional doctor's prescription/referral slip
+  referral_mimetype    VARCHAR(100),
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_lr_consultation FOREIGN KEY (consultation_id)

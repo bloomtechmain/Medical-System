@@ -52,6 +52,7 @@ const TABS: Record<string, TabConfig> = {
     ],
     more: [
       { to: '/patient/medical-flow',  label: 'Medical Flow', icon: Activity },
+      { to: '/patient/lab-tests',     label: 'Lab Tests',    icon: Microscope },
     ],
   },
   doctor: {
