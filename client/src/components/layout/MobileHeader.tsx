@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList } from 'lucide-react';
+import { Bell, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Activity } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { notificationApi } from '../../services/api';
@@ -24,6 +24,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   prescription_dispensed: <CheckCircle2 size={13} />,
   lab_request_assigned:   <FlaskConical size={13} />,
   lab_report_ready:       <ClipboardList size={13} />,
+  vitals_updated:         <Activity size={13} />,
 };
 
 const NOTIF_ROUTE: Record<string, (role?: string) => string> = {
@@ -32,6 +33,7 @@ const NOTIF_ROUTE: Record<string, (role?: string) => string> = {
   prescription_dispensed: (role) => role === 'doctor'  ? '/doctor/consultations' : '/patient/medical',
   lab_request_assigned:   ()     => '/laboratory/reports',
   lab_report_ready:       (role) => role === 'doctor'  ? '/doctor/lab-requests'  : '/patient/lab-reports',
+  vitals_updated:         ()     => '/patient',
   access_request:         ()     => '/patient/requests',
   access_accepted:        ()     => '/doctor/requests',
   access_declined:        ()     => '/doctor/requests',

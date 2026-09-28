@@ -5,10 +5,10 @@ import { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Stethoscope, Activity, FolderOpen, Users, Pill,
   Truck, ShoppingCart, Receipt, BarChart2, ClipboardList, Microscope,
-  ShieldCheck, MoreHorizontal, X, LogOut,
+  ShieldCheck, MoreHorizontal, X, LogOut, CalendarClock, CalendarPlus,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { accessRequestApi, labViewRequestApi } from '../../services/api';
+import { accessRequestApi, labViewRequestApi, appointmentApi } from '../../services/api';
 
 interface NavItem {
   to: string;
@@ -32,7 +32,9 @@ const TABS: Record<string, TabConfig> = {
       { to: '/hospital/lab-requests',  label: 'Labs',     icon: Microscope },
       { to: '/hospital/requests',      label: 'Requests', icon: ShieldCheck, badge: 'drRequests' },
     ],
-    more: [],
+    more: [
+      { to: '/hospital/appointments', label: 'Appointments', icon: CalendarClock, badge: 'apptRequests' },
+    ],
   },
   clinic: {
     primary: [
@@ -41,7 +43,9 @@ const TABS: Record<string, TabConfig> = {
       { to: '/clinic/lab-requests',  label: 'Labs',     icon: Microscope },
       { to: '/clinic/requests',      label: 'Requests', icon: ShieldCheck, badge: 'drRequests' },
     ],
-    more: [],
+    more: [
+      { to: '/clinic/appointments', label: 'Appointments', icon: CalendarClock, badge: 'apptRequests' },
+    ],
   },
   patient: {
     primary: [
@@ -53,6 +57,7 @@ const TABS: Record<string, TabConfig> = {
     more: [
       { to: '/patient/medical-flow',  label: 'Medical Flow', icon: Activity },
       { to: '/patient/lab-tests',     label: 'Lab Tests',    icon: Microscope },
+      { to: '/patient/book-doctor',   label: 'Book Doctor',  icon: CalendarPlus },
     ],
   },
   doctor: {
@@ -62,7 +67,9 @@ const TABS: Record<string, TabConfig> = {
       { to: '/doctor/lab-requests',  label: 'Lab Reports',icon: Microscope },
       { to: '/doctor/requests',      label: 'Requests',   icon: ShieldCheck, badge: 'drRequests' },
     ],
-    more: [],
+    more: [
+      { to: '/doctor/appointments', label: 'Appointments', icon: CalendarClock, badge: 'apptRequests' },
+    ],
   },
   admin: {
     primary: [
@@ -102,10 +109,11 @@ const TABS: Record<string, TabConfig> = {
 // ── More drawer (slide-up sheet) ──────────────────────────────────────────────
 interface MoreDrawerProps {
   items: NavItem[];
+  getBadge: (key: string) => number;
   onClose: () => void;
 }
 
-function MoreDrawer({ items, onClose }: MoreDrawerProps) {
+function MoreDrawer({ items, getBadge, onClose }: MoreDrawerProps) {
   const { user, logout } = useAuth();
   const navigate         = useNavigate();
 
@@ -137,6 +145,7 @@ function MoreDrawer({ items, onClose }: MoreDrawerProps) {
         <div className="px-4 space-y-1">
           {items.map(item => {
             const Icon = item.icon;
+            const badgeCount = item.badge ? getBadge(item.badge) : 0;
             return (
               <NavLink
                 key={item.to}
@@ -152,12 +161,18 @@ function MoreDrawer({ items, onClose }: MoreDrawerProps) {
               >
                 {({ isActive }) => (
                   <>
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                       isActive ? 'bg-primary-100' : 'bg-gray-100'
                     }`}>
                       <Icon size={18} strokeWidth={1.8} className={isActive ? 'text-primary-600' : 'text-gray-500'} />
+                      {badgeCount > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                      )}
                     </div>
-                    <span className="text-sm font-semibold">{item.label}</span>
+                    <span className="text-sm font-semibold flex-1">{item.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">{badgeCount}</span>
+                    )}
                   </>
                 )}
               </NavLink>
@@ -223,12 +238,20 @@ export default function MobileBottomNav() {
     enabled:  isRequestsRole,
   });
 
+  const { data: appointments = [] } = useQuery({
+    queryKey: ['appointments'],
+    queryFn:  appointmentApi.getAll,
+    enabled:  role === 'doctor',
+  });
+
   const accessPending  = (accessRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
   const labViewPending = (labViewRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
+  const apptPending    = (appointments as Array<{ status: string }>).filter(r => r.status === 'pending').length;
 
   const getBadge = (badgeKey: string): number => {
     if (badgeKey === 'ptRequests') return accessPending + labViewPending;
     if (badgeKey === 'drRequests') return accessPending;
+    if (badgeKey === 'apptRequests') return apptPending;
     return 0;
   };
 
@@ -278,8 +301,11 @@ export default function MobileBottomNav() {
               onClick={() => setShowMore(true)}
               className="flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-gray-400 active:text-gray-600"
             >
-              <div className="w-10 h-7 flex items-center justify-center">
+              <div className="relative w-10 h-7 flex items-center justify-center">
                 <MoreHorizontal size={20} strokeWidth={1.8} />
+                {moreItems.some(item => item.badge && getBadge(item.badge) > 0) && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                )}
               </div>
               <span className="text-[10px] font-semibold leading-none">More</span>
             </button>
@@ -289,7 +315,7 @@ export default function MobileBottomNav() {
 
       {/* More drawer */}
       {showMore && (
-        <MoreDrawer items={moreItems} onClose={() => setShowMore(false)} />
+        <MoreDrawer items={moreItems} getBadge={getBadge} onClose={() => setShowMore(false)} />
       )}
     </>
   );

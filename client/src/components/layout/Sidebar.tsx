@@ -1,12 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
-import { accessRequestApi, labViewRequestApi } from '../../services/api';
+import { accessRequestApi, labViewRequestApi, appointmentApi } from '../../services/api';
 import { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Stethoscope, Activity,
   FolderOpen, Users, Pill, Truck, ShoppingCart, Receipt, BarChart2,
   ClipboardList, Microscope, LogOut, Settings, UserSearch, ShieldCheck, Building2,
+  CalendarClock, CalendarPlus,
 } from 'lucide-react';
 
 // ── 4-dot logo mark ───────────────────────────────────────────────────────────
@@ -46,12 +47,14 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/hospital/consultations', label: 'Consultations',   icon: Stethoscope },
     { to: '/hospital/lab-requests',  label: 'Lab Reports',     icon: Microscope },
     { to: '/hospital/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/hospital/appointments',  label: 'Appointments',    icon: CalendarClock, badge: 'apptRequests' },
   ],
   clinic: [
     { to: '/clinic',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
     { to: '/clinic/consultations', label: 'Consultations',   icon: Stethoscope },
     { to: '/clinic/lab-requests',  label: 'Lab Reports',     icon: Microscope },
     { to: '/clinic/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/clinic/appointments',  label: 'Appointments',    icon: CalendarClock, badge: 'apptRequests' },
   ],
   pharmacist: [
     { to: '/pharmacist',               label: 'Dashboard',     icon: LayoutDashboard, exact: true },
@@ -68,6 +71,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/doctor/lab-requests',  label: 'Lab Reports',     icon: Microscope },
     { to: '/doctor/patients',      label: 'Patients',        icon: UserSearch,  badge: 'patients'  },
     { to: '/doctor/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/doctor/appointments',  label: 'Appointments',    icon: CalendarClock, badge: 'apptRequests' },
   ],
   patient: [
     { to: '/patient',               label: 'Patient Information', icon: LayoutDashboard, exact: true },
@@ -76,6 +80,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/patient/lab-tests',     label: 'Lab Tests',       icon: Microscope },
     { to: '/patient/my-reports',    label: 'My Reports',      icon: FolderOpen },
     { to: '/patient/requests',      label: 'Doctor Requests', icon: ShieldCheck, badge: 'ptRequests' },
+    { to: '/patient/book-doctor',   label: 'Book Doctor',     icon: CalendarPlus },
   ],
   laboratory: [
     { to: '/laboratory',         label: 'Dashboard',   icon: LayoutDashboard, exact: true },
@@ -122,12 +127,21 @@ export default function Sidebar() {
     enabled:  !!user && (user.role === 'patient' || user.role === 'doctor'),
   });
 
+  // Fetch appointment booking requests for the doctor's pending-request badge
+  const { data: appointments = [] } = useQuery({
+    queryKey: ['appointments'],
+    queryFn:  appointmentApi.getAll,
+    enabled:  !!user && user.role === 'doctor',
+  });
+
   const accessPending    = (accessRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
   // Patient: lab view requests waiting for their response
   const labViewPending   = (labViewRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
+  const apptPending      = (appointments as Array<{ status: string }>).filter(r => r.status === 'pending').length;
   const getBadge = (badgeKey: string): number => {
     if (badgeKey === 'ptRequests') return accessPending + labViewPending;
     if (badgeKey === 'drRequests') return accessPending;
+    if (badgeKey === 'apptRequests') return apptPending;
     return 0;
   };
 

@@ -7,7 +7,7 @@ import {
   ArrowUpRight, Download, Calendar, Building2, ChevronDown,
   Thermometer, Microscope, Package, Clock,
 } from 'lucide-react';
-import { authApi, consultationApi, labApi } from '../services/api';
+import { authApi, consultationApi, labApi, patientReportApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/helpers';
 import MiniCalendar from '../components/common/MiniCalendar';
@@ -420,6 +420,7 @@ export default function PatientDashboard() {
   const { data: me }                 = useQuery({ queryKey: ['me'],                  queryFn: authApi.me });
   const { data: consultations = [] } = useQuery({ queryKey: ['consultations'],        queryFn: consultationApi.getAll });
   const { data: labReports = [] }    = useQuery({ queryKey: ['patient-lab-reports'],  queryFn: labApi.getAll });
+  const { data: patientReports = [] } = useQuery({ queryKey: ['patient-reports'],      queryFn: patientReportApi.getAll });
 
   const profile   = me?.profile as any;
   const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Patient';
@@ -465,6 +466,74 @@ export default function PatientDashboard() {
     [consultations]
   );
 
+  // Real per-row detail for the stat list — each derived from the same
+  // consultations/lab-reports data already fetched above, never hardcoded.
+  const latestConsultation = useMemo(() =>
+    [...(consultations as any[])].sort((a, b) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())[0] || null,
+    [consultations]
+  );
+
+  const latestActiveTreatment = useMemo(() =>
+    [...activeConsultations].sort((a: any, b: any) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())[0] || null,
+    [activeConsultations]
+  );
+
+  const lastResolved = useMemo(() =>
+    diseases
+      .filter((d: any) => d.status === 'completed')
+      .sort((a: any, b: any) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())[0] || null,
+    [diseases]
+  );
+
+  const labStatusCounts = useMemo(() =>
+    (labReports as any[]).reduce((acc: Record<string, number>, r: any) => {
+      acc[r.status] = (acc[r.status] || 0) + 1;
+      return acc;
+    }, {}),
+    [labReports]
+  );
+
+  // Lab tests come from two independent sources: doctor/lab-assigned requests
+  // (clinical.lab_requests) and reports the patient uploaded themselves
+  // (clinical.patient_reports, tagged report_type='lab_report') — both must
+  // count toward "Lab Tests" or self-uploads silently disappear from the stat.
+  const selfUploadedLabReports = useMemo(() =>
+    (patientReports as any[]).filter((r: any) => r.report_type === 'lab_report'),
+    [patientReports]
+  );
+
+  const allLabTests = useMemo(() => [
+    ...(labReports as any[]).map((r: any) => ({
+      id:       `lr-${r.id}`,
+      source:   'lab_request' as const,
+      title:    r.lab_name || 'Laboratory',
+      subtitle: r.test_description,
+      doctor:   r.doctor_name,
+      status:   r.status,
+      date:     r.created_at,
+    })),
+    ...selfUploadedLabReports.map((r: any) => ({
+      id:       `pr-${r.id}`,
+      source:   'patient_upload' as const,
+      title:    r.title || 'Lab Report',
+      subtitle: r.laboratory_name || r.description,
+      doctor:   r.doctor_name,
+      status:   'uploaded',
+      date:     r.created_at,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [labReports, selfUploadedLabReports]
+  );
+
+  const topDoctor = useMemo(() => {
+    if (doctors.length === 0) return null;
+    const counts = (doctors as string[]).map(name => ({
+      name,
+      visits: (consultations as any[]).filter((c: any) => c.doctor_display_name === name).length,
+    }));
+    return counts.sort((a, b) => b.visits - a.visits)[0];
+  }, [doctors, consultations]);
+
   const allergies = useMemo(() =>
     profile?.allergies
       ? profile.allergies.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean)
@@ -505,9 +574,19 @@ export default function PatientDashboard() {
         date:     r.created_at,
         status:   r.status,
       })),
+      ...selfUploadedLabReports.map((r: any) => ({
+        id:       `pr-${r.id}`,
+        type:     'lab-upload',
+        icon:     '📄',
+        color:    'bg-violet-100',
+        title:    r.title || 'Lab Report',
+        subtitle: 'Uploaded by you',
+        date:     r.created_at,
+        status:   'uploaded',
+      })),
     ];
     return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [consultations, labReports]);
+  }, [consultations, labReports, selfUploadedLabReports]);
 
   const handleDownload = () => {
     setDownloading(true);
@@ -540,7 +619,7 @@ export default function PatientDashboard() {
                     🩸 {profile.blood_type}
                   </span>
                 )}
-                {age && (
+                {age != null && (
                   <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
                     🎂 {age} yrs
                   </span>
@@ -576,7 +655,7 @@ export default function PatientDashboard() {
               {(() => {
                 const fields = [
                   { label: 'Blood Type', value: profile?.blood_type || '—' },
-                  { label: 'Age',        value: age ? `${age} yrs` : '—' },
+                  { label: 'Age',        value: age != null ? `${age} yrs` : '—' },
                   { label: 'Gender',     value: profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : '—' },
                   { label: 'Insurance',  value: profile?.insurance_provider || '—' },
                   { label: 'Phone',      value: profile?.phone || '—' },
@@ -611,16 +690,54 @@ export default function PatientDashboard() {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Health Summary</p>
             <div className="divide-y divide-gray-100">
               {[
-                { label: 'Doctor Visits',     value: (consultations as any[]).length },
-                { label: 'Active Treatments', value: activeConsultations.length },
-                { label: 'Resolved',          value: diseases.filter((d: any) => d.status === 'completed').length },
-                { label: 'Lab Tests',         value: (labReports as any[]).length },
-                { label: 'Medicines',         value: medCount.length },
-                { label: 'Doctors Seen',      value: doctors.length },
+                {
+                  label: 'Doctor Visits',
+                  value: (consultations as any[]).length,
+                  detail: latestConsultation
+                    ? `Last: ${formatDate(latestConsultation.visit_date)}${latestConsultation.doctor_display_name ? ` · Dr. ${latestConsultation.doctor_display_name}` : ''}`
+                    : null,
+                },
+                {
+                  label: 'Active Treatments',
+                  value: activeConsultations.length,
+                  detail: latestActiveTreatment
+                    ? (latestActiveTreatment.diagnosis || latestActiveTreatment.sick_description || null)
+                    : null,
+                },
+                {
+                  label: 'Resolved',
+                  value: diseases.filter((d: any) => d.status === 'completed').length,
+                  detail: lastResolved
+                    ? `${lastResolved.title} · ${formatDate(lastResolved.visit_date)}`
+                    : null,
+                },
+                {
+                  label: 'Lab Tests',
+                  value: allLabTests.length,
+                  detail: allLabTests.length > 0
+                    ? [
+                        ...Object.entries(labStatusCounts).map(([k, v]) => `${v} ${k.replace('_', ' ')}`),
+                        selfUploadedLabReports.length > 0 ? `${selfUploadedLabReports.length} self-uploaded` : null,
+                      ].filter(Boolean).join(' · ')
+                    : null,
+                },
+                {
+                  label: 'Medicines',
+                  value: medCount.length,
+                  detail: medCount[0] ? `Most used: ${medCount[0].name} (${medCount[0].count}×)` : null,
+                },
+                {
+                  label: 'Doctors Seen',
+                  value: doctors.length,
+                  detail: topDoctor ? `Primary: Dr. ${topDoctor.name} (${topDoctor.visits} visit${topDoctor.visits !== 1 ? 's' : ''})` : null,
+                },
               ].map((s) => (
                 <div key={s.label} className="grid grid-cols-[110px_1fr] gap-3 text-sm py-2 first:pt-0 last:pb-0">
                   <span className="text-gray-400">{s.label}</span>
-                  <span className="text-gray-800 font-medium">{s.value}</span>
+                  <div>
+                    <span className="text-gray-800 font-medium">{s.value}</span>
+                    {s.detail && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{s.detail}</p>}
+                  </div>
                 </div>
               ))}
             </div>
@@ -973,36 +1090,39 @@ export default function PatientDashboard() {
         </div>
       </div>
 
-      {(labReports as any[]).length > 0 && (
+      {allLabTests.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <SectionTitle>Recent Lab Reports</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(labReports as any[]).slice(0, 4).map((r: any) => {
+            {allLabTests.slice(0, 4).map((r) => {
               const STATUS: Record<string, string> = {
                 pending:     'bg-yellow-100 text-yellow-700',
                 in_progress: 'bg-blue-100   text-blue-700',
                 completed:   'bg-green-100  text-green-700',
+                uploaded:    'bg-violet-100 text-violet-700',
               };
               return (
                 <div key={r.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <span className="text-xl mt-0.5">🔬</span>
+                  <span className="text-xl mt-0.5">{r.source === 'patient_upload' ? '📄' : '🔬'}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{r.lab_name || 'Laboratory'}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{r.title}</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS[r.status]}`}>
-                        {r.status.replace('_', ' ')}
+                        {r.source === 'patient_upload' ? 'Uploaded by you' : r.status.replace('_', ' ')}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{r.test_description}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Dr. {r.doctor_name} · {formatDate(r.created_at)}</p>
+                    {r.subtitle && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{r.subtitle}</p>}
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {r.doctor ? `Dr. ${r.doctor} · ` : ''}{formatDate(r.date)}
+                    </p>
                   </div>
                 </div>
               );
             })}
           </div>
-          {(labReports as any[]).length > 4 && (
+          {allLabTests.length > 4 && (
             <p className="text-xs text-center text-gray-400 mt-3">
-              +{(labReports as any[]).length - 4} more lab reports — view in Lab Reports tab
+              +{allLabTests.length - 4} more lab reports — view in Lab Reports tab
             </p>
           )}
         </div>
@@ -1035,7 +1155,7 @@ export default function PatientDashboard() {
         </div>
       )}
 
-      {(consultations as any[]).length === 0 && (labReports as any[]).length === 0 && (
+      {(consultations as any[]).length === 0 && allLabTests.length === 0 && (
         <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-2xl border border-primary-100 p-8 text-center">
           <span className="text-4xl block mb-3">🏥</span>
           <p className="text-gray-700 font-semibold">Your health dashboard is ready</p>

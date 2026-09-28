@@ -16,7 +16,9 @@
     "db:migrate:lab-view-requests": "node dist/config/migrateLabViewRequests.js",
     "db:migrate:vitals": "node dist/config/migrateVitals.js",
     "db:migrate:vitals-access": "node dist/config/migrateVitalsAccessType.js",
-    "db:migrate:lab-assignment": "node dist/config/migrateLabAssignment.js"
+    "db:migrate:lab-assignment": "node dist/config/migrateLabAssignment.js",
+    "db:migrate:patient-upload-vitals": "node dist/config/migratePatientUploadVitals.js",
+    "db:migrate:appointments": "node dist/config/migrateAppointments.js"
   },
   "dependencies": {
     "@types/pdf-parse": "^1.1.5",

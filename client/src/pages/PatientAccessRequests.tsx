@@ -376,7 +376,7 @@ export default function PatientAccessRequests() {
       <div className="grid grid-cols-3 gap-3 md:gap-4">
         {[
           { label:'Pending',        value: totalPending,                                                                         grad:'from-amber-500 to-orange-500',   shadow:'shadow-amber-200/50'  },
-          { label:'Data Access',    value: (requests as any[]).filter((r: any) => r.status==='accepted').length,                 grad:'from-emerald-500 to-teal-500',   shadow:'shadow-emerald-200/50'},
+          { label:'Health Info',    value: (requests as any[]).filter((r: any) => r.status==='accepted').length,                 grad:'from-emerald-500 to-teal-500',   shadow:'shadow-emerald-200/50'},
           { label:'Lab Reports',    value: (labViewRequests as any[]).filter((r: any) => r.status==='accepted').length,          grad:'from-cyan-500 to-teal-600',      shadow:'shadow-cyan-200/50'  },
         ].map(s => (
           <div key={s.label} className="ios-stat-tile relative overflow-hidden">
@@ -398,7 +398,7 @@ export default function PatientAccessRequests() {
           }`}
         >
           <Shield size={14} strokeWidth={2} />
-          Data Access
+          Health Info
           {accessPending > 0 && (
             <span className="text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
               {accessPending}
@@ -441,7 +441,7 @@ export default function PatientAccessRequests() {
               <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
                 <Shield size={28} strokeWidth={1.5} className="text-gray-300" />
               </div>
-              <p className="font-bold text-gray-500">No {accessFilter !== 'all' ? accessFilter : ''} data access requests</p>
+              <p className="font-bold text-gray-500">No {accessFilter !== 'all' ? accessFilter : ''} health info requests</p>
               <p className="text-sm text-gray-400 mt-1">When a doctor requests access to your health data, it will appear here.</p>
             </div>
           ) : (

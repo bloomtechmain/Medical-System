@@ -380,6 +380,63 @@ CREATE INDEX idx_dar_doctor  ON clinical.data_access_requests(doctor_id);
 CREATE INDEX idx_dar_patient ON clinical.data_access_requests(patient_id);
 CREATE INDEX idx_dar_status  ON clinical.data_access_requests(status);
 
+-- Doctor-initiated appointment booking: a patient books a specific date/time slot
+-- directly with a doctor (no organization involved) and the doctor accepts/declines.
+-- This is distinct from the per-organization tenant_<slug>.appointments table (that's
+-- an org's own front-desk record, seeded/aggregated for the admin dashboard only).
+-- Like data_access_requests, this is patient-doctor-owned relationship data, so it
+-- lives here rather than in any one organization's tenant schema.
+CREATE TABLE clinical.doctor_weekly_availability (
+  id                    SERIAL      PRIMARY KEY,
+  doctor_id             INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  day_of_week           SMALLINT    NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sunday .. 6=Saturday
+  start_time            TIME        NOT NULL,
+  end_time              TIME        NOT NULL,
+  slot_duration_minutes SMALLINT    NOT NULL DEFAULT 30 CHECK (slot_duration_minutes BETWEEN 5 AND 240),
+  is_active             BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (end_time > start_time)
+);
+CREATE INDEX idx_dwa_doctor ON clinical.doctor_weekly_availability(doctor_id);
+
+-- Per-date exceptions to the weekly pattern: a doctor can close a normally-open day
+-- (holiday/leave) or open a normally-closed one (extra clinic hours) for one date.
+CREATE TABLE clinical.doctor_availability_overrides (
+  id            SERIAL      PRIMARY KEY,
+  doctor_id     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  override_date DATE        NOT NULL,
+  is_available  BOOLEAN     NOT NULL,
+  reason        VARCHAR(255),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (doctor_id, override_date)
+);
+CREATE INDEX idx_dao_doctor_date ON clinical.doctor_availability_overrides(doctor_id, override_date);
+
+CREATE TABLE clinical.doctor_appointments (
+  id               SERIAL      PRIMARY KEY,
+  doctor_id        INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  patient_id       INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  appointment_date DATE        NOT NULL,
+  start_time       TIME        NOT NULL,
+  end_time         TIME        NOT NULL,
+  reason           TEXT,
+  status           VARCHAR(20) NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','confirmed','declined','cancelled','completed')),
+  doctor_notes     TEXT,
+  responded_at     TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_da_doctor  ON clinical.doctor_appointments(doctor_id);
+CREATE INDEX idx_da_patient ON clinical.doctor_appointments(patient_id);
+CREATE INDEX idx_da_status  ON clinical.doctor_appointments(status);
+CREATE INDEX idx_da_date    ON clinical.doctor_appointments(appointment_date);
+-- One active (pending/confirmed) booking per doctor per date+time slot — prevents double-booking.
+CREATE UNIQUE INDEX idx_da_slot_unique ON clinical.doctor_appointments(doctor_id, appointment_date, start_time)
+  WHERE status IN ('pending','confirmed');
+
 CREATE TABLE clinical.patient_reports (
   id                 SERIAL       PRIMARY KEY,
   patient_id         INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -436,15 +493,17 @@ CREATE TABLE clinical.patient_vitals (
   oxygen_saturation NUMERIC(5,2),
   -- Metadata
   source            VARCHAR(20)   NOT NULL DEFAULT 'manual'
-                    CHECK (source IN ('manual','lab_report')),
+                    CHECK (source IN ('manual','lab_report','patient_upload')),
   lab_request_id    INTEGER,                            -- soft ref: clinical.lab_requests(id)
+  patient_report_id INTEGER,                            -- soft ref: clinical.patient_reports(id)
   notes             TEXT,
   recorded_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_pv_patient    ON clinical.patient_vitals(patient_id);
-CREATE INDEX idx_pv_recorded   ON clinical.patient_vitals(recorded_at DESC);
-CREATE INDEX idx_pv_lab_req    ON clinical.patient_vitals(lab_request_id);
+CREATE INDEX idx_pv_patient      ON clinical.patient_vitals(patient_id);
+CREATE INDEX idx_pv_recorded     ON clinical.patient_vitals(recorded_at DESC);
+CREATE INDEX idx_pv_lab_req      ON clinical.patient_vitals(lab_request_id);
+CREATE INDEX idx_pv_patient_rept ON clinical.patient_vitals(patient_report_id);
 
 CREATE TABLE clinical.notifications (
   id         SERIAL       PRIMARY KEY,
@@ -513,6 +572,7 @@ BEGIN
   FOR t IN SELECT unnest(ARRAY[
       'patient_profiles','medical_consultations','consultation_medicines',
       'lab_requests','lab_view_requests','data_access_requests',
+      'doctor_weekly_availability','doctor_availability_overrides','doctor_appointments',
       'patient_reports','patient_vitals','notifications'])
   LOOP
     EXECUTE format('ALTER TABLE clinical.%I ENABLE ROW LEVEL SECURITY', t);
@@ -586,6 +646,30 @@ CREATE POLICY lvr_all ON clinical.lab_view_requests FOR ALL USING (
 
 -- data_access_requests: the doctor or patient party; admin
 CREATE POLICY dar_all ON clinical.data_access_requests FOR ALL USING (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
+);
+
+-- doctor_weekly_availability / doctor_availability_overrides: readable by anyone
+-- (booking hours aren't PHI — a patient must see them to pick a slot); only the
+-- owning doctor (or admin) can create/change them.
+CREATE POLICY dwa_sel ON clinical.doctor_weekly_availability FOR SELECT USING (true);
+CREATE POLICY dwa_mod ON clinical.doctor_weekly_availability FOR ALL USING (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid()
+);
+
+CREATE POLICY dao_sel ON clinical.doctor_availability_overrides FOR SELECT USING (true);
+CREATE POLICY dao_mod ON clinical.doctor_availability_overrides FOR ALL USING (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid()
+);
+
+-- doctor_appointments: the doctor or patient party; admin
+CREATE POLICY da_all ON clinical.doctor_appointments FOR ALL USING (
   public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
 ) WITH CHECK (
   public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
@@ -919,7 +1003,7 @@ SET search_path = public, clinical;
 
 -- 8.1 Users (same order -> ids 1..12, matching all downstream references)
 INSERT INTO public.users (name, email, password, role) VALUES
-  ('System Admin',        'admin@gmail.com',        '$2a$10$iRvGN/NlfdNmjgNU10wJNOYgd4nWE74bwQ11DuTzZR3bg5PZ5Vvee', 'admin'),
+  ('System Admin',        'admin@corehealth.lk',    '$2a$10$iRvGN/NlfdNmjgNU10wJNOYgd4nWE74bwQ11DuTzZR3bg5PZ5Vvee', 'admin'),
   ('Dr. Janaka Perera',   'dr.janaka@corehealth.lk','$2a$10$k0ySTFcD6IepYSDihy6OOuISQsBtIIhMwTeQ6w55DXomF7Qsit8GK', 'doctor'),
   ('Dr. Nimal Fernando',  'dr.nimal@corehealth.lk', '$2a$10$k0ySTFcD6IepYSDihy6OOuISQsBtIIhMwTeQ6w55DXomF7Qsit8GK', 'doctor'),
   ('Dr. Kamani Silva',    'dr.kamani@corehealth.lk','$2a$10$k0ySTFcD6IepYSDihy6OOuISQsBtIIhMwTeQ6w55DXomF7Qsit8GK', 'doctor'),
