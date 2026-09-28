@@ -111,6 +111,18 @@ export const accessRequestApi = {
   getLabReportFile: (patientId: number, labRequestId: number): Promise<Blob>      => api.get(`/access-requests/patient/${patientId}/lab-report/${labRequestId}/file`, { responseType: 'blob' }),
 };
 
+export const appointmentApi = {
+  getAll:               (): Promise<any>                                            => api.get('/appointments'),
+  create:               (data: unknown): Promise<any>                               => api.post('/appointments', data),
+  updateStatus:         (id: number, status: string, extra?: Record<string, unknown>): Promise<any> => api.patch(`/appointments/${id}/status`, { status, ...extra }),
+  getDoctorSlots:       (doctorId: number, days = 14): Promise<any>                  => api.get(`/appointments/doctor/${doctorId}/slots`, { params: { days } }),
+  getWeeklyAvailability: (): Promise<any>                                           => api.get('/appointments/availability/weekly'),
+  setWeeklyAvailability: (schedule: unknown): Promise<any>                          => api.put('/appointments/availability/weekly', { schedule }),
+  getOverrides:         (from?: string, to?: string): Promise<any>                  => api.get('/appointments/availability/overrides', { params: { from, to } }),
+  setOverride:          (data: unknown): Promise<any>                               => api.post('/appointments/availability/overrides', data),
+  deleteOverride:       (id: number): Promise<any>                                  => api.delete(`/appointments/availability/overrides/${id}`),
+};
+
 export const patientReportApi = {
   getAll:        (): Promise<any>                   => api.get('/patient-reports'),
   getOne:        (id: number): Promise<any>         => api.get(`/patient-reports/${id}`),
@@ -127,9 +139,10 @@ export const notificationApi = {
 };
 
 export const patientVitalsApi = {
-  get:     (): Promise<any>              => api.get('/patient-vitals'),
-  history: (): Promise<any>             => api.get('/patient-vitals/history'),
-  save:    (data: unknown): Promise<any> => api.post('/patient-vitals', data),
+  get:         (): Promise<any>              => api.get('/patient-vitals'),
+  history:     (): Promise<any>             => api.get('/patient-vitals/history'),
+  fieldHistory: (field: string): Promise<any> => api.get(`/patient-vitals/history/${field}`),
+  save:        (data: unknown): Promise<any> => api.post('/patient-vitals', data),
 };
 
 export const orgApi = {

@@ -3,33 +3,13 @@ import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
-import { extractVitalsFromText, extractTextFromPDF } from '../utils/labVitalsParser';
+import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
 import { saveVitalsFromLab } from './patientVitalsController';
 
 // lab_requests lives in the `clinical` schema behind row-level security —
 // every query against it must carry the acting user's identity. See
 // config/db.ts (queryAs) for why plain pool.query() isn't enough.
 const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
-
-/** Run OCR on an image file; skip PDFs (handled by pdfjs separately). */
-const runOCROnLabFile = async (filePath: string): Promise<string> => {
-  const ext = path.extname(filePath).toLowerCase();
-  if (!['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'].includes(ext)) return '';
-  try {
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker('eng', 1, { logger: () => {} });
-    const { data: { text } } = await worker.recognize(filePath);
-    await worker.terminate();
-    return text || '';
-  } catch { return ''; }
-};
-
-/** Extract text from any file: pdfjs for PDFs, OCR for images. */
-const extractReportText = async (filePath: string): Promise<string> => {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.pdf') return extractTextFromPDF(filePath);
-  return runOCROnLabFile(filePath);
-};
 
 const labName = async (labId: number): Promise<string> => {
   const { rows } = await pool.query(
@@ -231,6 +211,7 @@ const finalizeReport = (
 
       if (Object.keys(vitalsToSave).length > 0) {
         await saveVitalsFromLab(request.patient_id, vitalsToSave, request.id);
+        await queryAs({ id: labId, role: 'laboratory' }, `UPDATE lab_requests SET vitals_extracted=true WHERE id=$1`, [request.id]);
       }
 
       // Notify doctor and patient at the same time

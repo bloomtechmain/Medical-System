@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Activity, Edit3, X, Save, RefreshCw, FlaskConical, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, Edit3, X, Save, RefreshCw, FlaskConical, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
 import { patientVitalsApi } from '../../services/api';
 import { formatDateTime } from '../../utils/helpers';
 
@@ -24,24 +24,24 @@ const VITALS: VitalDef[] = [
   { key: 'rbc',             label: 'Red Blood Cells',     unit: '10⁶/µL', min: 4.5,  max: 6.0,  step: '0.01', critLow: 3.0,  critHigh: 7.0,   group: 'CBC' },
   { key: 'hemoglobin',      label: 'Hemoglobin',          unit: 'g/dL',   min: 12.0, max: 18.0, step: '0.1',  critLow: 7.0,  critHigh: 20.0,  group: 'CBC' },
   { key: 'hematocrit',      label: 'Hematocrit',          unit: '%',      min: 37.0, max: 52.0, step: '0.1',  critLow: 20.0, critHigh: 60.0,  group: 'CBC' },
-  { key: 'mcv',             label: 'MCV',                 unit: 'fL',     min: 80.0, max: 99.0, step: '0.1',  group: 'CBC' },
-  { key: 'mch',             label: 'MCH',                 unit: 'pg',     min: 27.0, max: 34.5, step: '0.1',  group: 'CBC' },
-  { key: 'mchc',            label: 'MCHC',                unit: 'g/dL',   min: 32.0, max: 36.5, step: '0.1',  group: 'CBC' },
-  { key: 'rdw',             label: 'RDW',                 unit: '%',      min: 11.0, max: 15.0, step: '0.1',  group: 'CBC' },
+  { key: 'mcv',             label: 'MCV (Red Cell Size)',            unit: 'fL',     min: 80.0, max: 99.0, step: '0.1',  group: 'CBC' },
+  { key: 'mch',             label: 'MCH (Hemoglobin per Cell)',      unit: 'pg',     min: 27.0, max: 34.5, step: '0.1',  group: 'CBC' },
+  { key: 'mchc',            label: 'MCHC (Hemoglobin Concentration)',unit: 'g/dL',   min: 32.0, max: 36.5, step: '0.1',  group: 'CBC' },
+  { key: 'rdw',             label: 'RDW (Red Cell Size Variation)',  unit: '%',      min: 11.0, max: 15.0, step: '0.1',  group: 'CBC' },
   { key: 'platelets',       label: 'Platelet Count',      unit: '10³/µL', min: 150,  max: 450,  step: '1',    critLow: 50,   critHigh: 1000,  group: 'CBC', inputType: 'integer' },
-  { key: 'mpv',             label: 'MPV',                 unit: 'fL',     min: 7.4,  max: 12.0, step: '0.1',  group: 'CBC' },
+  { key: 'mpv',             label: 'MPV (Platelet Size)', unit: 'fL',     min: 7.4,  max: 12.0, step: '0.1',  group: 'CBC' },
   // Metabolic
-  { key: 'blood_glucose',   label: 'Blood Glucose',       unit: 'mg/dL',  min: 70,   max: 100,  step: '0.1',  critLow: 40,   critHigh: 500,   group: 'Metabolic' },
-  { key: 'hba1c',           label: 'HbA1c',               unit: '%',      min: 4.0,  max: 5.6,  step: '0.1',  critHigh: 14,  group: 'Metabolic' },
-  { key: 'creatinine',      label: 'Creatinine',          unit: 'mg/dL',  min: 0.7,  max: 1.2,  step: '0.01', critHigh: 10,  group: 'Metabolic' },
+  { key: 'blood_glucose',   label: 'Blood Glucose (Blood Sugar)', unit: 'mg/dL',  min: 70,   max: 100,  step: '0.1',  critLow: 40,   critHigh: 500,   group: 'Metabolic' },
+  { key: 'hba1c',           label: 'HbA1c (Avg. Blood Sugar, 3 Months)', unit: '%',      min: 4.0,  max: 5.6,  step: '0.1',  critHigh: 14,  group: 'Metabolic' },
+  { key: 'creatinine',      label: 'Creatinine (Kidney Function)',  unit: 'mg/dL',  min: 0.7,  max: 1.2,  step: '0.01', critHigh: 10,  group: 'Metabolic' },
   // Lipid Panel
   { key: 'cholesterol',     label: 'Total Cholesterol',   unit: 'mg/dL',  min: 125,  max: 200,  step: '1',    critHigh: 300, group: 'Lipid', inputType: 'integer' },
-  { key: 'hdl',             label: 'HDL Cholesterol',     unit: 'mg/dL',  min: 40,   max: 60,   step: '1',    group: 'Lipid', inputType: 'integer' },
-  { key: 'ldl',             label: 'LDL Cholesterol',     unit: 'mg/dL',  min: 0,    max: 100,  step: '1',    critHigh: 190, group: 'Lipid', inputType: 'integer' },
-  { key: 'triglycerides',   label: 'Triglycerides',       unit: 'mg/dL',  min: 0,    max: 150,  step: '1',    critHigh: 500, group: 'Lipid', inputType: 'integer' },
+  { key: 'hdl',             label: 'HDL Cholesterol (Good)', unit: 'mg/dL',  min: 40,   max: 60,   step: '1',    group: 'Lipid', inputType: 'integer' },
+  { key: 'ldl',             label: 'LDL Cholesterol (Bad)',  unit: 'mg/dL',  min: 0,    max: 100,  step: '1',    critHigh: 190, group: 'Lipid', inputType: 'integer' },
+  { key: 'triglycerides',   label: 'Triglycerides (Blood Fat)', unit: 'mg/dL',  min: 0,    max: 150,  step: '1',    critHigh: 500, group: 'Lipid', inputType: 'integer' },
   // Basic Vitals
-  { key: 'bp_systolic',     label: 'BP Systolic',         unit: 'mmHg',   min: 90,   max: 120,  step: '1',    critLow: 70,   critHigh: 180,   group: 'Vitals', inputType: 'integer' },
-  { key: 'bp_diastolic',    label: 'BP Diastolic',        unit: 'mmHg',   min: 60,   max: 80,   step: '1',    critLow: 40,   critHigh: 120,   group: 'Vitals', inputType: 'integer' },
+  { key: 'bp_systolic',     label: 'Blood Pressure (Systolic)',  unit: 'mmHg',   min: 90,   max: 120,  step: '1',    critLow: 70,   critHigh: 180,   group: 'Vitals', inputType: 'integer' },
+  { key: 'bp_diastolic',    label: 'Blood Pressure (Diastolic)', unit: 'mmHg',   min: 60,   max: 80,   step: '1',    critLow: 40,   critHigh: 120,   group: 'Vitals', inputType: 'integer' },
   { key: 'heart_rate',      label: 'Heart Rate',          unit: 'bpm',    min: 60,   max: 100,  step: '1',    critLow: 40,   critHigh: 150,   group: 'Vitals', inputType: 'integer' },
   { key: 'temperature',     label: 'Temperature',         unit: '°C',     min: 36.1, max: 37.2, step: '0.1',  critLow: 34,   critHigh: 41,    group: 'Vitals' },
   { key: 'oxygen_saturation', label: 'O₂ Saturation',    unit: '%',      min: 95,   max: 100,  step: '0.1',  critLow: 85,   group: 'Vitals' },
@@ -73,10 +73,27 @@ const STATUS_STYLE: Record<string, { badge: string; color: string; label: string
   'critical-high': { badge: 'bg-red-600   text-white', color: '#dc2626', label: 'Critical', pulse: true },
 };
 
+// ── Source badge (per-field provenance) ────────────────────────────────────────
+const SOURCE_META: Record<string, { icon: string; label: string; className: string }> = {
+  lab_report:     { icon: '🧪', label: 'Lab report',   className: 'bg-primary-50 text-primary-700' },
+  patient_upload: { icon: '📄', label: 'Your upload',  className: 'bg-violet-50 text-violet-700' },
+  manual:         { icon: '✍️', label: 'Manual entry', className: 'bg-gray-100 text-gray-600' },
+};
+
+interface VitalFieldMeta {
+  source: string;
+  recorded_at: string;
+  previous?: number | null;
+  delta?: number | null;
+  direction?: 'up' | 'down' | 'same' | null;
+}
+
 // ── VitalCard ─────────────────────────────────────────────────────────────────
-function VitalCard({ def, value }: { def: VitalDef; value: number }) {
+function VitalCard({ def, value, meta, onClick }: { def: VitalDef; value: number; meta?: VitalFieldMeta; onClick?: () => void }) {
   const status = getStatus(value, def);
   const style  = STATUS_STYLE[status];
+  const src    = meta ? SOURCE_META[meta.source] : undefined;
+  const trend  = meta?.previous != null ? meta : undefined;
 
   // Bar geometry — show 20% padding outside normal range
   const range   = def.max - def.min;
@@ -88,7 +105,11 @@ function VitalCard({ def, value }: { def: VitalDef; value: number }) {
   const normalW = (range / barSpan) * 100;
 
   return (
-    <div className={`bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-shadow ${
+    <button
+      type="button"
+      onClick={onClick}
+      title={`View ${def.label} history`}
+      className={`group text-left w-full bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md hover:border-primary-200 transition-shadow ${
       style.pulse ? 'border-red-200' : 'border-gray-100'
     }`}>
       {/* Header */}
@@ -114,6 +135,17 @@ function VitalCard({ def, value }: { def: VitalDef; value: number }) {
         </div>
       </div>
 
+      {/* Trend vs. previous reading */}
+      {trend && (
+        <p className={`text-center text-[10px] font-semibold mb-1 ${
+          trend.direction === 'up' ? 'text-amber-600' : trend.direction === 'down' ? 'text-blue-600' : 'text-gray-400'
+        }`}>
+          {trend.direction === 'up' ? '▲' : trend.direction === 'down' ? '▼' : '≈'}{' '}
+          {trend.delta != null && trend.delta !== 0 ? `${trend.delta > 0 ? '+' : ''}${trend.delta}` : 'no change'}
+          {' '}since last ({trend.previous})
+        </p>
+      )}
+
       {/* Range bar */}
       <div className="relative mt-1">
         <div className="h-2 bg-gray-100 rounded-full relative overflow-hidden">
@@ -137,6 +169,244 @@ function VitalCard({ def, value }: { def: VitalDef; value: number }) {
         <div className="flex justify-between mt-3">
           <span className="text-[9px] text-gray-400 font-medium">{def.min}</span>
           <span className="text-[9px] text-gray-400 font-medium">{def.max}</span>
+        </div>
+      </div>
+
+      {/* Provenance — where this value came from */}
+      {src && (
+        <div
+          className={`mt-3 flex items-center justify-center gap-1 text-[9px] font-bold px-2 py-1 rounded-lg ${src.className}`}
+          title={meta ? formatDateTime(meta.recorded_at) : undefined}
+        >
+          <span>{src.icon}</span> {src.label}
+        </div>
+      )}
+
+      {/* Affordance — this whole card is clickable */}
+      <p className="text-center text-[9px] font-semibold text-gray-300 mt-2 group-hover:text-primary-500 transition-colors">
+        Click for history →
+      </p>
+    </button>
+  );
+}
+
+// ── Vital History Modal ─────────────────────────────────────────────────────
+const shortDate = (iso: string): string =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+interface HistoryPoint {
+  id: number;
+  value: string | number;
+  source: string;
+  lab_request_id: number | null;
+  patient_report_id: number | null;
+  recorded_at: string;
+}
+
+function VitalTrendChart({ def, points }: { def: VitalDef; points: HistoryPoint[] }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const W = 640, H = 220;
+  const padL = 38, padR = 12, padT = 16, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const values = points.map(p => Number(p.value));
+  const domainMin = Math.min(...values, def.min);
+  const domainMax = Math.max(...values, def.max);
+  const pad = (domainMax - domainMin || 1) * 0.15;
+  const yMin = domainMin - pad, yMax = domainMax + pad;
+
+  const xAt = (i: number) => padL + (points.length > 1 ? (i / (points.length - 1)) * plotW : plotW / 2);
+  const yAt = (v: number) => padT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)},${yAt(Number(p.value))}`).join(' ');
+  const normalTop    = Math.max(padT, yAt(def.max));
+  const normalBottom = Math.min(padT + plotH, yAt(def.min));
+
+  // Y-axis ticks: min / mid / max of the visible domain
+  const ticks = [yMin, (yMin + yMax) / 2, yMax];
+
+  const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!svgRef.current || points.length === 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    let nearest = 0, best = Infinity;
+    points.forEach((_, i) => {
+      const d = Math.abs(xAt(i) - px);
+      if (d < best) { best = d; nearest = i; }
+    });
+    setHoverIdx(nearest);
+  };
+
+  const hovered = hoverIdx != null ? points[hoverIdx] : null;
+  const usedStatuses = Array.from(new Set(values.map(v => getStatus(v, def))));
+
+  return (
+    <div>
+      <div className="relative">
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full h-auto touch-none select-none"
+          onPointerMove={handleMove}
+          onPointerLeave={() => setHoverIdx(null)}
+        >
+          {/* Normal-range band */}
+          <rect x={padL} y={normalTop} width={plotW} height={Math.max(0, normalBottom - normalTop)}
+                fill="#14b8a6" opacity={0.08} />
+          {/* Gridlines + y labels */}
+          {ticks.map((t, i) => (
+            <g key={i}>
+              <line x1={padL} x2={W - padR} y1={yAt(t)} y2={yAt(t)} stroke="#e5e7eb" strokeWidth={1} />
+              <text x={padL - 6} y={yAt(t)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="#9ca3af">
+                {Math.round(t * 100) / 100}
+              </text>
+            </g>
+          ))}
+          {/* Trend line */}
+          {points.length > 1 && (
+            <path d={linePath} fill="none" stroke="#0d9488" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          )}
+          {/* Crosshair */}
+          {hovered && (
+            <line x1={xAt(hoverIdx!)} x2={xAt(hoverIdx!)} y1={padT} y2={padT + plotH} stroke="#9ca3af" strokeWidth={1} strokeDasharray="3,3" />
+          )}
+          {/* Dots, colored by status */}
+          {points.map((p, i) => {
+            const status = getStatus(Number(p.value), def);
+            const color  = STATUS_STYLE[status].color;
+            const isHover = hoverIdx === i;
+            return (
+              <circle
+                key={p.id}
+                cx={xAt(i)} cy={yAt(Number(p.value))}
+                r={isHover ? 7 : 5}
+                fill={color}
+                stroke="#ffffff"
+                strokeWidth={2}
+                tabIndex={0}
+                onFocus={() => setHoverIdx(i)}
+                style={{ cursor: 'pointer' }}
+              />
+            );
+          })}
+          {/* X labels: first, last, and middle only (avoid crowding) */}
+          {points.length > 0 && [0, Math.floor((points.length - 1) / 2), points.length - 1]
+            .filter((v, i, arr) => arr.indexOf(v) === i)
+            .map(i => (
+              <text key={i} x={xAt(i)} y={H - 8} textAnchor="middle" fontSize={9} fill="#9ca3af">
+                {shortDate(points[i].recorded_at)}
+              </text>
+            ))}
+        </svg>
+
+        {/* Tooltip */}
+        {hovered && (
+          <div
+            className="absolute z-10 bg-gray-900 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg pointer-events-none -translate-x-1/2 -translate-y-full"
+            style={{ left: `${(xAt(hoverIdx!) / W) * 100}%`, top: `${(yAt(Number(hovered.value)) / H) * 100}%`, marginTop: -10 }}
+          >
+            <p className="font-bold">{hovered.value} {def.unit}</p>
+            <p className="text-gray-300">{formatDateTime(hovered.recorded_at)}</p>
+            <p className="text-gray-300 flex items-center gap-1 mt-0.5">
+              {SOURCE_META[hovered.source]?.icon} {SOURCE_META[hovered.source]?.label || hovered.source}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Legend — status colors used for the dots */}
+      <div className="flex flex-wrap gap-3 mt-2 px-1">
+        {usedStatuses.map(s => (
+          <span key={s} className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-500">
+            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: STATUS_STYLE[s].color }} />
+            {STATUS_STYLE[s].label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400">
+          <span className="w-2.5 h-2.5 rounded-full inline-block bg-teal-500/10 border border-teal-500/30" />
+          Normal range ({def.min}–{def.max} {def.unit})
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function VitalHistoryModal({ def, onClose }: { def: VitalDef; onClose: () => void }) {
+  const { data: points, isLoading } = useQuery<HistoryPoint[]>({
+    queryKey: ['vital-field-history', def.key],
+    queryFn:  () => patientVitalsApi.fieldHistory(def.key),
+  });
+
+  const ordered = points ? [...points].reverse() : []; // newest first, for the list
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-teal-50 to-cyan-50 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-teal-500 to-primary-600 rounded-2xl flex items-center justify-center shadow-md">
+              <TrendingUp size={16} className="text-white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">{def.label} History</p>
+              <p className="text-xs text-gray-500">
+                {isLoading ? 'Loading…' : `${points?.length || 0} reading${points?.length === 1 ? '' : 's'} recorded`}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200">
+            <X size={15} strokeWidth={2.5} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5">
+          {isLoading && <p className="text-sm text-gray-400 text-center py-10">Loading history…</p>}
+
+          {!isLoading && (!points || points.length === 0) && (
+            <p className="text-sm text-gray-400 text-center py-10">No readings recorded yet for {def.label}.</p>
+          )}
+
+          {!isLoading && points && points.length > 0 && (
+            <>
+              <VitalTrendChart def={def} points={points} />
+
+              {/* Reachable-without-hover list — also shows source per reading */}
+              <div className="mt-5 divide-y divide-gray-50 border border-gray-100 rounded-2xl overflow-hidden">
+                {ordered.map((p, i) => {
+                  const prev   = ordered[i + 1];
+                  const delta  = prev ? Math.round((Number(p.value) - Number(prev.value)) * 100) / 100 : null;
+                  const status = getStatus(Number(p.value), def);
+                  const style  = STATUS_STYLE[status];
+                  const src    = SOURCE_META[p.source];
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${style.badge}`}>
+                          {p.value} {def.unit}
+                        </span>
+                        <span className="text-xs text-gray-500 truncate">{formatDateTime(p.recorded_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {delta != null && delta !== 0 && (
+                          <span className={`text-[10px] font-bold ${delta > 0 ? 'text-amber-600' : 'text-blue-600'}`}>
+                            {delta > 0 ? '▲' : '▼'} {delta > 0 ? '+' : ''}{delta}
+                          </span>
+                        )}
+                        {src && (
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 ${src.className}`}>
+                            {src.icon} {src.label}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -294,8 +564,9 @@ function EditVitalsModal({ vitals, onClose, onSaved }: {
 
 // ── Main VitalsOverview component ─────────────────────────────────────────────
 export default function VitalsOverview() {
-  const [showEdit,  setShowEdit]  = useState(false);
-  const [expanded,  setExpanded]  = useState<Record<string, boolean>>({ CBC: true, Metabolic: false, Lipid: false, Vitals: false });
+  const [showEdit,     setShowEdit]     = useState(false);
+  const [historyField, setHistoryField] = useState<VitalDef | null>(null);
+  const [expanded,      setExpanded]     = useState<Record<string, boolean>>({ CBC: true, Metabolic: false, Lipid: false, Vitals: false });
 
   const { data: vitals, isLoading, refetch } = useQuery({
     queryKey: ['patient-vitals'],
@@ -315,6 +586,15 @@ export default function VitalsOverview() {
         if (vitals[v.key] == null) return acc;
         const s = getStatus(Number(vitals[v.key]), v);
         acc[s] = (acc[s] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    : {};
+
+  // How many fields came from each source (lab report / patient upload / manual entry)
+  const sourceCounts: Record<string, number> = vitals?.field_meta
+    ? VITALS.reduce((acc, v) => {
+        const src = vitals.field_meta[v.key]?.source;
+        if (src) acc[src] = (acc[src] || 0) + 1;
         return acc;
       }, {} as Record<string, number>)
     : {};
@@ -367,9 +647,14 @@ export default function VitalsOverview() {
                 ⚠ {(statusCounts['critical-high'] || 0) + (statusCounts['critical-low'] || 0)} Critical
               </span>
             }
-            {vitals.source === 'lab_report' && (
+            {sourceCounts.lab_report > 0 && (
               <span className="bg-white/20 text-white border border-white/20 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                <FlaskConical size={9} strokeWidth={2.5} /> Auto-extracted from lab report
+                <FlaskConical size={9} strokeWidth={2.5} /> {sourceCounts.lab_report} from lab report
+              </span>
+            )}
+            {sourceCounts.patient_upload > 0 && (
+              <span className="bg-white/20 text-white border border-white/20 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                📄 {sourceCounts.patient_upload} from your uploads
               </span>
             )}
           </div>
@@ -384,7 +669,7 @@ export default function VitalsOverview() {
           </div>
           <p className="text-sm font-bold text-gray-700">No vitals recorded yet</p>
           <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
-            Manually enter your lab results, or they'll update automatically when your lab reports arrive.
+            Manually enter your lab results, or they'll update automatically when a lab uploads a report — or when you upload one yourself.
           </p>
           <button
             onClick={() => setShowEdit(true)}
@@ -448,7 +733,13 @@ export default function VitalsOverview() {
                 {isOpen && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-5 pb-5">
                     {withValues.map(v => (
-                      <VitalCard key={v.key} def={v} value={Number(vitals[v.key])} />
+                      <VitalCard
+                        key={v.key}
+                        def={v}
+                        value={Number(vitals[v.key])}
+                        meta={vitals.field_meta?.[v.key]}
+                        onClick={() => setHistoryField(v)}
+                      />
                     ))}
                   </div>
                 )}
@@ -465,6 +756,11 @@ export default function VitalsOverview() {
           onClose={() => setShowEdit(false)}
           onSaved={() => {}}
         />
+      )}
+
+      {/* Per-vital history modal */}
+      {historyField && (
+        <VitalHistoryModal def={historyField} onClose={() => setHistoryField(null)} />
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import { useSocket } from '../../context/SocketContext';
 import { useNavigate } from 'react-router-dom';
 import { notificationApi } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Bell, User, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList } from 'lucide-react';
+import { Search, Bell, User, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Activity } from 'lucide-react';
 
 // ── Notification type icons ───────────────────────────────────────────────────
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -13,6 +13,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   prescription_dispensed: <CheckCircle2 size={14} />,
   lab_request_assigned:   <FlaskConical size={14} />,
   lab_report_ready:       <ClipboardList size={14} />,
+  vitals_updated:         <Activity size={14} />,
 };
 
 const NOTIF_ROUTE: Record<string, (role?: string) => string> = {
@@ -21,6 +22,7 @@ const NOTIF_ROUTE: Record<string, (role?: string) => string> = {
   prescription_dispensed: (role) => role === 'doctor'   ? '/doctor/consultations' : '/patient/medical',
   lab_request_assigned:   ()     => '/laboratory/reports',
   lab_report_ready:       (role) => role === 'doctor'   ? '/doctor/lab-requests'  : '/patient/lab-reports',
+  vitals_updated:         ()     => '/patient',
   access_request:         ()     => '/patient/requests',
   access_accepted:        ()     => '/doctor/requests',
   access_declined:        ()     => '/doctor/requests',
