@@ -1,0 +1,196 @@
+{
+  "dashboard": {
+    "loading": "පූරණය වෙමින්…",
+    "welcomeBack": "නැවත සාදරයෙන් පිළිගනිමු, වෛද්‍ය {{name}}",
+    "search": {
+      "placeholder": "රෝගියාගේ නම හෝ විද්‍යුත් තැපෑල අනුව සොයන්න…",
+      "searching": "සොයමින්…",
+      "noResults": "\"{{query}}\" සඳහා රෝගීන් හමු නොවීය",
+      "yrs": "වයස {{age}}",
+      "allergiesTag": "අසාත්මිකතා"
+    },
+    "actions": {
+      "newConsultation": "නව වෛද්‍ය හමුවීම",
+      "labRequests": "රසායනාගාර ඉල්ලීම්"
+    },
+    "recentConsultations": {
+      "title": "මෑත වෛද්‍ය හමුවීම්",
+      "viewAll": "සියල්ල බලන්න",
+      "empty": "තවම වෛද්‍ය හමුවීම් නැත",
+      "patientFallback": "රෝගියා #{{id}}",
+      "generalConsultation": "සාමාන්‍ය වෛද්‍ය හමුවීම"
+    },
+    "info": {
+      "name": "නම",
+      "type": "වර්ගය",
+      "slug": "Slug",
+      "status": "තත්ත්වය",
+      "active": "ක්‍රියාත්මකයි",
+      "inactive": "අක්‍රියයි"
+    },
+    "profile": {
+      "title": "මගේ පැතිකඩ",
+      "yearsExperience": "වසර {{count}}ක පළපුරුද්ද"
+    },
+    "stats": {
+      "pendingLabTests": "විභාග කිරීමට ඇති රසායනාගාර පරීක්ෂණ",
+      "accessRequests": "ප්‍රවේශ ඉල්ලීම්"
+    }
+  },
+  "doctorDashboard": {
+    "welcome": {
+      "greeting": "නැවත සාදරයෙන් පිළිගනිමු,",
+      "namePrefix": "වෛද්‍ය {{name}}",
+      "defaultSpecialization": "වෛද්‍ය වෘත්තිකයෙක්",
+      "pendingRequests": "පොරොත්තු ඉල්ලීම්",
+      "accessGranted": "ලබා දුන් ප්‍රවේශය",
+      "yearsExp": "පළපුරුද්ද (වසර)"
+    },
+    "stats": {
+      "specialization": "විශේෂඥතාව",
+      "licenseNo": "බලපත්‍ර අංකය",
+      "consultationFee": "වෛද්‍ය හමුවීම් ගාස්තුව",
+      "affiliation": "සම්බන්ධතාව"
+    },
+    "quickActions": {
+      "newConsultation": "නව වෛද්‍ය හමුවීම",
+      "newLabRequest": "නව රසායනාගාර ඉල්ලීම",
+      "viewRequests": "ඉල්ලීම් බලන්න"
+    },
+    "alerts": {
+      "pendingLabResults": "පොරොත්තු රසායනාගාර ප්‍රතිඵල",
+      "noPendingLabResults": "ප්‍රතිඵල එනතුරු බලාපොරොත්තුවෙන් සිටින රසායනාගාර පරීක්ෂණ නොමැත.",
+      "labFallback": "රසායනාගාරය",
+      "waitingDays": "දින {{count}}ක් රැඳී ඇත",
+      "activeConsultationsAging": "ප්‍රමාද වෙමින් ඇති ක්‍රියාත්මක වෛද්‍ය හමුවීම්",
+      "noAgingConsultations": "බෙහෙත් නිකුත් කිරීම බලාපොරොත්තුවෙන් ඇති වෛද්‍ය හමුවීම් නොමැත.",
+      "noDiagnosisRecorded": "රෝග විනිශ්චයක් සටහන් කර නොමැත",
+      "activeDays": "දින {{count}}ක් ක්‍රියාත්මකයි",
+      "accessRequestsAwaitingPatient": "රෝගියාගේ ප්‍රතිචාරය බලාපොරොත්තුවෙන් ඇති ප්‍රවේශ ඉල්ලීම්",
+      "noPendingAccessRequests": "පොරොත්තු ප්‍රවේශ ඉල්ලීම් නොමැත.",
+      "daysAgo": "දින {{count}}කට පෙර",
+      "reportViewRequestsAwaitingPatient": "රෝගියාගේ ප්‍රතිචාරය බලාපොරොත්තුවෙන් ඇති වාර්තා නැරඹීමේ ඉල්ලීම්",
+      "noPendingViewRequests": "පොරොත්තු වාර්තා නැරඹීමේ ඉල්ලීම් නොමැත."
+    },
+    "search": {
+      "title": "රෝගී සෙවීම",
+      "subtitle": "රෝගීන්ගේ පැතිකඩ සොයා බලන්න",
+      "hint": "ලියාපදිංචි සියලුම රෝගීන් අතරින් සෙවීමට ටයිප් කිරීම ආරම්භ කරන්න — ඉතිහාසය බැලීමට ප්‍රතිඵලයක් ක්ලික් කරන්න"
+    },
+    "history": {
+      "loading": "ඉතිහාසය පූරණය වෙමින්…",
+      "bloodType": "රුධිර වර්ගය",
+      "allergies": "අසාත්මිකතා",
+      "none": "නොමැත",
+      "conditions": "රෝග තත්ත්ව",
+      "insurance": "රක්ෂණය",
+      "visits": "හමුවීම්",
+      "medicines": "බෙහෙත්",
+      "doctors": "වෛද්‍යවරු",
+      "diagnoses": "රෝග විනිශ්චය",
+      "timelineTitle": "වෛද්‍ය හමුවීම් ඉතිහාසය ({{count}})",
+      "timelineEmpty": "වෛද්‍ය හමුවීම් වාර්තා හමු නොවීය",
+      "dxPrefix": "රෝග විනිශ්චය: {{diagnosis}}",
+      "doctorPrefix": "වෛද්‍ය {{name}}",
+      "symptoms": "රෝග ලක්ෂණ",
+      "diagnosis": "රෝග විනිශ්චය",
+      "treatment": "ප්‍රතිකාර",
+      "viewFullProfile": "සම්පූර්ණ පැතිකඩ බලන්න"
+    },
+    "recent": {
+      "seenPatients": "මෑතකදී පරීක්ෂා කළ රෝගීන්",
+      "noConsultations": "තවම වෛද්‍ය හමුවීම් සටහන් කර නොමැත.",
+      "activity": "මෑත ක්‍රියාකාරකම්",
+      "noActivity": "මෑත ක්‍රියාකාරකම් නොමැත.",
+      "labResultReady": "රසායනාගාර ප්‍රතිඵලය සූදානම් — {{name}}",
+      "prescriptionDispensed": "බෙහෙත් වට්ටෝරුව නිකුත් කරන ලදී — {{name}}",
+      "accessRequestResponse": "{{name}} ඔබේ ප්‍රවේශ ඉල්ලීමට {{status}} ලෙස ප්‍රතිචාර දැක්වීය"
+    },
+    "profile": {
+      "title": "වෘත්තීය පැතිකඩ",
+      "fullName": "සම්පූර්ණ නම",
+      "email": "විද්‍යුත් තැපෑල",
+      "phone": "දුරකථන අංකය",
+      "licenseNo": "බලපත්‍ර අංකය",
+      "medicalSchool": "වෛද්‍ය විද්‍යාලය",
+      "affiliation": "සම්බන්ධතාව",
+      "bio": "ජීව දත්ත සටහන"
+    }
+  },
+  "hospitalDashboard": {
+    "badge": "රෝහල් පෝට්ලය",
+    "defaultName": "රෝහල් උපකරණ පුවරුව",
+    "avatarLabel": "රෝහල",
+    "actions": {
+      "accessRequests": "ප්‍රවේශ ඉල්ලීම්"
+    },
+    "stats": {
+      "totalConsultations": "සම්පූර්ණ වෛද්‍ය හමුවීම්",
+      "activeCases": "ක්‍රියාත්මක සිද්ධීන්"
+    },
+    "org": {
+      "title": "ආයතනය"
+    },
+    "staff": {
+      "title": "කාර්ය මණ්ඩල සාමාජිකයන්",
+      "total": "මුළු {{count}}",
+      "empty": "තවම කාර්ය මණ්ඩල සාමාජිකයන් නොමැත"
+    }
+  },
+  "clinicDashboard": {
+    "badge": "සායන පෝට්ලය",
+    "defaultName": "මගේ සායනය",
+    "actions": {
+      "requests": "ඉල්ලීම්"
+    },
+    "stats": {
+      "activeConsultations": "ක්‍රියාත්මක වෛද්‍ය හමුවීම්",
+      "completedToday": "අද සම්පූර්ණ කළ"
+    },
+    "info": {
+      "title": "සායන තොරතුරු"
+    },
+    "summary": {
+      "title": "සාරාංශය",
+      "totalConsultations": "මුළු වෛද්‍ය හමුවීම්",
+      "totalLabRequests": "මුළු රසායනාගාර ඉල්ලීම්",
+      "completedCases": "සම්පූර්ණ කළ සිද්ධීන්",
+      "dispensed": "බෙහෙත් නිකුත් කළ"
+    },
+    "profile": {
+      "yearsExpShort": "වසර {{count}}ක පළපුරුද්ද",
+      "fee": "රු. {{amount}} ගාස්තුව"
+    }
+  },
+  "accessRequests": {
+    "pageTitle": "ප්‍රවේශ ඉල්ලීම්",
+    "pageSubtitle": "ඔබ රෝගීන් වෙත ඔවුන්ගේ සෞඛ්‍ය දත්තවලට ප්‍රවේශය සඳහා යැවූ ඉල්ලීම්",
+    "searchHint": "රෝගියෙකුගේ පැතිකඩ බැලීමට සහ ඔවුන්ගේ දත්තවලට ප්‍රවේශය ඉල්ලීමට සොයන්න.",
+    "stats": {
+      "pending": "පොරොත්තුවෙන්",
+      "accepted": "පිළිගත්තා",
+      "declined": "ප්‍රතික්ෂේප කළා"
+    },
+    "typeMeta": {
+      "labReports": "රසායනාගාර වාර්තා",
+      "medicalHistory": "වෛද්‍ය ඉතිහාසය",
+      "personalReports": "පුද්ගලික සෞඛ්‍ය වාර්තා",
+      "contactInfo": "සම්බන්ධතා තොරතුරු"
+    },
+    "statusMeta": {
+      "pending": "රෝගියාගේ ප්‍රතිචාරය බලාපොරොත්තුවෙන්",
+      "accepted": "ප්‍රවේශය ලබා දී ඇත",
+      "declined": "ප්‍රතික්ෂේප කළා"
+    },
+    "empty": {
+      "title": "තවම ඉල්ලීම් යවා නොමැත",
+      "subtitle": "රෝගියෙකු සොයා ඔවුන්ගේ දත්තවලට ප්‍රවේශය ඉල්ලීමට ඉහත සෙවුම භාවිත කරන්න."
+    },
+    "listItem": {
+      "patientLabel": "රෝගියා:",
+      "sent": "යවන ලද්දේ {{date}}",
+      "responded": "ප්‍රතිචාර දැක්වූයේ {{date}}",
+      "view": "බලන්න"
+    }
+  }
+}

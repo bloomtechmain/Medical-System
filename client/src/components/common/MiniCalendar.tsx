@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface MiniCalendarProps {
@@ -11,13 +12,11 @@ interface Cell {
   cur: boolean;
 }
 
-const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MONTHS = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-];
-
-export default function MiniCalendar({ highlightDates = [], title = 'My Schedule' }: MiniCalendarProps) {
+export default function MiniCalendar({ highlightDates = [], title }: MiniCalendarProps) {
+  const { t } = useTranslation('common');
+  const DAY_HEADERS = t('calendar.days', { returnObjects: true }) as string[];
+  const MONTHS      = t('calendar.months', { returnObjects: true }) as string[];
+  const resolvedTitle = title ?? t('calendar.mySchedule');
   const today = new Date();
   const [view, setView] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
 
@@ -52,7 +51,7 @@ export default function MiniCalendar({ highlightDates = [], title = 'My Schedule
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{title}</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{resolvedTitle}</p>
           <p className="text-[15px] font-bold text-gray-900">{MONTHS[mo]} {yr}</p>
         </div>
         <div className="flex items-center gap-0.5">
@@ -73,9 +72,9 @@ export default function MiniCalendar({ highlightDates = [], title = 'My Schedule
 
       {/* Day-of-week headers */}
       <div className="grid grid-cols-7 mb-1">
-        {DAY_HEADERS.map(d => (
+        {DAY_HEADERS.map((d, i) => (
           <div key={d} className={`text-center text-[10px] font-bold py-0.5 ${
-            d === 'Sat' || d === 'Sun' ? 'text-rose-400' : 'text-gray-400'
+            i >= 5 ? 'text-rose-400' : 'text-gray-400'
           }`}>
             {d}
           </div>
@@ -110,11 +109,11 @@ export default function MiniCalendar({ highlightDates = [], title = 'My Schedule
         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-50">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 bg-[#3B82F6] rounded-full" />
-            <span className="text-[10px] text-gray-400 font-medium">Today</span>
+            <span className="text-[10px] text-gray-400 font-medium">{t('calendar.today')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 bg-primary-200 rounded-full" />
-            <span className="text-[10px] text-gray-400 font-medium">Visit</span>
+            <span className="text-[10px] text-gray-400 font-medium">{t('calendar.visit')}</span>
           </div>
         </div>
       )}

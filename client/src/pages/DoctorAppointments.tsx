@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import {
   Calendar, Clock, CheckCircle2, XCircle, X, Settings, ClipboardList, Ban,
 } from 'lucide-react';
 import { appointmentApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const SLOT_OPTIONS = [10, 15, 20, 30, 45, 60];
 
 const fmtTime = (t: string): string => {
@@ -22,35 +21,40 @@ const fmtTime = (t: string): string => {
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 const toDateStr = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
-const STATUS_STYLE: Record<string, { badge: string; label: string; icon: string }> = {
-  pending:   { badge: 'bg-yellow-100 text-yellow-700', label: 'Pending Response', icon: '⏳' },
-  confirmed: { badge: 'bg-green-100  text-green-700',  label: 'Confirmed',        icon: '✅' },
-  declined:  { badge: 'bg-red-100    text-red-600',    label: 'Declined',         icon: '❌' },
-  cancelled: { badge: 'bg-gray-100   text-gray-500',   label: 'Cancelled',        icon: '🚫' },
-  completed: { badge: 'bg-blue-100   text-blue-700',   label: 'Completed',        icon: '🏁' },
+const STATUS_ICON: Record<string, string> = {
+  pending: '⏳', confirmed: '✅', declined: '❌', cancelled: '🚫', completed: '🏁',
+};
+const STATUS_BADGE: Record<string, string> = {
+  pending:   'bg-yellow-100 text-yellow-700',
+  confirmed: 'bg-green-100  text-green-700',
+  declined:  'bg-red-100    text-red-600',
+  cancelled: 'bg-gray-100   text-gray-500',
+  completed: 'bg-blue-100   text-blue-700',
 };
 
 interface DeclineModalProps { onClose: () => void; onConfirm: (notes: string) => void; }
 
 function DeclineModal({ onClose, onConfirm }: DeclineModalProps) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   const [notes, setNotes] = useState('');
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-gray-900">Decline Appointment</p>
+          <p className="text-sm font-bold text-gray-900">{t('appointments.declineModal.title')}</p>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
         </div>
         <textarea
           rows={3} autoFocus className="input text-sm resize-none w-full"
-          placeholder="Let the patient know why (optional)…"
+          placeholder={t('appointments.declineModal.placeholder') as string}
           value={notes} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
         />
         <div className="flex gap-2">
           <button onClick={() => onConfirm(notes)} className="flex-1 py-2.5 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700">
-            Decline
+            {t('appointments.actions.decline')}
           </button>
-          <button onClick={onClose} className="btn-secondary px-4">Cancel</button>
+          <button onClick={onClose} className="btn-secondary px-4">{tc('actions.cancel')}</button>
         </div>
       </div>
     </div>
@@ -59,6 +63,8 @@ function DeclineModal({ onClose, onConfirm }: DeclineModalProps) {
 
 // ── Requests + appointment list ─────────────────────────────────────────────
 function AppointmentsPanel() {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   const qc = useQueryClient();
   const [filter, setFilter] = useState('all');
   const [declineTarget, setDeclineTarget] = useState<number | null>(null);
@@ -68,18 +74,21 @@ function AppointmentsPanel() {
     queryFn:  appointmentApi.getAll,
   });
 
+  const statusLabel = (s: string): string =>
+    s === 'pending' ? t('appointments.status.pendingResponse') : tc(`status.${s}`, { defaultValue: s });
+
   const statusMutation = useMutation({
     mutationFn: ({ id, status, extra }: { id: number; status: string; extra?: Record<string, unknown> }) =>
       appointmentApi.updateStatus(id, status, extra),
     onSuccess: (_data, vars) => {
       const labels: Record<string, string> = {
-        confirmed: 'Appointment confirmed', declined: 'Appointment declined',
-        cancelled: 'Appointment cancelled', completed: 'Appointment marked completed',
+        confirmed: t('appointments.toast.confirmed'), declined: t('appointments.toast.declined'),
+        cancelled: t('appointments.toast.cancelled'), completed: t('appointments.toast.completed'),
       };
-      toast.success(labels[vars.status] || 'Updated');
+      toast.success(labels[vars.status] || t('appointments.toast.updated'));
       qc.invalidateQueries({ queryKey: ['appointments'] });
     },
-    onError: (err: any) => toast.error(err.message || 'Failed to update appointment'),
+    onError: (err: any) => toast.error(err.message || t('appointments.toast.updateFailed')),
   });
 
   const list = appointments as any[];
@@ -92,9 +101,9 @@ function AppointmentsPanel() {
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Pending Requests', value: pendingCount,   icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
-          { label: 'Confirmed',        value: confirmedCount, icon: '✅', bg: 'bg-green-50  border-green-100'  },
-          { label: 'Completed',        value: completedCount, icon: '🏁', bg: 'bg-blue-50   border-blue-100'   },
+          { label: t('appointments.stats.pendingRequests'), value: pendingCount,   icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
+          { label: tc('status.confirmed'),                  value: confirmedCount, icon: '✅', bg: 'bg-green-50  border-green-100'  },
+          { label: tc('status.completed'),                  value: completedCount, icon: '🏁', bg: 'bg-blue-50   border-blue-100'   },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
             <span className="text-2xl">{s.icon}</span>
@@ -106,49 +115,50 @@ function AppointmentsPanel() {
 
       <div className="flex justify-end">
         <select value={filter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilter(e.target.value)} className="input text-sm py-1.5 w-40">
-          <option value="all">All</option>
-          <option value="pending">Pending</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="completed">Completed</option>
-          <option value="declined">Declined</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="all">{t('appointments.filters.all')}</option>
+          <option value="pending">{tc('status.pending')}</option>
+          <option value="confirmed">{tc('status.confirmed')}</option>
+          <option value="completed">{tc('status.completed')}</option>
+          <option value="declined">{tc('status.declined')}</option>
+          <option value="cancelled">{tc('status.cancelled')}</option>
         </select>
       </div>
 
       {isLoading ? (
         <div className="bg-white rounded-xl border p-12 text-center text-gray-400">
           <span className="w-6 h-6 border-2 border-gray-200 border-t-primary-400 rounded-full animate-spin inline-block mb-2" />
-          <p>Loading appointments…</p>
+          <p>{t('appointments.loading')}</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-gray-200 p-12 text-center">
           <span className="text-4xl block mb-3">📅</span>
-          <p className="text-gray-600 font-medium">No appointments here</p>
-          <p className="text-sm text-gray-400 mt-1">Booking requests from patients will show up here.</p>
+          <p className="text-gray-600 font-medium">{t('appointments.emptyTitle')}</p>
+          <p className="text-sm text-gray-400 mt-1">{t('appointments.emptySubtitle')}</p>
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((a: any) => {
-            const st = STATUS_STYLE[a.status] || STATUS_STYLE.pending;
+            const icon  = STATUS_ICON[a.status] || STATUS_ICON.pending;
+            const badge = STATUS_BADGE[a.status] || STATUS_BADGE.pending;
             const busy = statusMutation.isPending && statusMutation.variables?.id === a.id;
             return (
               <div key={a.id} className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-all">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center text-xl shrink-0">
-                      {st.icon}
+                      {icon}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-bold text-gray-900">{a.patient_name}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge}`}>{statusLabel(a.status)}</span>
                       </div>
                       <p className="text-sm text-gray-600 mt-1 flex items-center gap-3 flex-wrap">
                         <span className="flex items-center gap-1"><Calendar size={12} strokeWidth={2} />{formatDate(a.appointment_date)}</span>
                         <span className="flex items-center gap-1"><Clock size={12} strokeWidth={2} />{fmtTime(a.start_time.slice(0, 5))}</span>
                       </p>
                       {a.reason && <p className="text-xs text-gray-400 mt-1 italic">"{a.reason}"</p>}
-                      {a.doctor_notes && <p className="text-xs text-gray-400 mt-1">Your note: {a.doctor_notes}</p>}
+                      {a.doctor_notes && <p className="text-xs text-gray-400 mt-1">{t('appointments.yourNote', { note: a.doctor_notes })}</p>}
                     </div>
                   </div>
 
@@ -158,12 +168,12 @@ function AppointmentsPanel() {
                         <button disabled={busy}
                           onClick={() => statusMutation.mutate({ id: a.id, status: 'confirmed' })}
                           className="flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-xl transition-colors disabled:opacity-50">
-                          <CheckCircle2 size={12} strokeWidth={2.5} /> Accept
+                          <CheckCircle2 size={12} strokeWidth={2.5} /> {t('appointments.actions.accept')}
                         </button>
                         <button disabled={busy}
                           onClick={() => setDeclineTarget(a.id)}
                           className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition-colors disabled:opacity-50">
-                          <XCircle size={12} strokeWidth={2.5} /> Decline
+                          <XCircle size={12} strokeWidth={2.5} /> {t('appointments.actions.decline')}
                         </button>
                       </>
                     )}
@@ -172,12 +182,12 @@ function AppointmentsPanel() {
                         <button disabled={busy}
                           onClick={() => statusMutation.mutate({ id: a.id, status: 'completed' })}
                           className="flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-xl transition-colors disabled:opacity-50">
-                          <CheckCircle2 size={12} strokeWidth={2.5} /> Mark Completed
+                          <CheckCircle2 size={12} strokeWidth={2.5} /> {t('appointments.actions.markCompleted')}
                         </button>
                         <button disabled={busy}
-                          onClick={() => { if (window.confirm('Cancel this confirmed appointment?')) statusMutation.mutate({ id: a.id, status: 'cancelled' }); }}
+                          onClick={() => { if (window.confirm(t('appointments.confirmCancel'))) statusMutation.mutate({ id: a.id, status: 'cancelled' }); }}
                           className="flex items-center gap-1.5 text-xs font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-xl transition-colors disabled:opacity-50">
-                          <Ban size={12} strokeWidth={2.5} /> Cancel
+                          <Ban size={12} strokeWidth={2.5} /> {tc('actions.cancel')}
                         </button>
                       </>
                     )}
@@ -207,6 +217,10 @@ interface DayForm { enabled: boolean; start: string; end: string; slot: number; 
 const DEFAULT_DAY: DayForm = { enabled: false, start: '09:00', end: '17:00', slot: 30 };
 
 function AvailabilityPanel() {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
+  const WEEKDAYS      = t('appointments.weekdays', { returnObjects: true }) as string[];
+  const WEEKDAY_SHORT = t('appointments.weekdaysShort', { returnObjects: true }) as string[];
   const qc = useQueryClient();
   const [form, setForm] = useState<DayForm[]>(() => Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY })));
   const [loaded, setLoaded] = useState(false);
@@ -252,20 +266,20 @@ function AvailabilityPanel() {
         .map(d => ({ day_of_week: d.day_of_week, start_time: d.start, end_time: d.end, slot_duration_minutes: d.slot }));
       return appointmentApi.setWeeklyAvailability(schedule);
     },
-    onSuccess: () => { toast.success('Weekly availability saved'); qc.invalidateQueries({ queryKey: ['doctor-weekly-availability'] }); },
-    onError:   (err: any) => toast.error(err.message || 'Failed to save availability'),
+    onSuccess: () => { toast.success(t('appointments.availability.toastWeeklySaved')); qc.invalidateQueries({ queryKey: ['doctor-weekly-availability'] }); },
+    onError:   (err: any) => toast.error(err.message || t('appointments.availability.toastWeeklyFailed')),
   });
 
   const overrideMutation = useMutation({
     mutationFn: (data: { date: string; is_available: boolean; reason?: string }) => appointmentApi.setOverride(data),
-    onSuccess: () => { toast.success('Availability updated for that day'); qc.invalidateQueries({ queryKey: ['doctor-overrides'] }); },
-    onError:   (err: any) => toast.error(err.message || 'Failed to update that day'),
+    onSuccess: () => { toast.success(t('appointments.availability.toastDayUpdated')); qc.invalidateQueries({ queryKey: ['doctor-overrides'] }); },
+    onError:   (err: any) => toast.error(err.message || t('appointments.availability.toastDayUpdateFailed')),
   });
 
   const clearOverrideMutation = useMutation({
     mutationFn: (id: number) => appointmentApi.deleteOverride(id),
-    onSuccess: () => { toast.success('Reverted to default schedule'); qc.invalidateQueries({ queryKey: ['doctor-overrides'] }); },
-    onError:   (err: any) => toast.error(err.message || 'Failed to reset that day'),
+    onSuccess: () => { toast.success(t('appointments.availability.toastDayReverted')); qc.invalidateQueries({ queryKey: ['doctor-overrides'] }); },
+    onError:   (err: any) => toast.error(err.message || t('appointments.availability.toastDayResetFailed')),
   });
 
   const updateDay = (i: number, patch: Partial<DayForm>) =>
@@ -278,8 +292,8 @@ function AvailabilityPanel() {
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
         <div className="flex items-center justify-between mb-1">
           <div>
-            <p className="text-sm font-bold text-gray-900">Default Weekly Hours</p>
-            <p className="text-xs text-gray-400 mt-0.5">Turn on the days you normally see patients, and set your hours for each.</p>
+            <p className="text-sm font-bold text-gray-900">{t('appointments.availability.defaultWeeklyHours')}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{t('appointments.availability.defaultWeeklyHoursDesc')}</p>
           </div>
           <button
             onClick={() => saveMutation.mutate()}
@@ -287,7 +301,7 @@ function AvailabilityPanel() {
             className="flex items-center gap-1.5 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 px-4 py-2 rounded-xl disabled:opacity-50 shrink-0"
           >
             {saveMutation.isPending && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-            Save
+            {tc('actions.save')}
           </button>
         </div>
 
@@ -307,17 +321,17 @@ function AvailabilityPanel() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <input type="time" value={d.start} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateDay(i, { start: e.target.value })}
                     className="input text-sm py-1.5 w-28" />
-                  <span className="text-gray-400 text-sm">to</span>
+                  <span className="text-gray-400 text-sm">{t('appointments.availability.to')}</span>
                   <input type="time" value={d.end} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateDay(i, { end: e.target.value })}
                     className="input text-sm py-1.5 w-28" />
                   <select value={d.slot} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateDay(i, { slot: parseInt(e.target.value, 10) })}
                     className="input text-sm py-1.5 w-32">
-                    {SLOT_OPTIONS.map(m => <option key={m} value={m}>{m} min slots</option>)}
+                    {SLOT_OPTIONS.map(m => <option key={m} value={m}>{t('appointments.availability.minSlots', { count: m })}</option>)}
                   </select>
-                  {invalid(d) && <span className="text-xs text-red-500">End time must be after start time</span>}
+                  {invalid(d) && <span className="text-xs text-red-500">{t('appointments.availability.endTimeError')}</span>}
                 </div>
               ) : (
-                <p className="text-xs text-gray-300">Not available</p>
+                <p className="text-xs text-gray-300">{t('appointments.availability.notAvailable')}</p>
               )}
             </div>
           ))}
@@ -325,8 +339,8 @@ function AvailabilityPanel() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <p className="text-sm font-bold text-gray-900">This Week's Exceptions</p>
-        <p className="text-xs text-gray-400 mt-0.5">Override your default schedule for a specific upcoming day — e.g. block a day off, or open a normally-closed day.</p>
+        <p className="text-sm font-bold text-gray-900">{t('appointments.availability.exceptionsTitle')}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{t('appointments.availability.exceptionsDesc')}</p>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {next7.map(d => {
@@ -342,7 +356,10 @@ function AvailabilityPanel() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-bold text-gray-900">{WEEKDAY_SHORT[dow]} {d.getDate()}</p>
-                    <p className="text-[11px] text-gray-400">{effectiveAvailable ? 'Available' : 'Not available'}{override ? ' (override)' : ' (default)'}</p>
+                    <p className="text-[11px] text-gray-400">
+                      {effectiveAvailable ? t('appointments.availability.available') : t('appointments.availability.notAvailable')}
+                      {override ? t('appointments.availability.overrideSuffix') : t('appointments.availability.defaultSuffix')}
+                    </p>
                   </div>
                   <span className="text-lg">{effectiveAvailable ? '🟢' : '⚪'}</span>
                 </div>
@@ -350,18 +367,18 @@ function AvailabilityPanel() {
                   <button disabled={busy || effectiveAvailable && !override}
                     onClick={() => overrideMutation.mutate({ date: dateStr, is_available: true })}
                     className="flex-1 text-[11px] font-bold text-green-700 bg-green-100 hover:bg-green-200 disabled:opacity-40 py-1.5 rounded-lg transition-colors">
-                    Open
+                    {t('appointments.availability.open')}
                   </button>
                   <button disabled={busy || !effectiveAvailable && !override}
                     onClick={() => overrideMutation.mutate({ date: dateStr, is_available: false, reason: 'Unavailable' })}
                     className="flex-1 text-[11px] font-bold text-red-700 bg-red-100 hover:bg-red-200 disabled:opacity-40 py-1.5 rounded-lg transition-colors">
-                    Block
+                    {t('appointments.availability.block')}
                   </button>
                   {override && (
                     <button disabled={busy}
                       onClick={() => clearOverrideMutation.mutate(override.id)}
                       className="flex-1 text-[11px] font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 py-1.5 rounded-lg transition-colors">
-                      Reset
+                      {t('appointments.availability.reset')}
                     </button>
                   )}
                 </div>
@@ -375,13 +392,14 @@ function AvailabilityPanel() {
 }
 
 export default function DoctorAppointments() {
+  const { t } = useTranslation('doctorPatients');
   const [tab, setTab] = useState<'appointments' | 'availability'>('appointments');
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage booking requests and set the hours patients can book you</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('appointments.pageTitle')}</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{t('appointments.pageSubtitle')}</p>
       </div>
 
       <div className="flex gap-2 border-b border-gray-100">
@@ -391,7 +409,7 @@ export default function DoctorAppointments() {
             tab === 'appointments' ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-400 hover:text-gray-600'
           }`}
         >
-          <ClipboardList size={15} strokeWidth={2} /> Requests &amp; Bookings
+          <ClipboardList size={15} strokeWidth={2} /> {t('appointments.tabs.requestsBookings')}
         </button>
         <button
           onClick={() => setTab('availability')}
@@ -399,7 +417,7 @@ export default function DoctorAppointments() {
             tab === 'availability' ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-400 hover:text-gray-600'
           }`}
         >
-          <Settings size={15} strokeWidth={2} /> Availability Settings
+          <Settings size={15} strokeWidth={2} /> {t('appointments.tabs.availabilitySettings')}
         </button>
       </div>
 

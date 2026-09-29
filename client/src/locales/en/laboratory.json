@@ -1,0 +1,219 @@
+{
+  "shared": {
+    "doctorPrefix": "Dr. {{name}}"
+  },
+  "dashboard": {
+    "welcome": "Welcome,",
+    "defaultName": "Lab",
+    "defaultLabType": "Diagnostic Laboratory",
+    "portalTagline": "Core Health Portal",
+    "stats": {
+      "labName": "Lab Name",
+      "labTypes": "Lab Types",
+      "license": "License",
+      "accreditations": "Accreditations",
+      "typesCount": "{{count}} types",
+      "certificationsCount": "{{count}} certifications"
+    },
+    "overdue": {
+      "title": "{{count}} requests pending over {{hours}}h",
+      "moreSuffix": "+{{count}} more",
+      "waitingSuffix": "— waiting to be started.",
+      "review": "Review"
+    },
+    "actions": {
+      "newReport": "New Report",
+      "viewAllReports": "View All Reports"
+    },
+    "recentActivity": {
+      "title": "Recent Activity",
+      "empty": "No lab requests yet."
+    },
+    "profile": {
+      "title": "Laboratory Profile",
+      "editButton": "Edit Profile",
+      "notProvided": "Not provided",
+      "labTypesHeading": "🧪 Laboratory Types",
+      "accreditationsHeading": "⭐ Accreditations",
+      "fields": {
+        "labName": "Lab Name",
+        "licenseNo": "License No.",
+        "operatingHours": "Operating Hours",
+        "website": "Website",
+        "memberSince": "Member Since"
+      }
+    },
+    "services": {
+      "title": "Services Offered",
+      "empty": "No services listed yet."
+    },
+    "infoTip": {
+      "title": "Core Health — Laboratory Portal",
+      "body": "Features for test request management, result uploads, and doctor referrals are coming in the next update. Your profile is now visible to doctors and patients on the Core Health network."
+    },
+    "editModal": {
+      "title": "Edit Laboratory Profile",
+      "toastSuccess": "Profile updated",
+      "toastError": "Failed to update profile",
+      "saveChanges": "Save Changes",
+      "servicesHint": "Comma-separated, e.g. Full Blood Count, X-Ray, Ultrasound, Lipid Profile",
+      "fields": {
+        "labName": "Laboratory Name",
+        "labType": "Lab Type",
+        "licenseNumber": "License Number",
+        "accreditation": "Accreditation",
+        "operatingHours": "Operating Hours",
+        "servicesOffered": "Services Offered"
+      }
+    }
+  },
+  "reports": {
+    "page": {
+      "title": "Lab Reports",
+      "subtitle": "Process test requests, enter results, and upload reports",
+      "newReportButton": "New Report",
+      "exportCsv": "Export CSV",
+      "searchPlaceholder": "Search by patient or doctor name…",
+      "filterAll": "All",
+      "stats": {
+        "total": "Total Requests"
+      },
+      "emptyMatching": "No matching requests",
+      "emptyMatchingHint": "Try a different name.",
+      "emptyNone": "No requests assigned yet",
+      "emptyNoneHint": "Doctors will send lab test requests here.",
+      "sampleLabel": "Sample",
+      "startProcessing": "Start Processing",
+      "uploadReport": "Upload Report",
+      "viewReport": "View Report"
+    },
+    "csv": {
+      "patient": "Patient",
+      "doctor": "Doctor",
+      "reportType": "Report Type",
+      "sampleId": "Sample ID",
+      "sampleCollected": "Sample Collected",
+      "requested": "Requested",
+      "tests": "Tests"
+    },
+    "errors": {
+      "reportFileRequired": "Please select a report file"
+    },
+    "fields": {
+      "sampleIdLabel": "Sample ID",
+      "sampleIdPlaceholder": "e.g. SMP-2026-0043",
+      "optional": "(optional)",
+      "reportFileLabel": "Report File",
+      "reportFileHint": "— PDF, JPG, PNG, TIFF · Max 20 MB",
+      "clickToSelect": "Click to select report file",
+      "fileTypesList": "PDF · JPG · PNG · WebP · TIFF · BMP",
+      "reportNotesLabel": "Report Notes / Findings",
+      "reportNotesPlaceholder": "Summarize key findings, abnormal values, recommendations..."
+    },
+    "bloodFields": {
+      "wbc": "WBC (White Blood Cells)",
+      "rbc": "RBC (Red Blood Cells)",
+      "hemoglobin": "Hemoglobin (Hgb)",
+      "hematocrit": "Hematocrit (Hct)",
+      "mcv": "MCV",
+      "mch": "MCH",
+      "mchc": "MCHC",
+      "rdw": "RDW",
+      "platelets": "Platelet Count",
+      "mpv": "MPV",
+      "bloodGlucose": "Blood Glucose (Fasting)",
+      "hba1c": "HbA1c",
+      "creatinine": "Creatinine",
+      "cholesterol": "Total Cholesterol",
+      "hdl": "HDL Cholesterol",
+      "ldl": "LDL Cholesterol",
+      "triglycerides": "Triglycerides"
+    },
+    "bloodPanel": {
+      "title": "Enter Test Results",
+      "recommended": "Recommended",
+      "valuesEntered": "{{count}} values entered",
+      "hint": "Directly entering values ensures the patient's vitals update instantly and accurately — no OCR needed.",
+      "cbcHeading": "🩸 Complete Blood Count (CBC)",
+      "metabolicHeading": "⚗️ Metabolic Panel",
+      "lipidHeading": "💧 Lipid Panel",
+      "filledCount": "{{count}} filled",
+      "checkboxLabel": "Enter numeric blood test values",
+      "checkboxHint": "Only relevant for blood panels — skip for X-Ray, scans, etc.",
+      "summaryCount": "{{count}} blood values",
+      "summarySuffix": "will be saved to the patient's vitals automatically."
+    },
+    "searchDropdown": {
+      "noResults": "No results for \"{{query}}\""
+    },
+    "sendModal": {
+      "title": "Send Lab Report",
+      "subtitle": "Pick a patient and doctor — both are notified together",
+      "successToast": "Report sent to {{patientName}} and Dr. {{doctorName}} at the same time!",
+      "sendingLabel": "Sending to both...",
+      "submitLabel": "Send to Patient & Doctor",
+      "errors": {
+        "patient": "Please select a patient",
+        "doctor": "Please select a doctor",
+        "reportType": "Please select a report type",
+        "testDescription": "Test description is required",
+        "generic": "Failed to send report"
+      },
+      "fields": {
+        "patientLabel": "Patient *",
+        "patientPlaceholder": "Search by name or email…",
+        "doctorLabel": "Doctor *",
+        "doctorPlaceholder": "Search by name or specialization…",
+        "reportTypeLabel": "Report Type",
+        "selectServicePlaceholder": "Select a service you offer…",
+        "reportTypeFreeformPlaceholder": "e.g. X-Ray, Full Blood Count…",
+        "noServicesHint": "No services configured on your lab profile yet — add them there to pick from a list next time.",
+        "testsSummaryLabel": "Tests / Findings Summary",
+        "testsSummaryPlaceholder": "e.g. Full Blood Count, Liver Function Tests, Blood Glucose… or Chest X-Ray — PA view",
+        "notesForDoctorLabel": "Notes for Doctor",
+        "notesForDoctorPlaceholder": "Anything the doctor should know…"
+      }
+    },
+    "uploadModal": {
+      "title": "Upload Lab Report",
+      "patientLabel": "Patient:",
+      "doctorLabel": "Doctor:",
+      "notifyBoth": "Both will be notified together on upload",
+      "notifyPatientOnly": "Patient will be notified on upload",
+      "testsRequestedHeading": "Tests Requested",
+      "notesLabel": "Notes:",
+      "uploadingLabel": "Uploading & saving vitals...",
+      "uploadAndSave": "Upload Report & Save {{count}} Vitals",
+      "uploadAndNotify": "Upload Report & Notify",
+      "toastBase": "Report uploaded",
+      "toastVitalsSuffix": " — {{count}} vitals saved",
+      "toastNotifiedSuffix": " · Doctor and patient notified!",
+      "toastError": "Upload failed"
+    },
+    "viewModal": {
+      "title": "Report — {{patientName}}",
+      "fields": {
+        "patient": "Patient",
+        "doctor": "Doctor",
+        "reportType": "Report Type",
+        "requested": "Requested",
+        "email": "Email"
+      },
+      "testsHeading": "🧪 Tests",
+      "sampleInfoHeading": "🧪 Sample Info",
+      "sampleIdLabel": "ID:",
+      "collectedLabel": "Collected:",
+      "reportNotesHeading": "📝 Report Notes",
+      "openReport": "Open Uploaded Report"
+    },
+    "sampleModal": {
+      "title": "Start Processing",
+      "patientLabel": "Patient:",
+      "collectedAtLabel": "Sample Collected At",
+      "startingLabel": "Starting...",
+      "submitLabel": "Start Processing",
+      "toastSuccess": "Processing started",
+      "toastError": "Failed to start processing"
+    }
+  }
+}

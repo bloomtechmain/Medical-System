@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   Stethoscope, Thermometer, CheckCircle2, Package, Pill,
   MapPin, Calendar, ChevronDown, Pencil, X, Plus, Building2,
@@ -21,9 +22,9 @@ const PALETTES = [
 ];
 
 const STATUS_STYLE: Record<string, any> = {
-  active:    { label: 'Active',    cls: 'bg-amber-100 text-amber-700',     dot: 'bg-amber-400'    },
-  dispensed: { label: 'Dispensed', cls: 'bg-blue-100 text-blue-700',       dot: 'bg-blue-400'     },
-  completed: { label: 'Resolved',  cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-400'  },
+  active:    { cls: 'bg-amber-100 text-amber-700',     dot: 'bg-amber-400'    },
+  dispensed: { cls: 'bg-blue-100 text-blue-700',       dot: 'bg-blue-400'     },
+  completed: { cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-400'  },
 };
 
 const EMPTY_MED = { medicine_name: '', dosage: '', frequency: '', duration: '' };
@@ -36,6 +37,8 @@ function useDebounce(v: string, ms = 350) {
 }
 
 function LabSearchDropdown({ selected, onSelect }: { selected: any; onSelect: (item: any) => void }) {
+  const { t } = useTranslation('patientConsultations');
+  const { t: tc } = useTranslation('common');
   const [q, setQ]       = useState('');
   const dq              = useDebounce(q);
   const [open, setOpen] = useState(false);
@@ -63,7 +66,7 @@ function LabSearchDropdown({ selected, onSelect }: { selected: any; onSelect: (i
         </div>
       </div>
       <button type="button" onClick={() => { onSelect(null); setQ(''); }}
-        className="text-gray-400 hover:text-red-500 text-xs font-medium">Change</button>
+        className="text-gray-400 hover:text-red-500 text-xs font-medium">{tc('actions.change')}</button>
     </div>
   );
 
@@ -73,7 +76,7 @@ function LabSearchDropdown({ selected, onSelect }: { selected: any; onSelect: (i
         <Search size={14} strokeWidth={2} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-400"
-          placeholder="Tap to see all labs, or type to search…"
+          placeholder={t('labSearch.placeholder')}
           value={q}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
@@ -85,10 +88,10 @@ function LabSearchDropdown({ selected, onSelect }: { selected: any; onSelect: (i
           {isFetching
             ? <li className="px-4 py-3 flex items-center gap-2 text-sm text-gray-400">
                 <span className="w-3.5 h-3.5 border-2 border-gray-200 border-t-cyan-400 rounded-full animate-spin shrink-0" />
-                Loading laboratories…
+                {t('labSearch.loading')}
               </li>
             : (results as any[]).length === 0
-              ? <li className="px-4 py-3 text-sm text-gray-400">No laboratories found</li>
+              ? <li className="px-4 py-3 text-sm text-gray-400">{t('labSearch.noResults')}</li>
               : (results as any[]).map((l: any) => (
                 <li key={l.id} onClick={() => { onSelect(l); setOpen(false); setQ(''); }}
                   className="px-4 py-2.5 hover:bg-cyan-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center gap-2">
@@ -116,6 +119,8 @@ interface SendToLabModalProps {
 }
 
 function SendToLabModal({ consultation, onClose, onSent }: SendToLabModalProps) {
+  const { t } = useTranslation('patientConsultations');
+  const { t: tc } = useTranslation('common');
   const [selectedLab, setSelectedLab] = useState<any>(null);
   const [error, setError]             = useState('');
   const qc = useQueryClient();
@@ -123,7 +128,7 @@ function SendToLabModal({ consultation, onClose, onSent }: SendToLabModalProps) 
   const mutation = useMutation({
     mutationFn: () => labApi.create({ consultation_id: consultation.id, laboratory_id: selectedLab.id }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['patient-lab-reports'] }); onSent?.(); onClose(); },
-    onError: (err: any) => setError(err.message || 'Failed to send request'),
+    onError: (err: any) => setError(err.message || t('sendToLabModal.errorGeneric')),
   });
 
   return (
@@ -136,8 +141,8 @@ function SendToLabModal({ consultation, onClose, onSent }: SendToLabModalProps) 
                 <FlaskConical size={16} strokeWidth={2} />
               </div>
               <div>
-                <p className="font-bold">Send to Laboratory</p>
-                <p className="text-white/70 text-xs">Choose a lab to process your tests</p>
+                <p className="font-bold">{t('sendToLabModal.title')}</p>
+                <p className="text-white/70 text-xs">{t('sendToLabModal.subtitle')}</p>
               </div>
             </div>
             <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30">
@@ -147,25 +152,25 @@ function SendToLabModal({ consultation, onClose, onSent }: SendToLabModalProps) 
         </div>
         <div className="px-5 py-4 space-y-4">
           <div className="bg-cyan-50 border border-cyan-100 rounded-xl px-3.5 py-2.5">
-            <p className="text-[10px] font-bold text-cyan-600 uppercase tracking-widest mb-0.5">Tests Requested</p>
+            <p className="text-[10px] font-bold text-cyan-600 uppercase tracking-widest mb-0.5">{t('sendToLabModal.testsRequested')}</p>
             <p className="text-sm text-gray-700 leading-relaxed">{consultation.lab_tests_requested}</p>
           </div>
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Select Laboratory <span className="text-red-400">*</span>
+              {t('sendToLabModal.selectLaboratory')} <span className="text-red-400">*</span>
             </label>
             <LabSearchDropdown selected={selectedLab} onSelect={setSelectedLab} />
           </div>
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2">{error}</p>}
           <div className="flex gap-3">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">Cancel</button>
+              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">{tc('actions.cancel')}</button>
             <button
-              onClick={() => { if (!selectedLab) { setError('Please select a laboratory'); return; } mutation.mutate(); }}
+              onClick={() => { if (!selectedLab) { setError(t('sendToLabModal.errorSelect')); return; } mutation.mutate(); }}
               disabled={mutation.isPending}
               className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-cyan-500 to-teal-600 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
               {mutation.isPending && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-              <Send size={14} strokeWidth={2.5} /> Send to Lab
+              <Send size={14} strokeWidth={2.5} /> {t('sendToLabModal.sendBtn')}
             </button>
           </div>
         </div>
@@ -175,6 +180,8 @@ function SendToLabModal({ consultation, onClose, onSent }: SendToLabModalProps) 
 }
 
 function PharmacySearchDropdown({ selected, onSelect }: { selected: any; onSelect: (item: any) => void }) {
+  const { t } = useTranslation('patientConsultations');
+  const { t: tc } = useTranslation('common');
   const [q, setQ]       = useState('');
   const dq              = useDebounce(q);
   const [open, setOpen] = useState(false);
@@ -202,7 +209,7 @@ function PharmacySearchDropdown({ selected, onSelect }: { selected: any; onSelec
         </div>
       </div>
       <button type="button" onClick={() => { onSelect(null); setQ(''); }}
-        className="text-gray-400 hover:text-red-500 text-xs font-medium">Change</button>
+        className="text-gray-400 hover:text-red-500 text-xs font-medium">{tc('actions.change')}</button>
     </div>
   );
 
@@ -212,7 +219,7 @@ function PharmacySearchDropdown({ selected, onSelect }: { selected: any; onSelec
         <Search size={14} strokeWidth={2} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400"
-          placeholder="Tap to see all pharmacies, or type to search…"
+          placeholder={t('pharmacySearch.placeholder')}
           value={q}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
@@ -224,10 +231,10 @@ function PharmacySearchDropdown({ selected, onSelect }: { selected: any; onSelec
           {isFetching
             ? <li className="px-4 py-3 flex items-center gap-2 text-sm text-gray-400">
                 <span className="w-3.5 h-3.5 border-2 border-gray-200 border-t-violet-400 rounded-full animate-spin shrink-0" />
-                Loading pharmacies…
+                {t('pharmacySearch.loading')}
               </li>
             : (results as any[]).length === 0
-              ? <li className="px-4 py-3 text-sm text-gray-400">No pharmacies found</li>
+              ? <li className="px-4 py-3 text-sm text-gray-400">{t('pharmacySearch.noResults')}</li>
               : (results as any[]).map((p: any) => (
                 <li key={p.id} onClick={() => { onSelect(p); setOpen(false); setQ(''); }}
                   className="px-4 py-2.5 hover:bg-violet-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center gap-2">
@@ -255,6 +262,8 @@ interface SendToPharmacyModalProps {
 }
 
 function SendToPharmacyModal({ consultation, onClose, onSent }: SendToPharmacyModalProps) {
+  const { t } = useTranslation('patientConsultations');
+  const { t: tc } = useTranslation('common');
   const [selectedPharmacy, setSelectedPharmacy] = useState<any>(null);
   const [error, setError]                       = useState('');
   const qc = useQueryClient();
@@ -262,7 +271,7 @@ function SendToPharmacyModal({ consultation, onClose, onSent }: SendToPharmacyMo
   const mutation = useMutation({
     mutationFn: () => consultationApi.assignPharmacy(consultation.id, selectedPharmacy.id),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['consultations'] }); onSent?.(); onClose(); },
-    onError: (err: any) => setError(err.message || 'Failed to forward prescription'),
+    onError: (err: any) => setError(err.message || t('sendToPharmacyModal.errorGeneric')),
   });
 
   const meds: any[] = consultation.medicines || [];
@@ -277,8 +286,8 @@ function SendToPharmacyModal({ consultation, onClose, onSent }: SendToPharmacyMo
                 <Package size={16} strokeWidth={2} />
               </div>
               <div>
-                <p className="font-bold">Forward to Pharmacy</p>
-                <p className="text-white/70 text-xs">Choose a pharmacy to dispense your prescription</p>
+                <p className="font-bold">{t('sendToPharmacyModal.title')}</p>
+                <p className="text-white/70 text-xs">{t('sendToPharmacyModal.subtitle')}</p>
               </div>
             </div>
             <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30">
@@ -289,7 +298,7 @@ function SendToPharmacyModal({ consultation, onClose, onSent }: SendToPharmacyMo
         <div className="px-5 py-4 space-y-4">
           {meds.length > 0 && (
             <div className="bg-violet-50 border border-violet-100 rounded-xl px-3.5 py-2.5">
-              <p className="text-[10px] font-bold text-violet-600 uppercase tracking-widest mb-1.5">Prescribed Medicines</p>
+              <p className="text-[10px] font-bold text-violet-600 uppercase tracking-widest mb-1.5">{t('sendToPharmacyModal.prescribedMedicines')}</p>
               <div className="flex flex-wrap gap-1.5">
                 {meds.map((m: any, i: number) => (
                   <span key={i} className="text-xs bg-white border border-violet-100 text-gray-700 font-medium px-2.5 py-1 rounded-xl">
@@ -301,20 +310,20 @@ function SendToPharmacyModal({ consultation, onClose, onSent }: SendToPharmacyMo
           )}
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Select Pharmacy <span className="text-red-400">*</span>
+              {t('sendToPharmacyModal.selectPharmacy')} <span className="text-red-400">*</span>
             </label>
             <PharmacySearchDropdown selected={selectedPharmacy} onSelect={setSelectedPharmacy} />
           </div>
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2">{error}</p>}
           <div className="flex gap-3">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">Cancel</button>
+              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">{tc('actions.cancel')}</button>
             <button
-              onClick={() => { if (!selectedPharmacy) { setError('Please select a pharmacy'); return; } mutation.mutate(); }}
+              onClick={() => { if (!selectedPharmacy) { setError(t('sendToPharmacyModal.errorSelect')); return; } mutation.mutate(); }}
               disabled={mutation.isPending}
               className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
               {mutation.isPending && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-              <Send size={14} strokeWidth={2.5} /> Forward Prescription
+              <Send size={14} strokeWidth={2.5} /> {t('sendToPharmacyModal.forwardBtn')}
             </button>
           </div>
         </div>
@@ -329,6 +338,8 @@ interface SelfRecordModalProps {
 }
 
 function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
+  const { t } = useTranslation('patientConsultations');
+  const { t: tc } = useTranslation('common');
   const [fields, setFields] = useState({
     visit_date: new Date().toISOString().slice(0, 10),
     doctor_name: '', hospital_clinic: '',
@@ -353,8 +364,8 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fields.visit_date) return setError('Visit date is required');
-    if (!fields.sick_description.trim()) return setError('Symptoms are required');
+    if (!fields.visit_date) return setError(t('selfRecordModal.errors.visitDateRequired'));
+    if (!fields.sick_description.trim()) return setError(t('selfRecordModal.errors.symptomsRequired'));
     setError(''); setSubmitting(true);
     try {
       const fd = new FormData();
@@ -364,7 +375,7 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
       await consultationApi.create(fd);
       onSaved(); onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to save');
+      setError(err.message || t('selfRecordModal.errors.saveFailed'));
     } finally { setSubmitting(false); }
   };
 
@@ -373,8 +384,8 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-4">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
-            <h2 className="font-bold text-gray-900 text-lg">Record My Visit</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Log a doctor visit or self-observation</p>
+            <h2 className="font-bold text-gray-900 text-lg">{t('selfRecordModal.title')}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{t('selfRecordModal.subtitle')}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
             <X size={15} strokeWidth={2.5} />
@@ -384,25 +395,25 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">{error}</p>}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Visit Date *</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('selfRecordModal.fields.visitDate')}</label>
               <input type="date" required value={fields.visit_date} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('visit_date', e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Doctor Name</label>
-              <input type="text" placeholder="Dr. Perera" value={fields.doctor_name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('doctor_name', e.target.value)}
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('selfRecordModal.fields.doctorName')}</label>
+              <input type="text" placeholder={t('selfRecordModal.fields.doctorNamePlaceholder')} value={fields.doctor_name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('doctor_name', e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
             </div>
           </div>
           <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Hospital / Clinic</label>
-            <input type="text" placeholder="e.g., Nawaloka Hospital" value={fields.hospital_clinic} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('hospital_clinic', e.target.value)}
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('selfRecordModal.fields.hospitalClinic')}</label>
+            <input type="text" placeholder={t('selfRecordModal.fields.hospitalClinicPlaceholder')} value={fields.hospital_clinic} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('hospital_clinic', e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
           </div>
           {[
-            { key: 'sick_description',      label: 'Symptoms *',     ph: 'What symptoms did you have?', req: true  },
-            { key: 'diagnosis',             label: 'Diagnosis',      ph: 'What did the doctor diagnose?', req: false },
-            { key: 'treatment_description', label: 'Treatment Plan', ph: 'Prescribed medications, etc.', req: false },
+            { key: 'sick_description',      label: t('selfRecordModal.fields.symptoms'),     ph: t('selfRecordModal.fields.symptomsPlaceholder'), req: true  },
+            { key: 'diagnosis',             label: t('selfRecordModal.fields.diagnosis'),      ph: t('selfRecordModal.fields.diagnosisPlaceholder'), req: false },
+            { key: 'treatment_description', label: t('selfRecordModal.fields.treatmentPlan'), ph: t('selfRecordModal.fields.treatmentPlanPlaceholder'), req: false },
           ].map(({ key, label, ph, req }) => (
             <div key={key}>
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{label}</label>
@@ -412,38 +423,38 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
           ))}
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Prescription <span className="text-gray-300 font-normal normal-case">(optional)</span>
+              {t('selfRecordModal.prescription.label')} <span className="text-gray-300 font-normal normal-case">{t('selfRecordModal.prescription.optional')}</span>
             </label>
             {!preview ? (
               <button type="button" onClick={() => fileRef.current?.click()}
                 className="w-full border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-primary-400 hover:bg-primary-50 transition-colors group">
                 <div className="flex items-center justify-center gap-2 text-gray-400 group-hover:text-primary-600">
                   <FileImage size={18} strokeWidth={1.5} />
-                  <p className="text-sm font-medium">Upload prescription image</p>
+                  <p className="text-sm font-medium">{t('selfRecordModal.prescription.uploadBtn')}</p>
                 </div>
               </button>
             ) : (
               <div className="relative">
                 <img src={preview} alt="Preview" className="w-full max-h-40 object-contain rounded-xl border border-gray-200 bg-gray-50" />
                 <button type="button" onClick={() => { setFile(null); setPreview(null); if (fileRef.current) fileRef.current.value = ''; }}
-                  className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">Remove</button>
+                  className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">{tc('actions.remove')}</button>
               </div>
             )}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Medicines</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('selfRecordModal.medicines.label')}</label>
               <button type="button" onClick={addMed}
                 className="flex items-center gap-1 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1.5 rounded-xl hover:bg-primary-100">
-                <Plus size={11} strokeWidth={2.5} /> Add
+                <Plus size={11} strokeWidth={2.5} /> {tc('actions.add')}
               </button>
             </div>
             {meds.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-3 border-2 border-dashed border-gray-100 rounded-xl">No medicines added</p>
+              <p className="text-xs text-gray-400 text-center py-3 border-2 border-dashed border-gray-100 rounded-xl">{t('selfRecordModal.medicines.none')}</p>
             ) : meds.map((m: any, i: number) => (
               <div key={i} className="grid grid-cols-12 gap-2 bg-gray-50 rounded-2xl p-2.5 border border-gray-100 mb-2">
-                {[['col-span-4','medicine_name','Medicine *'],['col-span-2','dosage','Dosage'],['col-span-3','frequency','Frequency'],['col-span-2','duration','Duration']].map(([col, k, ph]) => (
+                {[['col-span-4','medicine_name',t('selfRecordModal.medicines.medicine')],['col-span-2','dosage',t('selfRecordModal.medicines.dosage')],['col-span-3','frequency',t('selfRecordModal.medicines.frequency')],['col-span-2','duration',t('selfRecordModal.medicines.duration')]].map(([col, k, ph]) => (
                   <div key={k} className={col}>
                     <input type="text" placeholder={ph} value={m[k]} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updMed(i, k, e.target.value)}
                       className="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-400" />
@@ -459,11 +470,11 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
           </div>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">Cancel</button>
+              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">{tc('actions.cancel')}</button>
             <button type="submit" disabled={submitting}
               className="flex-1 py-2.5 text-sm font-bold text-white bg-primary-600 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
               {submitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-              {submitting ? 'Saving…' : 'Save Visit'}
+              {submitting ? tc('actions.saving') : t('selfRecordModal.saveBtn')}
             </button>
           </div>
         </form>
@@ -480,6 +491,8 @@ interface EditModalProps {
 }
 
 function EditModal({ consultation, onClose, onSave, isPending }: EditModalProps) {
+  const { t } = useTranslation('patientConsultations');
+  const { t: tc } = useTranslation('common');
   const [form, setForm] = useState({
     visit_date:            consultation.visit_date?.split('T')[0] || '',
     doctor_name:           consultation.doctor_name || '',
@@ -503,7 +516,7 @@ function EditModal({ consultation, onClose, onSave, isPending }: EditModalProps)
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
-            <h2 className="font-bold text-gray-900">Edit Consultation</h2>
+            <h2 className="font-bold text-gray-900">{t('editModal.title')}</h2>
             <p className="text-xs text-gray-400 mt-0.5">{fmtDate(consultation.visit_date)}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
@@ -514,25 +527,25 @@ function EditModal({ consultation, onClose, onSave, isPending }: EditModalProps)
               className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Visit Date *</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('editModal.fields.visitDate')}</label>
               <input type="date" required value={form.visit_date} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, visit_date: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Doctor Name</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('editModal.fields.doctorName')}</label>
               <input type="text" value={form.doctor_name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, doctor_name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
             </div>
           </div>
           <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Hospital / Clinic</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('editModal.fields.hospitalClinic')}</label>
             <input type="text" value={form.hospital_clinic} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, hospital_clinic: e.target.value }))}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
           </div>
           {[
-            { k: 'sick_description',      l: 'Symptoms',      ph: 'Describe symptoms…'    },
-            { k: 'diagnosis',             l: 'Diagnosis',     ph: 'Medical diagnosis…'    },
-            { k: 'treatment_description', l: 'Treatment Plan',ph: 'Treatment plan…'       },
+            { k: 'sick_description',      l: t('editModal.fields.symptoms'),      ph: t('editModal.fields.symptomsPlaceholder')    },
+            { k: 'diagnosis',             l: t('editModal.fields.diagnosis'),     ph: t('editModal.fields.diagnosisPlaceholder')    },
+            { k: 'treatment_description', l: t('editModal.fields.treatmentPlan'),ph: t('editModal.fields.treatmentPlanPlaceholder')       },
           ].map(({ k, l, ph }) => (
             <div key={k}>
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{l}</label>
@@ -542,15 +555,15 @@ function EditModal({ consultation, onClose, onSave, isPending }: EditModalProps)
           ))}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Medicines</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('editModal.medicines.label')}</label>
               <button type="button" onClick={addMed}
                 className="flex items-center gap-1 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1.5 rounded-xl">
-                <Plus size={11} strokeWidth={2.5} /> Add
+                <Plus size={11} strokeWidth={2.5} /> {tc('actions.add')}
               </button>
             </div>
             {meds.map((m: any, i: number) => (
               <div key={i} className="grid grid-cols-12 gap-2 bg-gray-50 rounded-2xl p-2.5 border border-gray-100 mb-2">
-                {[['col-span-4','medicine_name','Medicine *'],['col-span-2','dosage','Dosage'],['col-span-3','frequency','Frequency'],['col-span-2','duration','Duration']].map(([col, k, ph]) => (
+                {[['col-span-4','medicine_name',t('editModal.medicines.medicine')],['col-span-2','dosage',t('editModal.medicines.dosage')],['col-span-3','frequency',t('editModal.medicines.frequency')],['col-span-2','duration',t('editModal.medicines.duration')]].map(([col, k, ph]) => (
                   <div key={k} className={col}>
                     <input type="text" placeholder={ph} value={m[k]} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updMed(i, k, e.target.value)}
                       className="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-400" />
@@ -566,11 +579,11 @@ function EditModal({ consultation, onClose, onSave, isPending }: EditModalProps)
           </div>
           <div className="flex gap-3 pb-1">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">Cancel</button>
+              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">{tc('actions.cancel')}</button>
             <button type="submit" disabled={isPending}
               className="flex-1 py-2.5 text-sm font-bold text-white bg-primary-600 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
               {isPending && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-              {isPending ? 'Saving…' : 'Save Changes'}
+              {isPending ? tc('actions.saving') : t('editModal.saveBtn')}
             </button>
           </div>
         </form>
@@ -616,8 +629,12 @@ interface ConsultationCommitProps {
 }
 
 function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLab, onSendToPharmacy }: ConsultationCommitProps) {
+  const { t } = useTranslation('patientConsultations');
+  const { t: tc } = useTranslation('common');
   const [open, setOpen] = useState(false);
-  const st = STATUS_STYLE[c.status] || STATUS_STYLE.active;
+  const statusKey = STATUS_STYLE[c.status] ? c.status : 'active';
+  const st = STATUS_STYLE[statusKey];
+  const stLabel = t(`page.commit.status.${statusKey}`);
   const meds = c.medicines || [];
 
   const hasSymptoms      = !!c.sick_description;
@@ -667,7 +684,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-gray-900 leading-snug truncate">
-                  {c.diagnosis || c.sick_description || 'Medical Visit'}
+                  {c.diagnosis || c.sick_description || t('page.commit.medicalVisit')}
                 </p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="flex items-center gap-1 text-xs text-gray-400">
@@ -682,13 +699,13 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
               </div>
               <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                 <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${st.cls}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
+                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{stLabel}
                 </span>
                 {hasLabReq && !labSent && (
-                  <span className="text-[9px] font-bold bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded-full">Lab Pending</span>
+                  <span className="text-[9px] font-bold bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded-full">{t('page.commit.labPending')}</span>
                 )}
                 {labDone && (
-                  <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">Lab Done</span>
+                  <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">{t('page.commit.labDone')}</span>
                 )}
                 {!c.doctor_id && (
                   <button type="button" onClick={(e: React.MouseEvent) => { e.stopPropagation(); onEdit(c); }}
@@ -707,40 +724,40 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                 <WFNode
                   icon={<Calendar size={12} strokeWidth={2} className="text-white" />}
                   iconBg={`bg-gradient-to-br ${palette.grad}`}
-                  label="Visit" labelColor={palette.accent}
+                  label={t('page.wf.visit')} labelColor={palette.accent}
                   isLast={subSteps.length === 0}
                 >
                   <div className="text-xs text-gray-600 space-y-0.5">
-                    <p><span className="text-gray-400">Date:</span> {fmtDate(c.visit_date)}</p>
-                    {c.hospital_clinic && <p><span className="text-gray-400">Location:</span> {c.hospital_clinic}</p>}
-                    {c.pharmacy_name   && <p><span className="text-gray-400">Pharmacy:</span> {c.pharmacy_name}</p>}
+                    <p><span className="text-gray-400">{t('page.wf.body.date')}</span> {fmtDate(c.visit_date)}</p>
+                    {c.hospital_clinic && <p><span className="text-gray-400">{t('page.wf.body.location')}</span> {c.hospital_clinic}</p>}
+                    {c.pharmacy_name   && <p><span className="text-gray-400">{t('page.wf.body.pharmacy')}</span> {c.pharmacy_name}</p>}
                   </div>
                 </WFNode>
 
                 {hasSymptoms && (
                   <WFNode icon={<Thermometer size={12} strokeWidth={2} className="text-orange-600" />} iconBg="bg-orange-100"
-                    label="Symptoms" labelColor="text-orange-600" isLast={subSteps[subSteps.length-1] === 'symptoms'}>
+                    label={t('page.wf.symptoms')} labelColor="text-orange-600" isLast={subSteps[subSteps.length-1] === 'symptoms'}>
                     <p className="text-xs text-gray-700 leading-relaxed bg-orange-50 rounded-xl px-3 py-2 border border-orange-100">{c.sick_description}</p>
                   </WFNode>
                 )}
 
                 {hasDx && (
                   <WFNode icon={<Microscope size={12} strokeWidth={2} className={palette.accent} />} iconBg={palette.light}
-                    label="Diagnosis" labelColor={palette.accent} isLast={subSteps[subSteps.length-1] === 'diagnosis'}>
+                    label={t('page.wf.diagnosis')} labelColor={palette.accent} isLast={subSteps[subSteps.length-1] === 'diagnosis'}>
                     <p className={`text-xs text-gray-700 leading-relaxed rounded-xl px-3 py-2 border ${palette.light} border-gray-100`}>{c.diagnosis}</p>
                   </WFNode>
                 )}
 
                 {hasTx && (
                   <WFNode icon={<Activity size={12} strokeWidth={2} className="text-teal-600" />} iconBg="bg-teal-100"
-                    label="Treatment Plan" labelColor="text-teal-600" isLast={subSteps[subSteps.length-1] === 'treatment'}>
+                    label={t('page.wf.treatmentPlan')} labelColor="text-teal-600" isLast={subSteps[subSteps.length-1] === 'treatment'}>
                     <p className="text-xs text-gray-700 leading-relaxed bg-teal-50 rounded-xl px-3 py-2 border border-teal-100">{c.treatment_description}</p>
                   </WFNode>
                 )}
 
                 {hasMeds && (
                   <WFNode icon={<Pill size={12} strokeWidth={2} className="text-violet-600" />} iconBg="bg-violet-100"
-                    label={`Medicines Prescribed (${meds.length})`} labelColor="text-violet-600" isLast={subSteps[subSteps.length-1] === 'medicines'}>
+                    label={t('page.wf.medicinesPrescribed', { count: meds.length })} labelColor="text-violet-600" isLast={subSteps[subSteps.length-1] === 'medicines'}>
                     <div className="flex flex-wrap gap-1.5">
                       {meds.map((m: any, i: number) => (
                         <div key={i} className="flex items-center gap-1.5 bg-white border border-violet-100 rounded-xl pl-2.5 pr-3 py-1.5 text-xs shadow-sm">
@@ -759,7 +776,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
 
                 {hasRx && (
                   <WFNode icon={<FileImage size={12} strokeWidth={2} className="text-violet-600" />} iconBg="bg-violet-100"
-                    label="Prescription" labelColor="text-violet-700" isLast={subSteps[subSteps.length-1] === 'prescription'}>
+                    label={t('page.wf.prescription')} labelColor="text-violet-700" isLast={subSteps[subSteps.length-1] === 'prescription'}>
                     <div className="space-y-2">
                       <img src={fileUrl('rx', c.prescription_file)} alt="Prescription"
                         className="w-full max-h-44 object-contain rounded-xl border border-violet-100 bg-white"
@@ -767,11 +784,11 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                       <div className="flex gap-2">
                         <a href={fileUrl('rx', c.prescription_file)} download onClick={(e: React.MouseEvent) => e.stopPropagation()}
                           className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 transition-colors">
-                          <Download size={11} strokeWidth={2.5} /> Download
+                          <Download size={11} strokeWidth={2.5} /> {tc('actions.download')}
                         </a>
                         <a href={fileUrl('rx', c.prescription_file)} target="_blank" rel="noreferrer" onClick={(e: React.MouseEvent) => e.stopPropagation()}
                           className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors">
-                          <ExternalLink size={11} strokeWidth={2.5} /> View in Browser
+                          <ExternalLink size={11} strokeWidth={2.5} /> {tc('actions.viewInBrowser')}
                         </a>
                       </div>
                     </div>
@@ -783,35 +800,35 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                   <WFNode
                     icon={<Package size={12} strokeWidth={2} className={hasPharmacy ? 'text-white' : 'text-violet-600'} />}
                     iconBg={hasPharmacy ? (dispensed ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-violet-500 to-purple-600') : 'bg-violet-100'}
-                    label={hasPharmacy ? (dispensed ? 'Dispensed by Pharmacy ✅' : `Pharmacy: ${c.pharmacy_name || 'Assigned'}`) : 'Pharmacy'}
+                    label={hasPharmacy ? (dispensed ? t('page.wf.pharmacyDispensed') : t('page.wf.pharmacyNamed', { name: c.pharmacy_name || t('page.wf.pharmacyAssignedFallback') })) : t('page.wf.pharmacy')}
                     labelColor={hasPharmacy ? (dispensed ? 'text-emerald-600' : 'text-violet-700') : 'text-violet-600'}
                     isLast={subSteps[subSteps.length-1] === 'pharmacy' && !hasLabReq}
                   >
                     {hasPharmacy ? (
                       <div className="bg-violet-50 border border-violet-100 rounded-xl px-3 py-2.5 space-y-1">
-                        <p className="text-sm font-bold text-gray-900">{c.pharmacy_name || 'Assigned Pharmacy'}</p>
+                        <p className="text-sm font-bold text-gray-900">{c.pharmacy_name || t('page.wf.assignedPharmacyFallback')}</p>
                         {c.pharmacy_address && <p className="text-xs text-gray-400 flex items-center gap-1"><MapPin size={9} strokeWidth={2} />{c.pharmacy_address}</p>}
                         {c.pharmacy_phone   && <p className="text-xs text-gray-400">{c.pharmacy_phone}</p>}
                         <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           dispensed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                         }`}>
-                          {dispensed ? '✓ Medicines dispensed' : 'Awaiting dispensing'}
+                          {dispensed ? t('page.wf.medicinesDispensed') : t('page.wf.awaitingDispensing')}
                         </span>
                       </div>
                     ) : canForwardPharm ? (
                       <div className="bg-violet-50 rounded-xl px-3 py-2 border border-violet-100 space-y-2">
                         <p className="text-xs text-gray-600 leading-relaxed">
-                          No pharmacy assigned. Forward your prescription to a pharmacy to collect medicines.
+                          {t('page.wf.noPharmacyText')}
                         </p>
                         <button
                           onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSendToPharmacy(c); }}
                           className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-white bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl hover:opacity-90 shadow-sm"
                         >
-                          <Send size={11} strokeWidth={2.5} /> Forward to Pharmacy
+                          <Send size={11} strokeWidth={2.5} /> {t('page.wf.forwardToPharmacyBtn')}
                         </button>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-400 italic">No pharmacy assigned.</p>
+                      <p className="text-xs text-gray-400 italic">{t('page.wf.noPharmacyAssigned')}</p>
                     )}
                   </WFNode>
                 )}
@@ -819,13 +836,13 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                 {hasLabReq && (
                   <>
                     <WFNode icon={<FlaskConical size={12} strokeWidth={2} className="text-cyan-600" />} iconBg="bg-cyan-100"
-                      label="Lab Tests Requested" labelColor="text-cyan-600" isLast={!labSent && subSteps[subSteps.length-1] === 'lab'}>
+                      label={t('page.wf.labTestsRequested')} labelColor="text-cyan-600" isLast={!labSent && subSteps[subSteps.length-1] === 'lab'}>
                       <div className="bg-cyan-50 rounded-xl px-3 py-2 border border-cyan-100 space-y-2">
                         <p className="text-xs text-gray-700 leading-relaxed">{c.lab_tests_requested}</p>
                         {!labSent && (
                           <button onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSendToLab(c); }}
                             className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-white bg-gradient-to-br from-cyan-500 to-teal-600 rounded-xl hover:opacity-90 shadow-sm">
-                            <Send size={11} strokeWidth={2.5} /> Send to Laboratory
+                            <Send size={11} strokeWidth={2.5} /> {t('page.wf.sendToLaboratoryBtn')}
                           </button>
                         )}
                       </div>
@@ -833,7 +850,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
 
                     {labSent && (
                       <WFNode icon={<Send size={12} strokeWidth={2} className="text-blue-600" />} iconBg="bg-blue-100"
-                        label={`Sent to: ${labRequest.lab_name || 'Laboratory'}`} labelColor="text-blue-600" isLast={!labDone && !labInProg}>
+                        label={t('page.wf.sentTo', { name: labRequest.lab_name || t('page.wf.laboratoryFallback') })} labelColor="text-blue-600" isLast={!labDone && !labInProg}>
                         <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2 border border-blue-100">
                           <FlaskConical size={12} strokeWidth={2} className="text-blue-500 shrink-0" />
                           <div className="flex-1 min-w-0">
@@ -845,7 +862,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                             labInProg  ? 'bg-blue-100 text-blue-700' :
                             'bg-amber-100 text-amber-700'
                           }`}>
-                            {labDone ? 'Completed' : labInProg ? 'In Progress' : 'Pending'}
+                            {labDone ? tc('status.completed') : labInProg ? tc('status.inProgress') : tc('status.pending')}
                           </span>
                         </div>
                       </WFNode>
@@ -853,7 +870,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
 
                     {labDone && (
                       <WFNode icon={<CheckCircle2 size={12} strokeWidth={2} className="text-white" />}
-                        iconBg="bg-gradient-to-br from-emerald-500 to-teal-600" label="Lab Report Ready ✅" labelColor="text-emerald-600" isLast>
+                        iconBg="bg-gradient-to-br from-emerald-500 to-teal-600" label={t('page.wf.labReportReady')} labelColor="text-emerald-600" isLast>
                         <div className="bg-white rounded-2xl border border-emerald-100 overflow-hidden shadow-sm">
                           <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-3 border-b border-emerald-100">
                             <div className="flex items-center gap-2 mb-1">
@@ -862,14 +879,14 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                             </div>
                             {c.doctor_display_name && (
                               <p className="text-xs text-gray-500 flex items-center gap-1">
-                                <Stethoscope size={10} strokeWidth={2} /> Ordered by Dr. {c.doctor_display_name}
+                                <Stethoscope size={10} strokeWidth={2} /> {t('page.wf.orderedByDoctor', { name: c.doctor_display_name })}
                               </p>
                             )}
                           </div>
                           {labRequest.report_notes && (
                             <div className="px-4 py-3 border-b border-gray-50">
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <FileText size={9} strokeWidth={2} /> Lab Notes / Results Summary
+                                <FileText size={9} strokeWidth={2} /> {t('page.wf.labNotesSummary')}
                               </p>
                               <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{labRequest.report_notes}</p>
                             </div>
@@ -878,11 +895,11 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                             <div className="px-4 py-3 flex gap-2">
                               <a href={fileUrl('lab', labRequest.report_file)} download onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-colors">
-                                <Download size={12} strokeWidth={2.5} /> Download Report
+                                <Download size={12} strokeWidth={2.5} /> {t('page.wf.downloadReport')}
                               </a>
                               <a href={fileUrl('lab', labRequest.report_file)} target="_blank" rel="noreferrer" onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors">
-                                <Eye size={12} strokeWidth={2.5} /> View in Browser
+                                <Eye size={12} strokeWidth={2.5} /> {tc('actions.viewInBrowser')}
                               </a>
                             </div>
                           )}
@@ -910,6 +927,8 @@ interface DoctorCardProps {
 }
 
 function DoctorCard({ group, palette, onEdit, onSendToLab, onSendToPharmacy, labRequestMap }: DoctorCardProps) {
+  const { t } = useTranslation('patientConsultations');
+  const { t: tc } = useTranslation('common');
   const [collapsed, setCollapsed] = useState(false);
   const initial = group.doctorKey.replace(/^Dr\.?\s*/i, '').charAt(0).toUpperCase();
 
@@ -929,7 +948,7 @@ function DoctorCard({ group, palette, onEdit, onSendToLab, onSendToPharmacy, lab
             </div>
             <div>
               <p className="text-white font-bold text-base leading-snug">
-                {group.doctorKey === 'Self-Recorded' ? 'Self-Recorded' : `Dr. ${group.doctorKey}`}
+                {group.doctorKey === 'Self-Recorded' ? t('page.doctorCard.selfRecorded') : t('page.doctorCard.doctorPrefix', { name: group.doctorKey })}
               </p>
               {group.hospital && (
                 <p className="text-white/70 text-xs flex items-center gap-1 mt-0.5">
@@ -942,14 +961,14 @@ function DoctorCard({ group, palette, onEdit, onSendToLab, onSendToPharmacy, lab
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right">
               <p className="text-white font-bold text-sm leading-none">{group.consultations.length}</p>
-              <p className="text-white/60 text-[10px]">visits</p>
+              <p className="text-white/60 text-[10px]">{t('page.doctorCard.visits')}</p>
             </div>
             {group.isSystemDoctor && (
-              <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">Verified</span>
+              <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">{t('page.doctorCard.verified')}</span>
             )}
             {group.hasActive && (
               <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-400/30 text-amber-100 border border-amber-300/30 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 bg-amber-300 rounded-full animate-pulse" /> Active
+                <span className="w-1.5 h-1.5 bg-amber-300 rounded-full animate-pulse" /> {tc('status.active')}
               </span>
             )}
             <ChevronDown size={16} strokeWidth={2.5} className={`text-white/80 transition-transform duration-200 ${collapsed ? '-rotate-180' : ''}`} />
@@ -978,6 +997,7 @@ function DoctorCard({ group, palette, onEdit, onSendToLab, onSendToPharmacy, lab
 }
 
 export default function PatientConsultations() {
+  const { t } = useTranslation('patientConsultations');
   const qc = useQueryClient();
   const [editConsultation,      setEditConsultation]      = useState<any>(null);
   const [sendLabConsultation,   setSendLabConsultation]   = useState<any>(null);
@@ -1027,14 +1047,14 @@ export default function PatientConsultations() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => consultationApi.updateByPatient(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['consultations'] }); setEditConsultation(null); showToast('Consultation updated!'); },
-    onError:   (err: any) => showToast(err.message || 'Update failed', 'error'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['consultations'] }); setEditConsultation(null); showToast(t('page.toast.updated')); },
+    onError:   (err: any) => showToast(err.message || t('page.toast.updateFailed'), 'error'),
   });
 
   if (isLoading) return (
     <div className="flex items-center justify-center py-32 text-gray-400">
       <span className="w-5 h-5 border-2 border-gray-200 border-t-primary-500 rounded-full animate-spin mr-3" />
-      Loading consultations…
+      {t('page.loading')}
     </div>
   );
 
@@ -1052,23 +1072,23 @@ export default function PatientConsultations() {
 
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">My Consultations</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Full workflow history grouped by doctor — click any visit to expand</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t('page.title')}</h1>
+          <p className="text-sm text-gray-400 mt-0.5">{t('page.subtitle')}</p>
         </div>
         <button
           onClick={() => setShowSelfRecord(true)}
           className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl shadow-sm hover:opacity-90"
         >
-          <Plus size={14} strokeWidth={2.5} /> Record Visit
+          <Plus size={14} strokeWidth={2.5} /> {t('page.recordVisit')}
         </button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label:'Total Visits',      value:stats.total,   grad:'from-teal-500 to-emerald-600'  },
-          { label:'Treating Doctors',  value:stats.doctors, grad:'from-blue-500 to-indigo-600'   },
-          { label:'Active Treatments', value:stats.active,  grad:'from-amber-500 to-orange-600'  },
-          { label:'Lab Tests Pending', value:pendingLabs,   grad:'from-cyan-500 to-teal-600'     },
+          { label:t('page.stats.totalVisits'),      value:stats.total,   grad:'from-teal-500 to-emerald-600'  },
+          { label:t('page.stats.treatingDoctors'),  value:stats.doctors, grad:'from-blue-500 to-indigo-600'   },
+          { label:t('page.stats.activeTreatments'), value:stats.active,  grad:'from-amber-500 to-orange-600'  },
+          { label:t('page.stats.labTestsPending'), value:pendingLabs,   grad:'from-cyan-500 to-teal-600'     },
         ].map(s => (
           <div key={s.label} className="ios-stat-tile relative overflow-hidden">
             <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${s.grad} opacity-10`} />
@@ -1085,7 +1105,7 @@ export default function PatientConsultations() {
         <div className="flex items-center gap-3 bg-cyan-50 border border-cyan-200 rounded-2xl px-4 py-3">
           <FlaskConical size={16} strokeWidth={2} className="text-cyan-600 shrink-0" />
           <p className="text-sm text-cyan-700">
-            <strong>{pendingLabs} lab test{pendingLabs > 1 ? 's' : ''}</strong> requested by your doctor — expand the consultation and choose a laboratory to send them.
+            <strong>{t('page.pendingLabsBanner.count', { count: pendingLabs })}{pendingLabs > 1 ? 's' : ''}</strong> {t('page.pendingLabsBanner.text')}
           </p>
         </div>
       )}
@@ -1095,8 +1115,8 @@ export default function PatientConsultations() {
           <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <Stethoscope size={28} strokeWidth={1.5} className="text-gray-300" />
           </div>
-          <p className="font-bold text-gray-500">No consultations yet</p>
-          <p className="text-sm text-gray-400 mt-1">Tap "Record Visit" to log your own or wait for your doctor to add one</p>
+          <p className="font-bold text-gray-500">{t('page.emptyState.title')}</p>
+          <p className="text-sm text-gray-400 mt-1">{t('page.emptyState.subtitle')}</p>
         </div>
       )}
 
@@ -1118,7 +1138,7 @@ export default function PatientConsultations() {
         <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
           <Info size={16} strokeWidth={2} className="text-blue-400 shrink-0" />
           <p className="text-sm text-blue-600">
-            Consultations added by your doctor are <strong>read-only</strong>. Only your own self-recorded visits can be edited.
+            {t('page.readOnlyNotice.prefix')} <strong>{t('page.readOnlyNotice.readOnly')}</strong>. {t('page.readOnlyNotice.suffix')}
           </p>
         </div>
       )}
@@ -1126,21 +1146,21 @@ export default function PatientConsultations() {
       {showSelfRecord && (
         <SelfRecordModal
           onClose={() => setShowSelfRecord(false)}
-          onSaved={() => { qc.invalidateQueries({ queryKey: ['consultations'] }); showToast('Visit recorded successfully!'); }}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ['consultations'] }); showToast(t('page.toast.visitRecorded')); }}
         />
       )}
       {sendLabConsultation && (
         <SendToLabModal
           consultation={sendLabConsultation}
           onClose={() => setSendLabConsultation(null)}
-          onSent={() => showToast('Lab request sent! Laboratory has been notified.')}
+          onSent={() => showToast(t('page.toast.labSent'))}
         />
       )}
       {sendPharmConsultation && (
         <SendToPharmacyModal
           consultation={sendPharmConsultation}
           onClose={() => setSendPharmConsultation(null)}
-          onSent={() => showToast('Prescription forwarded! Pharmacy has been notified.')}
+          onSent={() => showToast(t('page.toast.pharmacySent'))}
         />
       )}
       {editConsultation && (
