@@ -1,0 +1,269 @@
+{
+  "labTests": {
+    "pageTitle": "Lab Reports",
+    "pageSubtitle": "Book a test with a lab, and view your test requests and results",
+    "bookTestBtn": "Book a Lab Test",
+    "labFallback": "Laboratory",
+    "loadFailed": "Failed to load",
+    "selfBooked": "Self-booked",
+    "viewReport": "View Report →",
+    "loading": "Loading lab reports...",
+    "filters": {
+      "all": "All",
+      "reportsReady": "Reports Ready"
+    },
+    "stats": {
+      "totalTests": "Total Tests",
+      "reportsReady": "Reports Ready"
+    },
+    "empty": {
+      "title": "No lab reports yet",
+      "subtitle": "Book a test yourself, or your doctor will assign one when needed."
+    },
+    "statusLabels": {
+      "pending": "Pending",
+      "inProgress": "In Progress",
+      "reportReady": "Report Ready"
+    },
+    "modal": {
+      "title": "Book a Lab Test",
+      "laboratoryLabel": "Laboratory *",
+      "laboratorySearchPlaceholder": "Search by lab name or address…",
+      "testLabel": "Test *",
+      "selectLabFirst": "Select a laboratory first to see its available tests",
+      "selectTestPlaceholder": "Select a test…",
+      "testInputPlaceholder": "e.g. Full Blood Count",
+      "dateTimeLabel": "Preferred Date & Time",
+      "optional": "(optional)",
+      "referralLabel": "Doctor's Referral / Prescription",
+      "attachReferral": "Attach referral (PDF/image)",
+      "notesLabel": "Notes for the Lab",
+      "notesPlaceholder": "Any symptoms or details worth mentioning…",
+      "submitBtn": "Book Test",
+      "noResultsFor": "No results for \"{{query}}\"",
+      "bookedSuccess": "Test booked with {{lab}}!",
+      "errors": {
+        "selectLab": "Please select a laboratory",
+        "selectTest": "Please select a test",
+        "bookFailed": "Failed to book test"
+      }
+    },
+    "reportModal": {
+      "title": "Lab Report",
+      "requestingDoctor": "Requesting Doctor",
+      "laboratory": "Laboratory",
+      "requestedOn": "Requested On",
+      "labType": "Lab Type",
+      "testsPerformed": "🧪 Tests Performed",
+      "labReportNotes": "🔬 Lab Report Notes",
+      "openPdf": "Open Lab Report (PDF)",
+      "viewImage": "View Lab Report Image",
+      "clickToView": "Click to view or download your report"
+    }
+  },
+  "myReports": {
+    "pageTitle": "My Reports",
+    "pageSubtitle": "All your health reports — uploaded and from labs",
+    "uploadBtn": "Upload Report",
+    "stats": {
+      "totalReports": "Total Reports",
+      "labReady": "Lab Ready",
+      "pendingTests": "Pending Tests"
+    },
+    "searchPlaceholder": "Search by report name, doctor, lab, description…",
+    "filters": {
+      "all": "All ({{count}})",
+      "personal": "Personal ({{count}})",
+      "labSystem": "Lab System ({{count}})",
+      "typeWithCount": "{{label}} ({{count}})"
+    },
+    "types": {
+      "lab_report": "Lab Report",
+      "prescription": "Prescription",
+      "imaging": "Imaging / X-Ray",
+      "discharge_summary": "Discharge Summary",
+      "vaccination": "Vaccination",
+      "other": "Other"
+    },
+    "labRequestLabel": "Lab Request",
+    "labTestFallback": "Lab Test",
+    "empty": {
+      "noResultsFor": "No results for \"{{query}}\"",
+      "noReportsYet": "No reports yet",
+      "tryDifferentSearch": "Try a different search term or clear the filter.",
+      "uploadFirst": "Upload your first report to keep health records organised."
+    },
+    "labCard": {
+      "labFallback": "Laboratory",
+      "statusReady": "Report Ready",
+      "statusProcessing": "Processing",
+      "labBadge": "Lab",
+      "testsLabel": "Tests",
+      "waitingUpload": "Waiting for lab to upload report",
+      "clickToView": "Click to view report"
+    },
+    "personalCard": {
+      "viewBtn": "View",
+      "openingBtn": "Opening…"
+    },
+    "modal": {
+      "labReportFallback": "Lab Report",
+      "doctorLabel": "Doctor",
+      "labLabel": "Lab",
+      "statusReady": "✅ Ready",
+      "statusProcessing": "🔄 Processing",
+      "statusPending": "⏳ Pending",
+      "testsRequested": "Tests Requested",
+      "labNotes": "Lab Notes",
+      "openPdf": "Open PDF Report",
+      "viewImage": "View Report Image",
+      "clickToOpen": "Click to open in new tab",
+      "waitingForLab": "Waiting for the laboratory to upload the report file"
+    },
+    "uploadModal": {
+      "title": "Upload Health Report",
+      "reportTitleLabel": "Report Title *",
+      "reportTitlePlaceholder": "e.g. Blood Test – January 2025",
+      "reportTypeLabel": "Report Type *",
+      "selectTypePlaceholder": "Select type…",
+      "issuedDateLabel": "Issued Date *",
+      "laboratoryNameLabel": "Laboratory Name",
+      "laboratoryNamePlaceholder": "e.g. City Medical Laboratory",
+      "doctorNameLabel": "Doctor Name",
+      "doctorNamePlaceholder": "Dr. Smith",
+      "hospitalClinicLabel": "Hospital / Clinic",
+      "hospitalClinicPlaceholder": "National Hospital",
+      "notesPlaceholder": "What does this report include?",
+      "fileLabel": "Report File *",
+      "clickToUpload": "Click to upload",
+      "fileHint": "PDF, JPG, PNG, TIFF — max 20 MB",
+      "uploading": "Uploading…",
+      "uploadBtn": "Upload Report",
+      "errors": {
+        "titleRequired": "Title is required",
+        "typeRequired": "Report type is required",
+        "dateRequired": "Date is required",
+        "fileRequired": "Select a file to upload",
+        "uploadFailed": "Upload failed"
+      }
+    },
+    "toast": {
+      "reportDeleted": "Report deleted.",
+      "deleteFailed": "Delete failed",
+      "fileOpenFailed": "Could not open file",
+      "uploadSuccess": "Report uploaded successfully!"
+    },
+    "deleteConfirm": {
+      "title": "Delete Report?",
+      "message": "This will permanently remove the report and its file."
+    }
+  },
+  "accessRequests": {
+    "pageTitle": "Doctor Requests",
+    "pageSubtitle": "Doctors requesting access to your health data — you control what they can see",
+    "loading": "Loading requests…",
+    "tabs": {
+      "healthInfo": "Health Info",
+      "labReports": "Lab Reports"
+    },
+    "typeMeta": {
+      "labReports": "Lab Reports",
+      "medicalHistory": "Medical History",
+      "personalReports": "Personal Health Reports",
+      "contactInfo": "Contact Information"
+    },
+    "statusMeta": {
+      "pending": "Awaiting Response",
+      "accepted": "Access Granted"
+    },
+    "card": {
+      "accessRequested": "Access requested",
+      "defaultSpecialization": "Medical Doctor",
+      "reasonFromDoctor": "Reason from Doctor",
+      "requestedOn": "Requested: {{date}}",
+      "respondedOn": "Responded: {{date}}",
+      "acceptWarning": "If you accept, Dr. {{doctor}} will be able to view your {{type}} in their portal.",
+      "acceptBtn": "Accept Request",
+      "declineBtn": "Decline",
+      "confirmDeclineQuestion": "Are you sure you want to decline?",
+      "yesDecline": "Yes, Decline",
+      "accessGrantedMsg": "Access granted — Dr. {{doctor}} can now view your {{type}}",
+      "requestDeclinedMsg": "Request declined"
+    },
+    "labCard": {
+      "title": "Lab Report Access",
+      "subtitle": "Doctor wants to view your lab report",
+      "laboratoryLabel": "Laboratory:",
+      "testsLabel": "Tests",
+      "acceptWarning": "If you accept, Dr. {{doctor}} will be able to view and download this specific lab report.",
+      "allowAccessBtn": "Allow Access",
+      "accessGrantedMsg": "Access granted — Dr. {{doctor}} can now view this lab report"
+    },
+    "toast": {
+      "accessGranted": "Access granted! Doctor has been notified.",
+      "requestDeclined": "Request declined.",
+      "respondFailed": "Failed to respond",
+      "labAccessGranted": "Lab report access granted! Doctor has been notified."
+    },
+    "filters": {
+      "all": "All",
+      "accepted": "Accepted"
+    },
+    "emptyHealthInfo": {
+      "allFilter": "No health info requests",
+      "filtered": "No {{status}} health info requests",
+      "subtitle": "When a doctor requests access to your health data, it will appear here."
+    },
+    "emptyLabReports": {
+      "allFilter": "No lab report requests",
+      "filtered": "No {{status}} lab report requests",
+      "subtitle": "When a doctor requests to view one of your lab reports, it will appear here."
+    }
+  },
+  "bookDoctor": {
+    "pageTitle": "Book a Doctor",
+    "pageSubtitle": "Find a doctor's available time and request an appointment",
+    "bookBtn": "Book Appointment",
+    "filters": {
+      "all": "All"
+    },
+    "stats": {
+      "upcoming": "Upcoming",
+      "totalBooked": "Total Booked"
+    },
+    "loading": "Loading appointments…",
+    "empty": {
+      "title": "No appointments yet",
+      "subtitle": "Book a doctor's available slot to get started."
+    },
+    "statusLabels": {
+      "awaitingDoctor": "Awaiting Doctor"
+    },
+    "doctorNote": "Doctor's note: {{note}}",
+    "cancelConfirm": "Cancel this appointment?",
+    "toast": {
+      "cancelled": "Appointment cancelled",
+      "cancelFailed": "Failed to cancel"
+    },
+    "modal": {
+      "title": "Book a Doctor Appointment",
+      "doctorLabel": "Doctor *",
+      "doctorSearchPlaceholder": "Search by name or specialization…",
+      "noDoctorsFound": "No doctors found for \"{{query}}\"",
+      "selectDateLabel": "Select a Date *",
+      "loadingAvailability": "Loading availability…",
+      "noAvailability": "This doctor has no availability in the next two weeks.",
+      "selectTimeLabel": "Select a Time *",
+      "reasonLabel": "Reason for Visit",
+      "optional": "(optional)",
+      "reasonPlaceholder": "e.g. Follow-up checkup, persistent headache…",
+      "submitBtn": "Request Appointment",
+      "bookedSuccess": "Appointment requested with Dr. {{doctor}}!",
+      "errors": {
+        "selectDoctor": "Please select a doctor",
+        "selectDateTime": "Please select a date and time",
+        "bookFailed": "Failed to book appointment"
+      }
+    }
+  }
+}

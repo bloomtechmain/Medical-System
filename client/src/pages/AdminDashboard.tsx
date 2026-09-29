@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { userApi } from '../services/api';
 import { formatDate, formatCurrency } from '../utils/helpers';
 import {
@@ -23,6 +24,8 @@ const ROLE_ICONS: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
+  const { t } = useTranslation('admin');
+  const { t: tc } = useTranslation('common');
   const qc = useQueryClient();
 
   const { data: stats, isLoading } = useQuery({
@@ -34,9 +37,9 @@ export default function AdminDashboard() {
     mutationFn: (id: number) => userApi.toggle(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
-      toast.success('User status updated');
+      toast.success(t('dashboard.toast.statusUpdated'));
     },
-    onError: () => toast.error('Failed to update user status'),
+    onError: () => toast.error(t('dashboard.toast.statusUpdateFailed')),
   });
 
   const u = stats?.users;
@@ -49,32 +52,32 @@ export default function AdminDashboard() {
   const recent: any[] = stats?.recentUsers || [];
 
   const userCards = [
-    { label: 'Total Users',   value: u?.total_users    ?? '—', icon: Users,       bg: 'bg-slate-50',  fg: 'text-slate-700',  border: 'border-slate-200' },
-    { label: 'Patients',      value: u?.total_patients ?? '—', icon: Activity,    bg: 'bg-blue-50',   fg: 'text-blue-700',   border: 'border-blue-200' },
-    { label: 'Doctors',       value: u?.total_doctors  ?? '—', icon: Stethoscope, bg: 'bg-teal-50',   fg: 'text-teal-700',   border: 'border-teal-200' },
-    { label: 'Pharmacists',   value: u?.total_pharmacists ?? '—', icon: Pill,     bg: 'bg-purple-50', fg: 'text-purple-700', border: 'border-purple-200' },
-    { label: 'Laboratories',  value: u?.total_laboratories ?? '—', icon: FlaskConical, bg: 'bg-cyan-50', fg: 'text-cyan-700', border: 'border-cyan-200' },
-    { label: 'Admins',        value: u?.total_admins   ?? '—', icon: Shield,      bg: 'bg-red-50',    fg: 'text-red-700',    border: 'border-red-200' },
-    { label: 'Active Users',  value: u?.active_users   ?? '—', icon: UserCheck,   bg: 'bg-green-50',  fg: 'text-green-700',  border: 'border-green-200' },
-    { label: 'New This Week', value: u?.new_this_week  ?? '—', icon: TrendingUp,  bg: 'bg-orange-50', fg: 'text-orange-700', border: 'border-orange-200' },
+    { label: t('dashboard.stats.totalUsers'),   value: u?.total_users    ?? '—', icon: Users,       bg: 'bg-slate-50',  fg: 'text-slate-700',  border: 'border-slate-200' },
+    { label: t('dashboard.stats.patients'),      value: u?.total_patients ?? '—', icon: Activity,    bg: 'bg-blue-50',   fg: 'text-blue-700',   border: 'border-blue-200' },
+    { label: t('dashboard.stats.doctors'),       value: u?.total_doctors  ?? '—', icon: Stethoscope, bg: 'bg-teal-50',   fg: 'text-teal-700',   border: 'border-teal-200' },
+    { label: t('dashboard.stats.pharmacists'),   value: u?.total_pharmacists ?? '—', icon: Pill,     bg: 'bg-purple-50', fg: 'text-purple-700', border: 'border-purple-200' },
+    { label: t('dashboard.stats.laboratories'),  value: u?.total_laboratories ?? '—', icon: FlaskConical, bg: 'bg-cyan-50', fg: 'text-cyan-700', border: 'border-cyan-200' },
+    { label: t('dashboard.stats.admins'),        value: u?.total_admins   ?? '—', icon: Shield,      bg: 'bg-red-50',    fg: 'text-red-700',    border: 'border-red-200' },
+    { label: t('dashboard.stats.activeUsers'),  value: u?.active_users   ?? '—', icon: UserCheck,   bg: 'bg-green-50',  fg: 'text-green-700',  border: 'border-green-200' },
+    { label: t('dashboard.stats.newThisWeek'), value: u?.new_this_week  ?? '—', icon: TrendingUp,  bg: 'bg-orange-50', fg: 'text-orange-700', border: 'border-orange-200' },
   ];
 
   const orgCards = [
-    { label: 'Hospitals',     value: org?.total_hospitals   ?? '—', emoji: '🏥', color: 'text-blue-700   bg-blue-50' },
-    { label: 'Pharmacies',    value: org?.total_pharmacies  ?? '—', emoji: '💊', color: 'text-purple-700 bg-purple-50' },
-    { label: 'Laboratories',  value: org?.total_laboratories?? '—', emoji: '🔬', color: 'text-cyan-700   bg-cyan-50' },
-    { label: 'Clinics',       value: org?.total_clinics     ?? '—', emoji: '🩺', color: 'text-teal-700   bg-teal-50' },
-    { label: 'Total Orgs',    value: org?.total_organizations ?? '—', emoji: '🏢', color: 'text-gray-700  bg-gray-50' },
+    { label: t('dashboard.orgStats.hospitals'),     value: org?.total_hospitals   ?? '—', emoji: '🏥', color: 'text-blue-700   bg-blue-50' },
+    { label: t('dashboard.orgStats.pharmacies'),    value: org?.total_pharmacies  ?? '—', emoji: '💊', color: 'text-purple-700 bg-purple-50' },
+    { label: t('dashboard.orgStats.laboratories'),  value: org?.total_laboratories?? '—', emoji: '🔬', color: 'text-cyan-700   bg-cyan-50' },
+    { label: t('dashboard.orgStats.clinics'),       value: org?.total_clinics     ?? '—', emoji: '🩺', color: 'text-teal-700   bg-teal-50' },
+    { label: t('dashboard.orgStats.totalOrgs'),    value: org?.total_organizations ?? '—', emoji: '🏢', color: 'text-gray-700  bg-gray-50' },
   ];
 
   const quickLinks = [
-    { to: '/admin/organizations', label: 'Organizations', icon: Building2,   color: 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border-indigo-100' },
-    { to: '/admin/users',         label: 'Users',          icon: Users,        color: 'text-red-600    bg-red-50    hover:bg-red-100    border-red-100' },
-    { to: '/admin/medicines',     label: 'Medicines',      icon: Pill,         color: 'text-purple-600 bg-purple-50 hover:bg-purple-100 border-purple-100' },
-    { to: '/admin/suppliers',     label: 'Suppliers',      icon: Truck,        color: 'text-orange-600 bg-orange-50 hover:bg-orange-100 border-orange-100' },
-    { to: '/admin/orders',        label: 'Orders',         icon: ShoppingCart, color: 'text-teal-600   bg-teal-50   hover:bg-teal-100   border-teal-100' },
-    { to: '/admin/sales',         label: 'Sales',          icon: Receipt,      color: 'text-green-600  bg-green-50  hover:bg-green-100  border-green-100' },
-    { to: '/admin/inventory',     label: 'Inventory',      icon: BarChart2,    color: 'text-blue-600   bg-blue-50   hover:bg-blue-100   border-blue-100' },
+    { to: '/admin/organizations', label: t('dashboard.quickLinks.organizations'), icon: Building2,   color: 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border-indigo-100' },
+    { to: '/admin/users',         label: t('dashboard.quickLinks.users'),          icon: Users,        color: 'text-red-600    bg-red-50    hover:bg-red-100    border-red-100' },
+    { to: '/admin/medicines',     label: t('dashboard.quickLinks.medicines'),      icon: Pill,         color: 'text-purple-600 bg-purple-50 hover:bg-purple-100 border-purple-100' },
+    { to: '/admin/suppliers',     label: t('dashboard.quickLinks.suppliers'),      icon: Truck,        color: 'text-orange-600 bg-orange-50 hover:bg-orange-100 border-orange-100' },
+    { to: '/admin/orders',        label: t('dashboard.quickLinks.orders'),         icon: ShoppingCart, color: 'text-teal-600   bg-teal-50   hover:bg-teal-100   border-teal-100' },
+    { to: '/admin/sales',         label: t('dashboard.quickLinks.sales'),          icon: Receipt,      color: 'text-green-600  bg-green-50  hover:bg-green-100  border-green-100' },
+    { to: '/admin/inventory',     label: t('dashboard.quickLinks.inventory'),      icon: BarChart2,    color: 'text-blue-600   bg-blue-50   hover:bg-blue-100   border-blue-100' },
   ];
 
   return (
@@ -83,11 +86,11 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">System Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Core Health — multi-tenant system overview</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('dashboard.subtitle')}</p>
         </div>
         <span className="inline-flex items-center gap-2 bg-red-50 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-red-200 self-start sm:self-auto">
-          🛡️ System Administrator
+          🛡️ {t('dashboard.systemAdministrator')}
         </span>
       </div>
 
@@ -102,19 +105,19 @@ export default function AdminDashboard() {
           </div>
           <div className="flex-1">
             <p className="text-sm font-semibold text-amber-800">
-              {org.pending_organizations} organization{Number(org.pending_organizations) > 1 ? 's' : ''} pending approval
+              {t('dashboard.pendingApproval', { count: org.pending_organizations })}
             </p>
-            <p className="text-xs text-amber-600 mt-0.5">Review and approve self-registered organizations</p>
+            <p className="text-xs text-amber-600 mt-0.5">{t('dashboard.reviewApprovals')}</p>
           </div>
           <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200">
-            Review →
+            {t('dashboard.review')} →
           </span>
         </Link>
       )}
 
       {/* User stats */}
       <section>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">User Overview</h2>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t('dashboard.userOverview')}</h2>
 
         <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
           {(() => {
@@ -143,12 +146,12 @@ export default function AdminDashboard() {
       {/* Organizations */}
       <section>
         <div className="w-full lg:w-3/4 flex items-center justify-between mb-3">
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tenant Organizations</h2>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('dashboard.tenantOrganizations')}</h2>
           <Link
             to="/admin/organizations"
             className="text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-full shadow-sm transition-colors"
           >
-            Manage →
+            {t('dashboard.manage')} →
           </Link>
         </div>
 
@@ -173,40 +176,40 @@ export default function AdminDashboard() {
 
       {/* System activity list */}
       <section>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">System Activity</h2>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t('dashboard.systemActivity')}</h2>
         <div className="w-full lg:w-3/4 bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
           {(() => {
             const items = [
               {
-                label: 'Consultations', icon: Stethoscope, bg: 'bg-teal-50', fg: 'text-teal-600',
+                label: t('dashboard.activity.consultations'), icon: Stethoscope, bg: 'bg-teal-50', fg: 'text-teal-600',
                 total: c?.total_consultations ?? '—',
                 subs: [
-                  { label: 'Active',    value: c?.active_consultations    ?? '—', color: 'text-teal-600'  },
-                  { label: 'Completed', value: c?.completed_consultations ?? '—', color: 'text-green-600' },
+                  { label: t('dashboard.activity.active'),    value: c?.active_consultations    ?? '—', color: 'text-teal-600'  },
+                  { label: t('dashboard.activity.completed'), value: c?.completed_consultations ?? '—', color: 'text-green-600' },
                 ],
               },
               {
-                label: 'Lab Requests', icon: FlaskConical, bg: 'bg-cyan-50', fg: 'text-cyan-600',
+                label: t('dashboard.activity.labRequests'), icon: FlaskConical, bg: 'bg-cyan-50', fg: 'text-cyan-600',
                 total: l?.total_lab_requests ?? '—',
                 subs: [
-                  { label: 'Pending',   value: l?.pending_lab_requests   ?? '—', color: 'text-yellow-600' },
-                  { label: 'Completed', value: l?.completed_lab_requests ?? '—', color: 'text-green-600'  },
+                  { label: t('dashboard.activity.pending'),   value: l?.pending_lab_requests   ?? '—', color: 'text-yellow-600' },
+                  { label: t('dashboard.activity.completed'), value: l?.completed_lab_requests ?? '—', color: 'text-green-600'  },
                 ],
               },
               {
-                label: 'Appointments', icon: CalendarCheck, bg: 'bg-blue-50', fg: 'text-blue-600',
+                label: t('dashboard.activity.appointments'), icon: CalendarCheck, bg: 'bg-blue-50', fg: 'text-blue-600',
                 total: a?.total_appointments ?? '—',
                 subs: [
-                  { label: 'Upcoming',  value: a?.upcoming_appointments  ?? '—', color: 'text-blue-600'  },
-                  { label: 'Completed', value: a?.completed_appointments ?? '—', color: 'text-green-600' },
+                  { label: t('dashboard.activity.upcoming'),  value: a?.upcoming_appointments  ?? '—', color: 'text-blue-600'  },
+                  { label: t('dashboard.activity.completed'), value: a?.completed_appointments ?? '—', color: 'text-green-600' },
                 ],
               },
               {
-                label: 'Pharmacy Sales', icon: TrendingUp, bg: 'bg-green-50', fg: 'text-green-600',
+                label: t('dashboard.activity.pharmacySales'), icon: TrendingUp, bg: 'bg-green-50', fg: 'text-green-600',
                 total: s?.total_sales ?? '—',
                 subs: [
-                  { label: 'Revenue',    value: s ? formatCurrency(Number(s.total_revenue)) : '—', color: 'text-green-600' },
-                  { label: 'This Month', value: s?.sales_this_month ?? '—',                        color: 'text-blue-600'  },
+                  { label: t('dashboard.activity.revenue'),    value: s ? formatCurrency(Number(s.total_revenue)) : '—', color: 'text-green-600' },
+                  { label: t('dashboard.activity.thisMonth'), value: s?.sales_this_month ?? '—',                        color: 'text-blue-600'  },
                 ],
               },
             ];
@@ -244,35 +247,35 @@ export default function AdminDashboard() {
 
       {/* Pharmacy inventory health */}
       <div className="bg-white rounded-xl border border-gray-100 p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-5">Pharmacy Inventory Health</h2>
+        <h2 className="text-sm font-semibold text-gray-700 mb-5">{t('dashboard.pharmacyInventoryHealth')}</h2>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-3">
               <Package size={20} className="text-blue-600" />
             </div>
             <p className="text-2xl font-bold text-gray-900">{m?.total_medicines ?? '—'}</p>
-            <p className="text-xs text-gray-500 mt-1">Total Medicines</p>
+            <p className="text-xs text-gray-500 mt-1">{t('dashboard.inventoryHealth.totalMedicines')}</p>
           </div>
           <div>
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${Number(m?.low_stock) > 0 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
               <AlertTriangle size={20} className={Number(m?.low_stock) > 0 ? 'text-yellow-500' : 'text-gray-300'} />
             </div>
             <p className={`text-2xl font-bold ${Number(m?.low_stock) > 0 ? 'text-yellow-600' : 'text-gray-900'}`}>{m?.low_stock ?? '—'}</p>
-            <p className="text-xs text-gray-500 mt-1">Low Stock</p>
+            <p className="text-xs text-gray-500 mt-1">{t('dashboard.inventoryHealth.lowStock')}</p>
           </div>
           <div>
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${Number(m?.expired) > 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
               <AlertTriangle size={20} className={Number(m?.expired) > 0 ? 'text-red-500' : 'text-gray-300'} />
             </div>
             <p className={`text-2xl font-bold ${Number(m?.expired) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{m?.expired ?? '—'}</p>
-            <p className="text-xs text-gray-500 mt-1">Expired</p>
+            <p className="text-xs text-gray-500 mt-1">{t('dashboard.inventoryHealth.expired')}</p>
           </div>
         </div>
       </div>
 
       {/* Quick navigation */}
       <section>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Quick Navigation</h2>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t('dashboard.quickNavigation')}</h2>
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-3">
           {quickLinks.map((link) => {
             const Icon = link.icon;
@@ -293,25 +296,25 @@ export default function AdminDashboard() {
       {/* Recent registrations */}
       <div className="bg-white rounded-xl border border-gray-100">
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Recent Registrations</h2>
+          <h2 className="text-sm font-semibold text-gray-700">{t('dashboard.recentRegistrations')}</h2>
           <Link
             to="/admin/users"
             className="text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-full shadow-sm transition-colors"
           >
-            View all →
+            {tc('actions.viewAll')} →
           </Link>
         </div>
 
         {isLoading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Loading...</div>
+          <div className="p-8 text-center text-gray-400 text-sm">{tc('actions.loading')}</div>
         ) : recent.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">No users yet.</div>
+          <div className="p-8 text-center text-gray-400 text-sm">{t('dashboard.noUsersYet')}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-50">
-                  {['Name', 'Email', 'Role', 'Status', 'Joined', 'Action'].map(h => (
+                  {[tc('fields.name'), tc('fields.email'), t('dashboard.table.role'), tc('fields.status'), t('dashboard.table.joined'), t('dashboard.table.action')].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">{h}</th>
                   ))}
                 </tr>
@@ -330,12 +333,12 @@ export default function AdminDashboard() {
                     <td className="px-5 py-3 text-gray-500">{usr.email}</td>
                     <td className="px-5 py-3">
                       <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS[usr.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {ROLE_ICONS[usr.role]} {usr.role}
+                        {ROLE_ICONS[usr.role]} {t(`dashboard.roles.${usr.role}`, { defaultValue: usr.role })}
                       </span>
                     </td>
                     <td className="px-5 py-3">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${usr.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {usr.is_active ? 'Active' : 'Inactive'}
+                        {usr.is_active ? tc('status.active') : t('dashboard.table.inactive')}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-gray-400 text-xs">{formatDate(usr.created_at)}</td>
@@ -349,7 +352,7 @@ export default function AdminDashboard() {
                             : 'bg-green-50 text-green-700 hover:bg-green-100'
                         }`}
                       >
-                        {usr.is_active ? 'Deactivate' : 'Activate'}
+                        {usr.is_active ? t('dashboard.table.deactivate') : t('dashboard.table.activate')}
                       </button>
                     </td>
                   </tr>

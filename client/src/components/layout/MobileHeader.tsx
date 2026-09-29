@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Bell, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Activity } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { notificationApi } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import LanguageSwitcher from '../common/LanguageSwitcher';
 
 // 4-dot logo
 function LogoMark() {
@@ -48,6 +50,7 @@ function timeAgo(ts: string): string {
 }
 
 export default function MobileHeader() {
+  const { t }          = useTranslation('common');
   const { user }      = useAuth();
   const { newPulse }  = useSocket() || {};
   const navigate      = useNavigate();
@@ -108,6 +111,8 @@ export default function MobileHeader() {
       {/* Right: actions */}
       <div className="flex items-center gap-1" ref={dropRef}>
 
+        <LanguageSwitcher compact />
+
         {/* Bell */}
         <div className="relative">
           <button
@@ -132,12 +137,12 @@ export default function MobileHeader() {
             <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-gray-900">Notifications</span>
+                  <span className="text-sm font-bold text-gray-900">{t('header.notifications')}</span>
                   {count > 0 && <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{count}</span>}
                 </div>
                 {count > 0 && (
                   <button onClick={() => markAllMutation.mutate()} className="text-xs font-semibold text-primary-600">
-                    Mark all read
+                    {t('header.markAllRead')}
                   </button>
                 )}
               </div>
@@ -146,7 +151,7 @@ export default function MobileHeader() {
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center">
                     <Bell size={24} className="mx-auto text-gray-200 mb-2" />
-                    <p className="text-sm text-gray-400">No notifications</p>
+                    <p className="text-sm text-gray-400">{t('header.noNotifications')}</p>
                   </div>
                 ) : notifications.slice(0, 10).map(n => {
                   const hasRoute = !!NOTIF_ROUTE[n.type];

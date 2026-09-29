@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import {
   Plus, Search, X, Stethoscope, Send, Calendar, Clock, XCircle,
 } from 'lucide-react';
@@ -39,6 +40,7 @@ interface SearchDropdownProps {
 }
 
 function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSelect, renderItem, renderSelected }: SearchDropdownProps) {
+  const { t } = useTranslation('patientReports');
   const [q, setQ]       = useState('');
   const dq              = useDebounce(q, 350);
   const [open, setOpen] = useState(false);
@@ -80,7 +82,7 @@ function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSel
           {open && dq.length >= 1 && (
             <ul className="absolute z-40 mt-1 w-full bg-white rounded-2xl shadow-xl border border-gray-100 max-h-52 overflow-y-auto">
               {(results as any[]).length === 0 && !isFetching
-                ? <li className="px-4 py-3 text-sm text-gray-400">No doctors found for "{dq}"</li>
+                ? <li className="px-4 py-3 text-sm text-gray-400">{t('bookDoctor.modal.noDoctorsFound', { query: dq })}</li>
                 : (results as any[]).map((item: any) => (
                   <li key={item.id}
                     onClick={() => { onSelect(item); setOpen(false); setQ(''); }}
@@ -99,6 +101,8 @@ function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSel
 interface BookModalProps { onClose: () => void; onBooked: () => void; }
 
 function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
+  const { t } = useTranslation('patientReports');
+  const { t: tc } = useTranslation('common');
   const [doctor, setDoctor]     = useState<any>(null);
   const [selDate, setSelDate]   = useState<string | null>(null);
   const [selSlot, setSelSlot]   = useState<{ start_time: string; end_time: string } | null>(null);
@@ -121,14 +125,14 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
       start_time: selSlot!.start_time,
       reason: reason.trim() || null,
     }),
-    onSuccess: () => { toast.success(`Appointment requested with Dr. ${doctor.name}!`); onBooked(); onClose(); },
-    onError: (err: any) => setError(err.message || 'Failed to book appointment'),
+    onSuccess: () => { toast.success(t('bookDoctor.modal.bookedSuccess', { doctor: doctor.name })); onBooked(); onClose(); },
+    onError: (err: any) => setError(err.message || t('bookDoctor.modal.errors.bookFailed')),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!doctor)  return setError('Please select a doctor');
-    if (!selSlot) return setError('Please select a date and time');
+    if (!doctor)  return setError(t('bookDoctor.modal.errors.selectDoctor'));
+    if (!selSlot) return setError(t('bookDoctor.modal.errors.selectDateTime'));
     setError('');
     mutation.mutate();
   };
@@ -141,7 +145,7 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
             <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
               <Calendar size={16} className="text-white" />
             </div>
-            <p className="text-sm font-bold text-white">Book a Doctor Appointment</p>
+            <p className="text-sm font-bold text-white">{t('bookDoctor.modal.title')}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white">
             <X size={15} />
@@ -156,8 +160,8 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
           )}
 
           <SearchDropdown
-            label="Doctor *"
-            placeholder="Search by name or specialization…"
+            label={t('bookDoctor.modal.doctorLabel')}
+            placeholder={t('bookDoctor.modal.doctorSearchPlaceholder')}
             fetchFn={userApi.searchDoctors}
             queryKey="patient-search-doctors"
             selected={doctor}
@@ -183,11 +187,11 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
 
           {doctor && (
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Select a Date *</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('bookDoctor.modal.selectDateLabel')}</label>
               {loadingSlots ? (
                 <div className="flex items-center gap-2 py-4 justify-center text-gray-400 text-sm">
                   <span className="w-4 h-4 border-2 border-gray-200 border-t-primary-400 rounded-full animate-spin" />
-                  Loading availability…
+                  {t('bookDoctor.modal.loadingAvailability')}
                 </div>
               ) : (
                 <div className="flex gap-2 overflow-x-auto pb-1">
@@ -214,14 +218,14 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
                 </div>
               )}
               {!loadingSlots && days.every(d => !d.is_available) && (
-                <p className="text-sm text-gray-400 text-center py-3">This doctor has no availability in the next two weeks.</p>
+                <p className="text-sm text-gray-400 text-center py-3">{t('bookDoctor.modal.noAvailability')}</p>
               )}
             </div>
           )}
 
           {selectedDay && (
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Select a Time *</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('bookDoctor.modal.selectTimeLabel')}</label>
               <div className="flex flex-wrap gap-2">
                 {selectedDay.slots.map((s: any) => (
                   <button
@@ -243,9 +247,9 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
           {selSlot && (
             <div>
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-                Reason for Visit <span className="text-gray-300 font-normal normal-case">(optional)</span>
+                {t('bookDoctor.modal.reasonLabel')} <span className="text-gray-300 font-normal normal-case">{t('bookDoctor.modal.optional')}</span>
               </label>
-              <textarea rows={2} className="input text-sm resize-none" placeholder="e.g. Follow-up checkup, persistent headache…"
+              <textarea rows={2} className="input text-sm resize-none" placeholder={t('bookDoctor.modal.reasonPlaceholder')}
                 value={reason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReason(e.target.value)} />
             </div>
           )}
@@ -255,9 +259,9 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
               className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
               {mutation.isPending && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
               <Send size={14} strokeWidth={2.5} />
-              Request Appointment
+              {t('bookDoctor.modal.submitBtn')}
             </button>
-            <button type="button" onClick={onClose} className="btn-secondary px-5">Cancel</button>
+            <button type="button" onClick={onClose} className="btn-secondary px-5">{tc('actions.cancel')}</button>
           </div>
         </form>
       </div>
@@ -265,18 +269,22 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
   );
 }
 
-const STATUS_STYLE: Record<string, { badge: string; label: string; icon: string }> = {
-  pending:   { badge: 'bg-yellow-100 text-yellow-700', label: 'Awaiting Doctor', icon: '⏳' },
-  confirmed: { badge: 'bg-green-100  text-green-700',  label: 'Confirmed',       icon: '✅' },
-  declined:  { badge: 'bg-red-100    text-red-600',    label: 'Declined',        icon: '❌' },
-  cancelled: { badge: 'bg-gray-100   text-gray-500',   label: 'Cancelled',       icon: '🚫' },
-  completed: { badge: 'bg-blue-100   text-blue-700',   label: 'Completed',       icon: '🏁' },
+const STATUS_STYLE: Record<string, { badge: string; icon: string; labelKey: string }> = {
+  pending:   { badge: 'bg-yellow-100 text-yellow-700', labelKey: 'awaitingDoctor', icon: '⏳' },
+  confirmed: { badge: 'bg-green-100  text-green-700',  labelKey: 'confirmed',      icon: '✅' },
+  declined:  { badge: 'bg-red-100    text-red-600',    labelKey: 'declined',       icon: '❌' },
+  cancelled: { badge: 'bg-gray-100   text-gray-500',   labelKey: 'cancelled',      icon: '🚫' },
+  completed: { badge: 'bg-blue-100   text-blue-700',   labelKey: 'completed',      icon: '🏁' },
 };
 
 export default function BookDoctor() {
+  const { t } = useTranslation('patientReports');
+  const { t: tc } = useTranslation('common');
   const [booking, setBooking] = useState(false);
   const [filter, setFilter]   = useState('all');
   const qc = useQueryClient();
+
+  const statusLabel = (key: string) => key === 'awaitingDoctor' ? t('bookDoctor.statusLabels.awaitingDoctor') : tc(`status.${key}`);
 
   const { data: appointments = [], isLoading } = useQuery({
     queryKey: ['appointments'],
@@ -285,8 +293,8 @@ export default function BookDoctor() {
 
   const cancelMutation = useMutation({
     mutationFn: (id: number) => appointmentApi.updateStatus(id, 'cancelled'),
-    onSuccess: () => { toast.success('Appointment cancelled'); qc.invalidateQueries({ queryKey: ['appointments'] }); },
-    onError:   (err: any) => toast.error(err.message || 'Failed to cancel'),
+    onSuccess: () => { toast.success(t('bookDoctor.toast.cancelled')); qc.invalidateQueries({ queryKey: ['appointments'] }); },
+    onError:   (err: any) => toast.error(err.message || t('bookDoctor.toast.cancelFailed')),
   });
 
   const list = appointments as any[];
@@ -303,31 +311,31 @@ export default function BookDoctor() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Book a Doctor</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Find a doctor's available time and request an appointment</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('bookDoctor.pageTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('bookDoctor.pageSubtitle')}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => setBooking(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 rounded-xl shadow-sm hover:opacity-90 transition-opacity">
             <Plus size={15} strokeWidth={2.5} />
-            Book Appointment
+            {t('bookDoctor.bookBtn')}
           </button>
           <select value={filter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilter(e.target.value)} className="input text-sm py-1.5 w-40">
-            <option value="all">All</option>
-            <option value="pending">Awaiting Doctor</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="completed">Completed</option>
-            <option value="declined">Declined</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="all">{t('bookDoctor.filters.all')}</option>
+            <option value="pending">{t('bookDoctor.statusLabels.awaitingDoctor')}</option>
+            <option value="confirmed">{tc('status.confirmed')}</option>
+            <option value="completed">{tc('status.completed')}</option>
+            <option value="declined">{tc('status.declined')}</option>
+            <option value="cancelled">{tc('status.cancelled')}</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Upcoming',  value: upcoming, icon: '📅', bg: 'bg-primary-50 border-primary-100' },
-          { label: 'Total Booked', value: list.length, icon: '🗓️', bg: 'bg-blue-50    border-blue-100'   },
-          { label: 'Completed', value: list.filter(a => a.status === 'completed').length, icon: '🏁', bg: 'bg-green-50  border-green-100'  },
+          { label: t('bookDoctor.stats.upcoming'),  value: upcoming, icon: '📅', bg: 'bg-primary-50 border-primary-100' },
+          { label: t('bookDoctor.stats.totalBooked'), value: list.length, icon: '🗓️', bg: 'bg-blue-50    border-blue-100'   },
+          { label: tc('status.completed'), value: list.filter(a => a.status === 'completed').length, icon: '🏁', bg: 'bg-green-50  border-green-100'  },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
             <span className="text-2xl">{s.icon}</span>
@@ -340,13 +348,13 @@ export default function BookDoctor() {
       {isLoading ? (
         <div className="bg-white rounded-xl border p-12 text-center text-gray-400">
           <span className="w-6 h-6 border-2 border-gray-200 border-t-primary-400 rounded-full animate-spin inline-block mb-2" />
-          <p>Loading appointments…</p>
+          <p>{t('bookDoctor.loading')}</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-gray-200 p-12 text-center">
           <span className="text-4xl block mb-3">🩺</span>
-          <p className="text-gray-600 font-medium">No appointments yet</p>
-          <p className="text-sm text-gray-400 mt-1">Book a doctor's available slot to get started.</p>
+          <p className="text-gray-600 font-medium">{t('bookDoctor.empty.title')}</p>
+          <p className="text-sm text-gray-400 mt-1">{t('bookDoctor.empty.subtitle')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -363,7 +371,7 @@ export default function BookDoctor() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-bold text-gray-900">Dr. {a.doctor_name}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{statusLabel(st.labelKey)}</span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">{a.doctor_specialization || a.doctor_hospital || ''}</p>
                       <p className="text-sm text-gray-600 mt-1 flex items-center gap-3 flex-wrap">
@@ -372,16 +380,16 @@ export default function BookDoctor() {
                       </p>
                       {a.reason && <p className="text-xs text-gray-400 mt-1 italic">"{a.reason}"</p>}
                       {a.status === 'declined' && a.doctor_notes && (
-                        <p className="text-xs text-red-500 mt-1">Doctor's note: {a.doctor_notes}</p>
+                        <p className="text-xs text-red-500 mt-1">{t('bookDoctor.doctorNote', { note: a.doctor_notes })}</p>
                       )}
                     </div>
                   </div>
                   {canCancel && (
                     <button
-                      onClick={() => { if (window.confirm('Cancel this appointment?')) cancelMutation.mutate(a.id); }}
+                      onClick={() => { if (window.confirm(t('bookDoctor.cancelConfirm'))) cancelMutation.mutate(a.id); }}
                       className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 px-2.5 py-1.5 rounded-xl hover:bg-red-100 transition-colors shrink-0"
                     >
-                      <XCircle size={12} strokeWidth={2.5} /> Cancel
+                      <XCircle size={12} strokeWidth={2.5} /> {tc('actions.cancel')}
                     </button>
                   )}
                 </div>

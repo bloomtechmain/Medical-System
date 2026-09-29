@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Clock, XCircle, FlaskConical, ClipboardList, FolderOpen, Phone, ArrowUpRight, ExternalLink, Search, UserRound } from 'lucide-react';
 import { accessRequestApi } from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
@@ -10,22 +11,23 @@ function calcAge(dob: string | null | undefined): number | null {
   return Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
 }
 
-const TYPE_META: Record<string, { label: string; Icon: any; grad: string }> = {
-  lab_reports:      { label:'Lab Reports',             Icon: FlaskConical,  grad:'from-blue-500 to-indigo-600'   },
-  medical_history:  { label:'Medical History',         Icon: ClipboardList, grad:'from-teal-500 to-emerald-600'  },
-  personal_reports: { label:'Personal Health Reports', Icon: FolderOpen,    grad:'from-violet-500 to-purple-600' },
-  contact_info:     { label:'Contact Information',     Icon: Phone,         grad:'from-rose-500 to-pink-600'     },
+const TYPE_META: Record<string, { labelKey: string; Icon: any; grad: string }> = {
+  lab_reports:      { labelKey:'accessRequests.typeMeta.labReports',      Icon: FlaskConical,  grad:'from-blue-500 to-indigo-600'   },
+  medical_history:  { labelKey:'accessRequests.typeMeta.medicalHistory',  Icon: ClipboardList, grad:'from-teal-500 to-emerald-600'  },
+  personal_reports: { labelKey:'accessRequests.typeMeta.personalReports', Icon: FolderOpen,    grad:'from-violet-500 to-purple-600' },
+  contact_info:     { labelKey:'accessRequests.typeMeta.contactInfo',     Icon: Phone,         grad:'from-rose-500 to-pink-600'     },
 };
 
-const STATUS_META: Record<string, { label: string; cls: string; dot: string; Icon: any }> = {
-  pending:  { label:'Awaiting Patient',  cls:'bg-amber-100 text-amber-700',     dot:'bg-amber-400',   Icon: Clock         },
-  accepted: { label:'Access Granted',   cls:'bg-emerald-100 text-emerald-700',  dot:'bg-emerald-400', Icon: CheckCircle2  },
-  declined: { label:'Declined',         cls:'bg-red-100 text-red-600',          dot:'bg-red-400',     Icon: XCircle       },
+const STATUS_META: Record<string, { labelKey: string; cls: string; dot: string; Icon: any }> = {
+  pending:  { labelKey:'accessRequests.statusMeta.pending',  cls:'bg-amber-100 text-amber-700',     dot:'bg-amber-400',   Icon: Clock         },
+  accepted: { labelKey:'accessRequests.statusMeta.accepted', cls:'bg-emerald-100 text-emerald-700',  dot:'bg-emerald-400', Icon: CheckCircle2  },
+  declined: { labelKey:'accessRequests.statusMeta.declined', cls:'bg-red-100 text-red-600',          dot:'bg-red-400',     Icon: XCircle       },
 };
 
 const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
 
 export default function DoctorAccessRequests() {
+  const { t } = useTranslation('doctorCore');
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const debouncedQ = useDebounce(query, 350);
@@ -48,15 +50,15 @@ export default function DoctorAccessRequests() {
   if (isLoading) return (
     <div className="flex items-center justify-center py-32 text-gray-400">
       <span className="w-5 h-5 border-2 border-gray-200 border-t-primary-500 rounded-full animate-spin mr-3" />
-      Loading…
+      {t('dashboard.loading')}
     </div>
   );
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Access Requests</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Requests you have sent to patients for access to their health data</p>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t('accessRequests.pageTitle')}</h1>
+        <p className="text-sm text-gray-400 mt-0.5">{t('accessRequests.pageSubtitle')}</p>
       </div>
 
       {/* Patient search */}
@@ -67,7 +69,7 @@ export default function DoctorAccessRequests() {
           </div>
           <input
             type="text"
-            placeholder="Search by patient name or email…"
+            placeholder={t('dashboard.search.placeholder')}
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all"
@@ -85,12 +87,12 @@ export default function DoctorAccessRequests() {
             {searching ? (
               <div className="flex items-center gap-2 py-4 justify-center text-gray-400 text-sm">
                 <span className="w-4 h-4 border-2 border-gray-200 border-t-primary-400 rounded-full animate-spin" />
-                Searching…
+                {t('dashboard.search.searching')}
               </div>
             ) : (searchResults as any[]).length === 0 ? (
               <div className="text-center py-6 text-gray-400">
                 <UserRound size={28} strokeWidth={1.3} className="mx-auto mb-2 text-gray-200" />
-                <p className="text-sm">No patients found for "<span className="font-medium">{debouncedQ}</span>"</p>
+                <p className="text-sm">{t('dashboard.search.noResults', { query: debouncedQ })}</p>
               </div>
             ) : (
               (searchResults as any[]).map(pt => {
@@ -108,9 +110,9 @@ export default function DoctorAccessRequests() {
                       <p className="text-sm font-bold text-gray-900 truncate">{pt.name}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="text-xs text-gray-400">{pt.email}</span>
-                        {age != null && <span className="text-[10px] font-semibold bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-md">{age} yrs</span>}
+                        {age != null && <span className="text-[10px] font-semibold bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-md">{t('dashboard.search.yrs', { age })}</span>}
                         {pt.blood_type && <span className="text-[10px] font-semibold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md">🩸 {pt.blood_type}</span>}
-                        {pt.allergies && <span className="text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">⚠️ Allergies</span>}
+                        {pt.allergies && <span className="text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">⚠️ {t('dashboard.search.allergiesTag')}</span>}
                       </div>
                     </div>
                     <ArrowUpRight size={14} strokeWidth={2.5} className="text-gray-300 shrink-0" />
@@ -123,7 +125,7 @@ export default function DoctorAccessRequests() {
 
         {debouncedQ.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-1">
-            Search for a patient to view their profile and request access to their data.
+            {t('accessRequests.searchHint')}
           </p>
         )}
       </div>
@@ -131,9 +133,9 @@ export default function DoctorAccessRequests() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label:'Pending',  value:pending,  grad:'from-amber-500 to-orange-500'   },
-          { label:'Accepted', value:accepted, grad:'from-emerald-500 to-teal-500'   },
-          { label:'Declined', value:declined, grad:'from-red-500 to-rose-500'       },
+          { label:t('accessRequests.stats.pending'),  value:pending,  grad:'from-amber-500 to-orange-500'   },
+          { label:t('accessRequests.stats.accepted'), value:accepted, grad:'from-emerald-500 to-teal-500'   },
+          { label:t('accessRequests.stats.declined'), value:declined, grad:'from-red-500 to-rose-500'       },
         ].map(s => (
           <div key={s.label} className="ios-stat-tile relative overflow-hidden">
             <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${s.grad} opacity-10`} />
@@ -152,8 +154,8 @@ export default function DoctorAccessRequests() {
           <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <ClipboardList size={28} strokeWidth={1.3} className="text-gray-300" />
           </div>
-          <p className="font-bold text-gray-500">No requests sent yet</p>
-          <p className="text-sm text-gray-400 mt-1">Use the search above to find a patient and request access to their data.</p>
+          <p className="font-bold text-gray-500">{t('accessRequests.empty.title')}</p>
+          <p className="text-sm text-gray-400 mt-1">{t('accessRequests.empty.subtitle')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -169,22 +171,25 @@ export default function DoctorAccessRequests() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-bold text-gray-900">{tm.label}</p>
+                    <p className="text-sm font-bold text-gray-900">{t(tm.labelKey)}</p>
                     <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${sm.cls}`}>
                       <StatusIcon size={9} strokeWidth={2.5} />
-                      {sm.label}
+                      {t(sm.labelKey)}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Patient: <span className="font-semibold text-gray-700">{r.patient_name}</span>
+                    {t('accessRequests.listItem.patientLabel')} <span className="font-semibold text-gray-700">{r.patient_name}</span>
                   </p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Sent {fmtDate(r.created_at)}{r.responded_at ? ` · Responded ${fmtDate(r.responded_at)}` : ''}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    {t('accessRequests.listItem.sent', { date: fmtDate(r.created_at) })}
+                    {r.responded_at ? ` · ${t('accessRequests.listItem.responded', { date: fmtDate(r.responded_at) })}` : ''}
+                  </p>
                 </div>
                 <button
                   onClick={() => navigate(`/doctor/patients/${r.patient_id}`)}
                   className="flex items-center gap-1 text-xs font-bold text-primary-600 bg-primary-50 px-2.5 py-1.5 rounded-xl hover:bg-primary-100 transition-colors shrink-0"
                 >
-                  View <ExternalLink size={11} strokeWidth={2.5} />
+                  {t('accessRequests.listItem.view')} <ExternalLink size={11} strokeWidth={2.5} />
                 </button>
               </div>
             );

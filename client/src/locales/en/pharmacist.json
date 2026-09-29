@@ -1,0 +1,278 @@
+{
+  "dashboard": {
+    "welcome": "Welcome,",
+    "defaultName": "Pharmacist",
+    "defaultPharmacyName": "Pharmacy",
+    "portalSuffix": "Core Health Portal",
+    "stats": {
+      "totalMedicines": "Total Medicines",
+      "lowStockItems": "Low Stock Items",
+      "expiredItems": "Expired Items",
+      "todaysRevenue": "Today's Revenue",
+      "salesCount": "{{count}} sales"
+    },
+    "quickActions": {
+      "newSale": "+ New Sale",
+      "addMedicine": "+ Add Medicine",
+      "newOrder": "+ New Order"
+    },
+    "searchPlaceholder": "Jump to a medicine...",
+    "inStock": "{{count}} in stock",
+    "salesTrendTitle": "Sales Trend (14 days)",
+    "noSalesData": "No sales data yet.",
+    "revenueProfitTitle": "Revenue & Profit",
+    "todayVsYesterday": "Today vs Yesterday",
+    "thisWeekVsLast": "This Week vs Last",
+    "profitMarginTitle": "Profit Margin (30 days)",
+    "revenueCostLine": "Revenue {{revenue}} · Cost {{cost}}",
+    "lowStockAlertsTitle": "Low Stock Alerts",
+    "allStockHealthy": "All stock levels are healthy.",
+    "suggestReorder": "Suggest reorder: {{count}}",
+    "itemsLeft": "{{count}} left",
+    "expiringSoonTitle": "Expiring Soon (30 days)",
+    "nothingExpiringSoon": "Nothing expiring soon.",
+    "daysLeft": "{{count}}d left",
+    "topSellingTitle": "Top Selling Medicines (30 days)",
+    "noSalesPeriod": "No sales in this period.",
+    "unitsSold": "{{count}} units sold",
+    "pendingOrdersTitle": "Pending Orders",
+    "noPendingOrders": "No pending orders.",
+    "markReceived": "Mark Received",
+    "recentActivityTitle": "Recent Activity",
+    "noActivityYet": "No activity yet.",
+    "walkInSale": "Walk-in sale",
+    "orderReceivedFrom": "Order received — {{supplier}}",
+    "defaultSupplier": "Supplier",
+    "pharmacyInfoTitle": "Pharmacy Information",
+    "fields": {
+      "pharmacyName": "Pharmacy Name",
+      "licenseNo": "License No.",
+      "experience": "Experience",
+      "experienceYears": "{{count}} years",
+      "specialization": "Specialization"
+    },
+    "toast": {
+      "orderReceived": "Order received — stock updated",
+      "orderReceiveFailed": "Failed to receive order"
+    }
+  },
+  "consultations": {
+    "pageTitle": "Assigned Prescriptions",
+    "pageDescription": "Prescriptions assigned to your pharmacy by doctors",
+    "filter": {
+      "all": "All",
+      "pending": "Pending",
+      "dispensed": "Dispensed"
+    },
+    "status": {
+      "pending": "Pending",
+      "dispensed": "Dispensed",
+      "completed": "Completed"
+    },
+    "stats": {
+      "totalAssigned": "Total Assigned",
+      "pending": "Pending",
+      "dispensed": "Dispensed"
+    },
+    "loading": "Loading prescriptions...",
+    "emptyTitleFiltered": "No {{filter}} prescriptions",
+    "emptyTitleAll": "No prescriptions",
+    "emptySubtitle": "Prescriptions assigned by doctors will appear here.",
+    "doctorLabel": "Doctor",
+    "doctorPrefix": "Dr. {{name}}",
+    "dxPrefix": "Dx: {{diagnosis}}",
+    "medicinesCount": "{{count}} medicines",
+    "rxImage": "Rx Image",
+    "dispenseButton": "Dispense ✅",
+    "toast": {
+      "dispensed": "Marked as dispensed — patient notified!",
+      "updateFailed": "Failed to update status",
+      "loadFailed": "Failed to load"
+    },
+    "modal": {
+      "title": "Assigned Prescription",
+      "patient": "Patient",
+      "visitDate": "Visit Date",
+      "patientEmail": "Patient Email",
+      "healthInfoTitle": "⚠️ Patient Health Info",
+      "blood": "Blood:",
+      "allergies": "Allergies:",
+      "symptoms": "Symptoms",
+      "diagnosis": "Diagnosis",
+      "treatment": "Treatment",
+      "prescriptionImage": "Prescription Image",
+      "clickToOpenFullSize": "Click to open full size",
+      "medicinesToDispense": "Medicines to Dispense ({{count}})",
+      "noMedicinesListed": "No medicines listed.",
+      "source": {
+        "ocr": "OCR",
+        "manual": "Manual"
+      },
+      "hideOcr": "Hide raw OCR text",
+      "showOcr": "Show raw OCR text",
+      "markDispensedButton": "Mark as Dispensed — Notify Patient",
+      "dispenseNote": "This will notify the patient that their medicines are ready to collect.",
+      "dispensedNote": "Medicines dispensed · Patient has been notified"
+    }
+  },
+  "medicines": {
+    "pageTitle": "Medicines",
+    "pageDescription": "Manage medicine inventory",
+    "addButton": "+ Add Medicine",
+    "searchPlaceholder": "Search medicines...",
+    "columns": {
+      "category": "Category",
+      "stock": "Stock",
+      "expiry": "Expiry"
+    },
+    "modal": {
+      "editTitle": "Edit Medicine",
+      "addTitle": "Add Medicine",
+      "name": "Name *",
+      "genericName": "Generic Name",
+      "category": "Category",
+      "unit": "Unit",
+      "units": {
+        "tablet": "Tablet",
+        "capsule": "Capsule",
+        "syrup": "Syrup",
+        "injection": "Injection",
+        "cream": "Cream",
+        "drops": "Drops"
+      },
+      "sellingPrice": "Selling Price (LKR) *",
+      "costPrice": "Cost Price (LKR)",
+      "stockQuantity": "Stock Quantity",
+      "reorderLevel": "Reorder Level",
+      "expiryDate": "Expiry Date",
+      "supplier": "Supplier",
+      "noneOption": "— None —",
+      "description": "Description"
+    },
+    "deleteDialog": {
+      "title": "Delete Medicine",
+      "message": "Are you sure you want to delete \"{{name}}\"?"
+    },
+    "toast": {
+      "updated": "Medicine updated",
+      "added": "Medicine added",
+      "saveFailed": "Failed to save",
+      "deleted": "Medicine deleted",
+      "deleteFailed": "Failed to delete"
+    }
+  },
+  "suppliers": {
+    "pageTitle": "Suppliers",
+    "addButton": "+ Add Supplier",
+    "columns": {
+      "contactPerson": "Contact Person"
+    },
+    "modal": {
+      "editTitle": "Edit Supplier",
+      "addTitle": "Add Supplier",
+      "name": "Name *",
+      "contactPerson": "Contact Person",
+      "address": "Address"
+    },
+    "deleteDialog": {
+      "title": "Delete Supplier",
+      "message": "Delete \"{{name}}\"?"
+    },
+    "toast": {
+      "updated": "Supplier updated",
+      "added": "Supplier added",
+      "saveFailed": "Failed to save",
+      "deleted": "Supplier deleted"
+    }
+  },
+  "orders": {
+    "pageTitle": "Purchase Orders",
+    "newButton": "+ New Order",
+    "columns": {
+      "supplier": "Supplier"
+    },
+    "status": {
+      "pending": "Pending",
+      "received": "Received",
+      "cancelled": "Cancelled"
+    },
+    "markReceived": "Mark Received",
+    "modal": {
+      "title": "New Purchase Order",
+      "supplier": "Supplier *",
+      "selectSupplier": "Select supplier",
+      "notes": "Notes",
+      "orderItems": "Order Items",
+      "addItem": "+ Add Item",
+      "selectMedicine": "Select medicine",
+      "qtyPlaceholder": "Qty",
+      "unitCostPlaceholder": "Unit cost",
+      "placeOrder": "Place Order",
+      "placing": "Placing..."
+    },
+    "toast": {
+      "placed": "Order placed",
+      "createFailed": "Failed to create order",
+      "received": "Order received — stock updated",
+      "receiveFailed": "Failed to receive order"
+    }
+  },
+  "sales": {
+    "pageTitle": "Sales",
+    "pageDescription": "Point of sale & sales history",
+    "newButton": "+ New Sale",
+    "columns": {
+      "customer": "Customer",
+      "walkIn": "Walk-in",
+      "payment": "Payment",
+      "dateTime": "Date & Time",
+      "soldBy": "Sold By"
+    },
+    "payment": {
+      "cash": "Cash",
+      "card": "Card",
+      "online": "Online"
+    },
+    "modal": {
+      "title": "New Sale",
+      "customerName": "Customer Name",
+      "customerPlaceholder": "Walk-in customer",
+      "paymentMethod": "Payment Method",
+      "items": "Items",
+      "addItem": "+ Add Item",
+      "selectMedicine": "Select medicine",
+      "stockSuffix": "(Stock: {{count}})",
+      "qtyPlaceholder": "Qty",
+      "unitPricePlaceholder": "Unit price",
+      "total": "Total: {{amount}}",
+      "complete": "Complete Sale",
+      "processing": "Processing..."
+    },
+    "toast": {
+      "recorded": "Sale recorded",
+      "recordFailed": "Failed to record sale"
+    }
+  },
+  "inventory": {
+    "pageTitle": "Inventory",
+    "pageDescription": "Stock levels and alerts",
+    "stats": {
+      "totalMedicines": "Total Medicines",
+      "lowStock": "Low Stock",
+      "expired": "Expired",
+      "inventoryValue": "Inventory Value"
+    },
+    "columns": {
+      "medicine": "Medicine",
+      "category": "Category",
+      "currentStock": "Current Stock",
+      "reorderLevel": "Reorder Level",
+      "stock": "Stock",
+      "expiryDate": "Expiry Date"
+    },
+    "lowStockTitle": "Low Stock Items",
+    "expiringTitle": "Expiring Within 60 Days",
+    "noLowStock": "No low stock items.",
+    "noExpiring": "No items expiring soon."
+  }
+}

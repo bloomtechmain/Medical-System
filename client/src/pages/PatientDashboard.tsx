@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   Stethoscope, CheckCircle2, Pill,
   ArrowUpRight, Download, Calendar, Building2, ChevronDown,
@@ -13,13 +15,13 @@ import { formatDate } from '../utils/helpers';
 import MiniCalendar from '../components/common/MiniCalendar';
 import VitalsOverview from '../components/common/VitalsOverview';
 
-function downloadHealthReport(me: any, profile: any, consultations: any[]) {
+function downloadHealthReport(me: any, profile: any, consultations: any[], t: TFunction) {
   const doc   = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageW  = doc.internal.pageSize.getWidth();
   const margin = 20;
   const colW   = pageW - margin * 2;
   let y = 0;
-  const val = (v: any) => v || 'Not provided';
+  const val = (v: any) => v || t('pdf.notProvided');
   const now = new Date();
 
   doc.setFillColor(13, 148, 136);
@@ -33,10 +35,10 @@ function downloadHealthReport(me: any, profile: any, consultations: any[]) {
   doc.text('by BloomTech', margin, 22);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
-  doc.text('Patient Health Report', margin, 32);
+  doc.text(t('pdf.title'), margin, 32);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text(`Generated: ${now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}  ${now.toLocaleTimeString()}`, pageW - margin, 32, { align: 'right' });
+  doc.text(t('pdf.generatedLabel', { date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }), time: now.toLocaleTimeString() }), pageW - margin, 32, { align: 'right' });
   y = 48;
 
   const section = (title: string) => {
@@ -70,47 +72,47 @@ function downloadHealthReport(me: any, profile: any, consultations: any[]) {
   doc.setTextColor(13, 148, 136);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text(me?.name || 'Patient', margin + 6, y + 9.5);
+  doc.text(me?.name || t('pdf.patientRole'), margin + 6, y + 9.5);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(15, 118, 110);
-  doc.text('Patient  ·  Core Health ID: #' + (me?.id || '—'), pageW - margin - 3, y + 9.5, { align: 'right' });
+  doc.text(t('pdf.patientRole') + '  ·  ' + t('pdf.idLine', { id: me?.id || '—' }), pageW - margin - 3, y + 9.5, { align: 'right' });
   y += 20;
 
-  section('Personal Information');
-  row('Full Name',     me?.name);
-  row('Email',         me?.email);
-  row('Phone',         profile?.phone);
-  row('Date of Birth', profile?.date_of_birth ? formatDate(profile.date_of_birth) : null);
-  row('Gender',        profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : null);
-  row('Address',       profile?.address);
+  section(t('pdf.sections.personal'));
+  row(t('pdf.fields.fullName'), me?.name);
+  row(t('pdf.fields.email'),    me?.email);
+  row(t('pdf.fields.phone'),    profile?.phone);
+  row(t('pdf.fields.dob'),      profile?.date_of_birth ? formatDate(profile.date_of_birth) : null);
+  row(t('pdf.fields.gender'),   profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : null);
+  row(t('pdf.fields.address'),  profile?.address);
   divider();
 
-  section('Health Information');
-  row('Blood Type',         profile?.blood_type);
-  row('Allergies',          profile?.allergies, !!(profile?.allergies && profile.allergies !== 'None'));
-  row('Chronic Conditions', profile?.chronic_conditions);
+  section(t('pdf.sections.health'));
+  row(t('pdf.fields.bloodType'),         profile?.blood_type);
+  row(t('pdf.fields.allergies'),         profile?.allergies, !!(profile?.allergies && profile.allergies !== 'None'));
+  row(t('pdf.fields.chronicConditions'), profile?.chronic_conditions);
   divider();
 
-  section('Emergency Contact');
-  row('Contact Name',  profile?.emergency_contact_name);
-  row('Contact Phone', profile?.emergency_contact_phone);
+  section(t('pdf.sections.emergency'));
+  row(t('pdf.fields.contactName'),  profile?.emergency_contact_name);
+  row(t('pdf.fields.contactPhone'), profile?.emergency_contact_phone);
   divider();
 
   if (consultations?.length) {
-    section('Disease & Treatment History');
+    section(t('pdf.sections.history'));
     consultations.slice(0, 10).forEach((c: any) => {
       if (y > 260) { doc.addPage(); y = 20; }
       doc.setTextColor(15, 118, 110);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
-      doc.text(`${formatDate(c.visit_date)} — ${c.diagnosis || c.sick_description || 'Visit'}`, margin + 3, y + 4);
+      doc.text(`${formatDate(c.visit_date)} — ${c.diagnosis || c.sick_description || t('pdf.visitFallback')}`, margin + 3, y + 4);
       y += 7;
       if (c.treatment_description) {
         doc.setTextColor(107, 114, 128);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
-        const lines = doc.splitTextToSize(`Treatment: ${c.treatment_description}`, colW - 10);
+        const lines = doc.splitTextToSize(t('pdf.treatmentLine', { text: c.treatment_description }), colW - 10);
         lines.slice(0, 2).forEach((line: string) => { doc.text(line, margin + 6, y + 3); y += 5; });
       }
       y += 2;
@@ -124,7 +126,7 @@ function downloadHealthReport(me: any, profile: any, consultations: any[]) {
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
-  doc.text('Core Health by BloomTech  ·  Confidential Medical Record  ·  For authorized use only', pageW / 2, pageH - 6, { align: 'center' });
+  doc.text(`Core Health by BloomTech  ·  ${t('pdf.footerConfidential')}  ·  ${t('pdf.footerAuthorized')}`, pageW / 2, pageH - 6, { align: 'center' });
 
   doc.setTextColor(200, 200, 200);
   doc.setFont('helvetica', 'bold');
@@ -142,31 +144,35 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{children}</h2>;
 }
 
-const STATUS_META: Record<string, { label: string; bg: string; dot: string }> = {
-  active:     { label: 'Active',     bg: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-400' },
-  dispensed:  { label: 'Dispensed',  bg: 'bg-blue-100   text-blue-700   border-blue-200',   dot: 'bg-blue-400'   },
-  completed:  { label: 'Completed',  bg: 'bg-green-100  text-green-700  border-green-200',  dot: 'bg-green-400'  },
+const STATUS_META: Record<string, { bg: string; dot: string }> = {
+  active:     { bg: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-400' },
+  dispensed:  { bg: 'bg-blue-100   text-blue-700   border-blue-200',   dot: 'bg-blue-400'   },
+  completed:  { bg: 'bg-green-100  text-green-700  border-green-200',  dot: 'bg-green-400'  },
 };
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation('patientDashboard');
+  const { t: tc } = useTranslation('common');
   const m = STATUS_META[status] || STATUS_META.active;
+  const label = status === 'dispensed' ? t('shared.dispensed') : status === 'completed' ? tc('status.completed') : tc('status.active');
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${m.bg}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
-      {m.label}
+      {label}
     </span>
   );
 }
 
 function TreatmentFlow({ consultation }: { consultation: any }) {
+  const { t } = useTranslation('patientDashboard');
   const steps = [
-    { label: 'Symptom',    done: !!consultation.sick_description,      icon: '🤒' },
-    { label: 'Diagnosed',  done: !!consultation.diagnosis,              icon: '🔍' },
-    { label: 'Treated',    done: !!consultation.treatment_description,  icon: '💉' },
+    { label: t('shared.steps.symptom'),    done: !!consultation.sick_description,      icon: '🤒' },
+    { label: t('shared.steps.diagnosed'),  done: !!consultation.diagnosis,              icon: '🔍' },
+    { label: t('shared.steps.treated'),    done: !!consultation.treatment_description,  icon: '💉' },
     {
-      label: consultation.status === 'completed' ? 'Resolved'
-           : consultation.status === 'dispensed' ? 'Dispensed'
-           : 'Ongoing',
+      label: consultation.status === 'completed' ? t('shared.steps.resolved')
+           : consultation.status === 'dispensed' ? t('shared.steps.dispensed')
+           : t('shared.steps.ongoing'),
       done:  consultation.status === 'completed' || consultation.status === 'dispensed',
       icon:  consultation.status === 'completed' ? '✅' : consultation.status === 'dispensed' ? '💊' : '⏳',
     },
@@ -230,12 +236,15 @@ const DASH_PALETTES = [
 ];
 
 function DashboardDoctorTiles({ consultations }: { consultations: any[] }) {
+  const { t } = useTranslation('patientDashboard');
+  const { t: tc } = useTranslation('common');
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const selfRecordedLabel = t('shared.fallbacks.selfRecorded');
 
   const doctorGroups = useMemo(() => {
     const groups: Record<string, any> = {};
     consultations.forEach((c: any) => {
-      const key = c.doctor_display_name || c.doctor_name || 'Self-Recorded';
+      const key = c.doctor_display_name || c.doctor_name || selfRecordedLabel;
       if (!groups[key]) groups[key] = { doctorKey:key, isSystemDoctor:!!c.doctor_display_name, hospital:'', hasActive:false, consultations:[] };
       groups[key].consultations.push(c);
       if (c.hospital_clinic) groups[key].hospital = c.hospital_clinic;
@@ -245,17 +254,17 @@ function DashboardDoctorTiles({ consultations }: { consultations: any[] }) {
       if (a.hasActive !== b.hasActive) return a.hasActive ? -1 : 1;
       return new Date(b.consultations[0]?.visit_date||0).getTime() - new Date(a.consultations[0]?.visit_date||0).getTime();
     });
-  }, [consultations]);
+  }, [consultations, selfRecordedLabel]);
 
   if (doctorGroups.length === 0) return null;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <SectionTitle>Consultations by Doctor</SectionTitle>
+        <SectionTitle>{t('sectionTitles.consultationsByDoctor')}</SectionTitle>
         <Link to="/patient/consultations"
           className="flex items-center gap-1 text-xs font-bold text-primary-600 hover:text-primary-700 transition-colors">
-          View all &amp; manage
+          {t('doctorTiles.viewAllManage')}
           <ArrowUpRight size={12} strokeWidth={2.5} />
         </Link>
       </div>
@@ -275,7 +284,7 @@ function DashboardDoctorTiles({ consultations }: { consultations: any[] }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-bold text-sm leading-snug">
-                      {group.doctorKey === 'Self-Recorded' ? 'Self-Recorded' : `Dr. ${group.doctorKey}`}
+                      {group.doctorKey === selfRecordedLabel ? selfRecordedLabel : `${t('shared.doctorPrefix')} ${group.doctorKey}`}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {group.hospital && (
@@ -285,11 +294,11 @@ function DashboardDoctorTiles({ consultations }: { consultations: any[] }) {
                       )}
                       <span className="flex items-center gap-1 text-white/70 text-[11px]">
                         <Calendar size={9} strokeWidth={2} />
-                        {group.consultations.length} visit{group.consultations.length !== 1 ? 's' : ''}
+                        {t('doctorTiles.visitCount', { count: group.consultations.length })}
                       </span>
                       {group.hasActive && (
                         <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-400/30 text-amber-100 border border-amber-200/30 px-2 py-0.5 rounded-full">
-                          <span className="w-1 h-1 bg-amber-300 rounded-full animate-pulse" />Active
+                          <span className="w-1 h-1 bg-amber-300 rounded-full animate-pulse" />{tc('status.active')}
                         </span>
                       )}
                     </div>
@@ -302,12 +311,12 @@ function DashboardDoctorTiles({ consultations }: { consultations: any[] }) {
                   const isOpen = expandedId === c.id;
                   const meds   = c.medicines || [];
                   const wfSteps = [
-                    { done:!!c.sick_description,     Icon:Thermometer,   label:'Symptom'   },
-                    { done:!!c.diagnosis,             Icon:Stethoscope,   label:'Diagnosed' },
-                    { done:!!c.treatment_description, Icon:Microscope,    label:'Treated'   },
+                    { done:!!c.sick_description,     Icon:Thermometer,   label:t('shared.steps.symptom')   },
+                    { done:!!c.diagnosis,             Icon:Stethoscope,   label:t('shared.steps.diagnosed') },
+                    { done:!!c.treatment_description, Icon:Microscope,    label:t('shared.steps.treated')   },
                     { done: c.status !== 'active',
                       Icon: c.status==='completed' ? CheckCircle2 : c.status==='dispensed' ? Package : Clock,
-                      label: c.status==='completed' ? 'Resolved' : c.status==='dispensed' ? 'Dispensed' : 'Ongoing' },
+                      label: c.status==='completed' ? t('shared.steps.resolved') : c.status==='dispensed' ? t('shared.steps.dispensed') : t('shared.steps.ongoing') },
                   ];
 
                   return (
@@ -412,6 +421,7 @@ function DashboardDoctorTiles({ consultations }: { consultations: any[] }) {
 }
 
 export default function PatientDashboard() {
+  const { t } = useTranslation('patientDashboard');
   const { user } = useAuth();
   const [downloading, setDownloading]     = useState(false);
   const [expandedDisease, setExpandedDisease] = useState<number | null>(null);
@@ -590,7 +600,7 @@ export default function PatientDashboard() {
 
   const handleDownload = () => {
     setDownloading(true);
-    try { downloadHealthReport(me, profile, diseases); }
+    try { downloadHealthReport(me, profile, diseases, t); }
     finally { setTimeout(() => setDownloading(false), 800); }
   };
 
