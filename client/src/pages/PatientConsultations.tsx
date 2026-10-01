@@ -454,13 +454,13 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
               <p className="text-xs text-gray-400 text-center py-3 border-2 border-dashed border-gray-100 rounded-xl">{t('selfRecordModal.medicines.none')}</p>
             ) : meds.map((m: any, i: number) => (
               <div key={i} className="grid grid-cols-12 gap-2 bg-gray-50 rounded-2xl p-2.5 border border-gray-100 mb-2">
-                {[['col-span-4','medicine_name',t('selfRecordModal.medicines.medicine')],['col-span-2','dosage',t('selfRecordModal.medicines.dosage')],['col-span-3','frequency',t('selfRecordModal.medicines.frequency')],['col-span-2','duration',t('selfRecordModal.medicines.duration')]].map(([col, k, ph]) => (
+                {[['col-span-12 sm:col-span-4','medicine_name',t('selfRecordModal.medicines.medicine')],['col-span-6 sm:col-span-2','dosage',t('selfRecordModal.medicines.dosage')],['col-span-6 sm:col-span-2','frequency',t('selfRecordModal.medicines.frequency')],['col-span-8 sm:col-span-2','duration',t('selfRecordModal.medicines.duration')]].map(([col, k, ph]) => (
                   <div key={k} className={col}>
                     <input type="text" placeholder={ph} value={m[k]} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updMed(i, k, e.target.value)}
                       className="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-400" />
                   </div>
                 ))}
-                <div className="col-span-1 flex items-center justify-center">
+                <div className="col-span-4 sm:col-span-2 flex items-center justify-center">
                   <button type="button" onClick={() => removeMed(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50">
                     <X size={12} strokeWidth={2.5} />
                   </button>
@@ -563,13 +563,13 @@ function EditModal({ consultation, onClose, onSave, isPending }: EditModalProps)
             </div>
             {meds.map((m: any, i: number) => (
               <div key={i} className="grid grid-cols-12 gap-2 bg-gray-50 rounded-2xl p-2.5 border border-gray-100 mb-2">
-                {[['col-span-4','medicine_name',t('editModal.medicines.medicine')],['col-span-2','dosage',t('editModal.medicines.dosage')],['col-span-3','frequency',t('editModal.medicines.frequency')],['col-span-2','duration',t('editModal.medicines.duration')]].map(([col, k, ph]) => (
+                {[['col-span-12 sm:col-span-4','medicine_name',t('editModal.medicines.medicine')],['col-span-6 sm:col-span-2','dosage',t('editModal.medicines.dosage')],['col-span-6 sm:col-span-2','frequency',t('editModal.medicines.frequency')],['col-span-8 sm:col-span-2','duration',t('editModal.medicines.duration')]].map(([col, k, ph]) => (
                   <div key={k} className={col}>
                     <input type="text" placeholder={ph} value={m[k]} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updMed(i, k, e.target.value)}
                       className="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-400" />
                   </div>
                 ))}
-                <div className="col-span-1 flex items-center justify-center">
+                <div className="col-span-4 sm:col-span-2 flex items-center justify-center">
                   <button type="button" onClick={() => removeMed(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50">
                     <X size={12} strokeWidth={2.5} />
                   </button>

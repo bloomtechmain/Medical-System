@@ -80,7 +80,7 @@ export default function Orders() {
 
       <Modal isOpen={formModal.isOpen} onClose={formModal.close} title={t('orders.modal.title')} size="xl">
         <form onSubmit={handleSubmit((d: any) => createMutation.mutate(d))} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">{t('orders.modal.supplier')}</label>
               <select className="input" {...register('supplier_id', { required: true })}>
@@ -105,19 +105,19 @@ export default function Orders() {
             <div className="space-y-2">
               {fields.map((field, i) => (
                 <div key={field.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-5">
+                  <div className="col-span-12 sm:col-span-5">
                     <select className="input" {...register(`items.${i}.medicine_id`, { required: true })}>
                       <option value="">{t('orders.modal.selectMedicine')}</option>
                       {(medicines as any[]).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-5 sm:col-span-3">
                     <input type="number" className="input" placeholder={t('orders.modal.qtyPlaceholder')} min={1} {...register(`items.${i}.quantity`, { required: true, min: 1 })} />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-5 sm:col-span-3">
                     <input type="number" step="0.01" className="input" placeholder={t('orders.modal.unitCostPlaceholder')} {...register(`items.${i}.unit_cost`, { required: true })} />
                   </div>
-                  <div className="col-span-1 flex justify-center">
+                  <div className="col-span-2 sm:col-span-1 flex justify-center">
                     {fields.length > 1 && (
                       <button type="button" onClick={() => remove(i)} className="text-red-400 hover:text-red-600 text-lg">&times;</button>
                     )}

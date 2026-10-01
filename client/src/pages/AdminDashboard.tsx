@@ -124,7 +124,7 @@ export default function AdminDashboard() {
             const rows = [];
             for (let i = 0; i < userCards.length; i += 2) rows.push(userCards.slice(i, i + 2));
             return rows.map((row, i) => (
-              <div key={i} className="grid grid-cols-2 divide-x divide-gray-100">
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-gray-100">
                 {row.map((card) => {
                   const Icon = card.icon;
                   return (
@@ -160,7 +160,7 @@ export default function AdminDashboard() {
             const rows = [];
             for (let i = 0; i < orgCards.length; i += 2) rows.push(orgCards.slice(i, i + 2));
             return rows.map((row, i) => (
-              <div key={i} className={`grid gap-x-0 divide-x divide-gray-100 ${row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div key={i} className={`grid gap-x-0 divide-x divide-gray-100 ${row.length === 2 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
                 {row.map((card) => (
                   <div key={card.label} className="flex items-center gap-3 px-4 py-3 min-w-0">
                     <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-lg ${card.color}`}>{card.emoji}</span>
@@ -216,7 +216,7 @@ export default function AdminDashboard() {
             const rows = [];
             for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2));
             return rows.map((row, i) => (
-              <div key={i} className={`grid divide-x divide-gray-100 ${row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div key={i} className={`grid divide-x divide-gray-100 ${row.length === 2 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
                 {row.map((item) => {
                   const Icon = item.icon;
                   return (

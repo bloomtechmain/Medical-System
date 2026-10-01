@@ -126,7 +126,7 @@ export default function PharmacistDashboard() {
             const rows = [];
             for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
             return rows.map((row, i) => (
-              <div key={i} className="grid grid-cols-2 divide-x divide-white/10 max-w-2xl">
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10 max-w-2xl">
                 {row.map((c) => (
                   <Link
                     to={statLinks[c.key]}

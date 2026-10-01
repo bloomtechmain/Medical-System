@@ -100,7 +100,7 @@ export default function ClinicDashboard() {
             const rows = [];
             for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
             return rows.map((row, i) => (
-              <div key={i} className="grid grid-cols-2 divide-x divide-white/10 max-w-2xl">
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10 max-w-2xl">
                 {row.map(({ label, value, icon: Icon }) => (
                   <div key={label} className="flex items-center gap-3 px-6 py-3 min-w-0">
                     <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
