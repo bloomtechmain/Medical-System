@@ -616,7 +616,7 @@ export default function DoctorDashboard() {
             const rows = [];
             for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
             return rows.map((row, i) => (
-              <div key={i} className={`grid gap-x-6 divide-x divide-gray-100 py-2.5 first:pt-0 last:pb-0 ${row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div key={i} className={`grid gap-x-6 divide-x divide-gray-100 py-2.5 first:pt-0 last:pb-0 ${row.length === 2 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
                 {row.map(({ label, value }) => (
                   <div key={label} className="flex justify-between text-sm gap-3 min-w-0 pl-3 first:pl-0">
                     <span className="text-gray-400 shrink-0">{label}</span>

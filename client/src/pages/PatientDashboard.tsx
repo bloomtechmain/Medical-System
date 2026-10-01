@@ -676,7 +676,7 @@ export default function PatientDashboard() {
                 const rows = [];
                 for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
                 return rows.map((row, i) => (
-                  <div key={i} className="grid grid-cols-2 divide-x divide-white/10">
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10">
                     {row.map((s) => (
                       <div key={s.label} className="grid grid-cols-[100px_1fr] items-center gap-3 px-6 py-3 min-w-0">
                         <span className="text-sm text-primary-100">{s.label}</span>

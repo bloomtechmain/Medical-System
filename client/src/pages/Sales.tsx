@@ -70,7 +70,7 @@ export default function Sales() {
 
       <Modal isOpen={formModal.isOpen} onClose={formModal.close} title={t('sales.modal.title')} size="xl">
         <form onSubmit={handleSubmit((d: any) => createMutation.mutate(d))} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">{t('sales.modal.customerName')}</label>
               <input className="input" placeholder={t('sales.modal.customerPlaceholder')} {...register('customer_name')} />
@@ -96,7 +96,7 @@ export default function Sales() {
             <div className="space-y-2">
               {fields.map((field, i) => (
                 <div key={field.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-5">
+                  <div className="col-span-12 sm:col-span-5">
                     <select className="input" {...register(`items.${i}.medicine_id`, { required: true })}>
                       <option value="">{t('sales.modal.selectMedicine')}</option>
                       {(medicines as any[]).map((m) => (
@@ -104,13 +104,13 @@ export default function Sales() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-5 sm:col-span-3">
                     <input type="number" className="input" placeholder={t('sales.modal.qtyPlaceholder')} min={1} {...register(`items.${i}.quantity`, { required: true, min: 1 })} />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-5 sm:col-span-3">
                     <input type="number" step="0.01" className="input" placeholder={t('sales.modal.unitPricePlaceholder')} {...register(`items.${i}.unit_price`, { required: true })} />
                   </div>
-                  <div className="col-span-1 flex justify-center">
+                  <div className="col-span-2 sm:col-span-1 flex justify-center">
                     {fields.length > 1 && (
                       <button type="button" onClick={() => remove(i)} className="text-red-400 hover:text-red-600 text-lg">&times;</button>
                     )}

@@ -137,7 +137,7 @@ export default function LaboratoryDashboard() {
             const rows = [];
             for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
             return rows.map((row, i) => (
-              <div key={i} className="grid grid-cols-2 divide-x divide-white/10 max-w-2xl">
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10 max-w-2xl">
                 {row.map((c) => (
                   <div key={c.label} className="flex items-center gap-3 px-6 py-3 min-w-0">
                     <span className="flex-1 text-sm text-cyan-100 truncate">{c.label}</span>

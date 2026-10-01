@@ -349,10 +349,10 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
                 {medicines.map((m, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center p-2.5 bg-gray-50 rounded-lg border border-gray-200">
                     <input className="input text-sm py-1.5 col-span-12 sm:col-span-4" placeholder={t('consultations.newModal.medicineNamePlaceholder')} value={m.medicine_name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'medicine_name', e.target.value)} />
-                    <input className="input text-sm py-1.5 col-span-4 sm:col-span-2" placeholder={t('consultations.newModal.dosagePlaceholder')} value={m.dosage} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'dosage', e.target.value)} />
-                    <input className="input text-sm py-1.5 col-span-4 sm:col-span-2" placeholder={t('consultations.newModal.frequencyPlaceholder')} value={m.frequency} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'frequency', e.target.value)} />
-                    <input className="input text-sm py-1.5 col-span-3 sm:col-span-2" placeholder={t('consultations.newModal.durationPlaceholder')} value={m.duration} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'duration', e.target.value)} />
-                    <div className="col-span-1 sm:col-span-2 flex justify-end">
+                    <input className="input text-sm py-1.5 col-span-6 sm:col-span-2" placeholder={t('consultations.newModal.dosagePlaceholder')} value={m.dosage} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'dosage', e.target.value)} />
+                    <input className="input text-sm py-1.5 col-span-6 sm:col-span-2" placeholder={t('consultations.newModal.frequencyPlaceholder')} value={m.frequency} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'frequency', e.target.value)} />
+                    <input className="input text-sm py-1.5 col-span-8 sm:col-span-2" placeholder={t('consultations.newModal.durationPlaceholder')} value={m.duration} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'duration', e.target.value)} />
+                    <div className="col-span-4 sm:col-span-2 flex justify-end">
                       <button type="button" onClick={() => removeMed(i)} className="text-red-400 hover:text-red-600 p-1 rounded">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
@@ -541,13 +541,13 @@ function EditConsultationModal({ consultation: c, onClose, onSaved }: EditConsul
                   <div key={i} className="grid grid-cols-12 gap-2 items-center p-2.5 bg-gray-50 rounded-lg border border-gray-200">
                     <input className="input text-sm py-1.5 col-span-12 sm:col-span-4" placeholder={t('consultations.newModal.medicineNamePlaceholder')}
                       value={m.medicine_name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'medicine_name', e.target.value)} />
-                    <input className="input text-sm py-1.5 col-span-4 sm:col-span-2" placeholder={t('consultations.newModal.dosagePlaceholder')}
+                    <input className="input text-sm py-1.5 col-span-6 sm:col-span-2" placeholder={t('consultations.newModal.dosagePlaceholder')}
                       value={m.dosage}    onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'dosage',    e.target.value)} />
-                    <input className="input text-sm py-1.5 col-span-4 sm:col-span-2" placeholder={t('consultations.newModal.frequencyPlaceholder')}
+                    <input className="input text-sm py-1.5 col-span-6 sm:col-span-2" placeholder={t('consultations.newModal.frequencyPlaceholder')}
                       value={m.frequency} onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'frequency', e.target.value)} />
-                    <input className="input text-sm py-1.5 col-span-3 sm:col-span-2" placeholder={t('consultations.newModal.durationPlaceholder')}
+                    <input className="input text-sm py-1.5 col-span-8 sm:col-span-2" placeholder={t('consultations.newModal.durationPlaceholder')}
                       value={m.duration}  onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeMed(i, 'duration',  e.target.value)} />
-                    <div className="col-span-1 sm:col-span-2 flex justify-end">
+                    <div className="col-span-4 sm:col-span-2 flex justify-end">
                       <button type="button" onClick={() => removeMed(i)} className="text-red-400 hover:text-red-600 p-1 rounded">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
