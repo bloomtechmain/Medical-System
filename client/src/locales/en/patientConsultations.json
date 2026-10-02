@@ -71,6 +71,7 @@
       "laboratoryFallback": "Laboratory",
       "labReportReady": "Lab Report Ready ✅",
       "body": {
+        "doctor": "Doctor:",
         "date": "Date:",
         "location": "Location:",
         "pharmacy": "Pharmacy:"

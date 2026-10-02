@@ -71,6 +71,7 @@
       "laboratoryFallback": "රසායනාගාරය",
       "labReportReady": "රසායනාගාර වාර්තාව සූදානම් ✅",
       "body": {
+        "doctor": "වෛද්‍යවරයා:",
         "date": "දිනය:",
         "location": "ස්ථානය:",
         "pharmacy": "ෆාමසිය:"

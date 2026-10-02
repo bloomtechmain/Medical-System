@@ -14,7 +14,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       LEFT JOIN public.users u ON u.id = o.owner_user_id
       LEFT JOIN public.organization_members m ON m.organization_id = o.id
       GROUP BY o.id, u.name, u.email
-      ORDER BY o.org_type, o.name
+      ORDER BY o.created_at DESC, o.id DESC
     `);
     res.json(rows);
   } catch (err) { next(err); }
