@@ -11,7 +11,9 @@ const EV: Record<string, any> = {
   sick: { labelKey: 'medicalFlow.events.sick', icon: '🤒', dot: 'bg-orange-500 ring-orange-100', card: 'border-orange-200 bg-orange-50/40', badge: 'bg-orange-100 text-orange-700', heading: 'text-orange-700', group: 'visits' },
   doctor_visit: { labelKey: 'medicalFlow.events.doctorVisit', icon: '🏥', dot: 'bg-teal-500 ring-teal-100', card: 'border-teal-200 bg-teal-50/40', badge: 'bg-teal-100 text-teal-700', heading: 'text-teal-700', group: 'visits' },
   diagnosis: { labelKey: 'medicalFlow.events.diagnosis', icon: '🔍', dot: 'bg-blue-500 ring-blue-100', card: 'border-blue-200 bg-blue-50/40', badge: 'bg-blue-100 text-blue-700', heading: 'text-blue-700', group: 'visits' },
+  prescription_preparing: { labelKey: 'medicalFlow.events.prescriptionPreparing', icon: '🧪', dot: 'bg-blue-500 ring-blue-100', card: 'border-blue-200 bg-blue-50/40', badge: 'bg-blue-100 text-blue-700', heading: 'text-blue-700', group: 'medicines' },
   prescription_dispensed: { labelKey: 'medicalFlow.events.prescriptionDispensed', icon: '🏪', dot: 'bg-indigo-500 ring-indigo-100', card: 'border-indigo-200 bg-indigo-50/40', badge: 'bg-indigo-100 text-indigo-700', heading: 'text-indigo-700', group: 'medicines' },
+  prescription_delivered: { labelKey: 'medicalFlow.events.prescriptionDelivered', icon: '📦', dot: 'bg-emerald-500 ring-emerald-100', card: 'border-emerald-200 bg-emerald-50/40', badge: 'bg-emerald-100 text-emerald-700', heading: 'text-emerald-700', group: 'medicines' },
   treatment_completed: { labelKey: 'medicalFlow.events.treatmentCompleted', icon: '✅', dot: 'bg-green-500 ring-green-100', card: 'border-green-200 bg-green-50/40', badge: 'bg-green-100 text-green-700', heading: 'text-green-700', group: 'visits' },
   lab_requested: { labelKey: 'medicalFlow.events.labRequested', icon: '🔬', dot: 'bg-cyan-500 ring-cyan-100', card: 'border-cyan-200 bg-cyan-50/40', badge: 'bg-cyan-100 text-cyan-700', heading: 'text-cyan-700', group: 'lab' },
   lab_in_progress: { labelKey: 'medicalFlow.events.labInProgress', icon: '⚗️', dot: 'bg-sky-500 ring-sky-100', card: 'border-sky-200 bg-sky-50/40', badge: 'bg-sky-100 text-sky-700', heading: 'text-sky-700', group: 'lab' },
@@ -30,10 +32,24 @@ function buildEvents(consultations: any[], labReports: any[]) {
       searchText: [c.diagnosis, c.sick_description, c.doctor_display_name, c.hospital_clinic, c.treatment_description, ...(c.medicines || []).map((m: any) => m.medicine_name)].filter(Boolean).join(' ').toLowerCase(),
     });
 
-    if (c.status === 'dispensed' || c.status === 'completed') {
+    if (['preparing', 'dispensed', 'delivered', 'completed'].includes(c.status)) {
+      events.push({
+        id: `c-${c.id}-preparing`, type: 'prescription_preparing', ts: baseTs + 3_600_000, dateStr: base, timeStr: null, consultation: c,
+        searchText: [c.doctor_display_name, c.pharmacy_name].filter(Boolean).join(' ').toLowerCase(),
+      });
+    }
+
+    if (['dispensed', 'delivered', 'completed'].includes(c.status)) {
       events.push({
         id: `c-${c.id}-dispensed`, type: 'prescription_dispensed', ts: baseTs + 7_200_000, dateStr: base, timeStr: null, consultation: c,
         searchText: [c.doctor_display_name, c.hospital_clinic, ...(c.medicines || []).map((m: any) => m.medicine_name)].filter(Boolean).join(' ').toLowerCase(),
+      });
+    }
+
+    if (c.status === 'delivered' || c.status === 'completed') {
+      events.push({
+        id: `c-${c.id}-delivered`, type: 'prescription_delivered', ts: baseTs + 9_000_000, dateStr: base, timeStr: null, consultation: c,
+        searchText: [c.doctor_display_name, c.pharmacy_name].filter(Boolean).join(' ').toLowerCase(),
       });
     }
 
@@ -144,9 +160,11 @@ function Tag({ children }: { children: React.ReactNode }) {
 
 function StatusRow({ status }: { status: string }) {
   const map: Record<string, any> = {
-    active:    { icon: '⚕️', label: 'Treatment Active',   cls: 'bg-yellow-100 text-yellow-700' },
-    dispensed: { icon: '💊', label: 'Prescription Given',  cls: 'bg-indigo-100 text-indigo-700' },
-    completed: { icon: '✅', label: 'Treatment Complete',  cls: 'bg-green-100  text-green-700'  },
+    active:    { icon: '⚕️', label: 'Treatment Active',       cls: 'bg-yellow-100 text-yellow-700' },
+    preparing: { icon: '🧪', label: 'Pharmacy Preparing',     cls: 'bg-blue-100   text-blue-700'   },
+    dispensed: { icon: '💊', label: 'Ready for Pickup',       cls: 'bg-indigo-100 text-indigo-700' },
+    delivered: { icon: '📦', label: 'Medicines Delivered',    cls: 'bg-emerald-100 text-emerald-700' },
+    completed: { icon: '✅', label: 'Treatment Complete',     cls: 'bg-green-100  text-green-700'  },
   };
   const s = map[status];
   if (!s) return null;
@@ -206,11 +224,17 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
             {event.type === 'doctor_visit' && (
               <p className="text-sm font-semibold text-gray-900">{c.diagnosis || c.sick_description || t('medicalFlow.card.fallback.medicalConsultation')}</p>
             )}
+            {event.type === 'prescription_preparing' && (
+              <p className="text-sm font-semibold text-gray-900">{c.pharmacy_name ? `${c.pharmacy_name} is preparing your medicines` : t('medicalFlow.card.fallback.prescriptionDispensed')}</p>
+            )}
             {event.type === 'prescription_dispensed' && (
               <p className="text-sm font-semibold text-gray-900">
                 {(c.medicines || []).slice(0, 3).map((m: any) => m.medicine_name).join(' · ') || t('medicalFlow.card.fallback.prescriptionDispensed')}
                 {(c.medicines || []).length > 3 && ` ${t('medicalFlow.card.moreMedicines', { count: (c.medicines || []).length - 3 })}`}
               </p>
+            )}
+            {event.type === 'prescription_delivered' && (
+              <p className="text-sm font-semibold text-gray-900">{c.pharmacy_name ? `Delivered from ${c.pharmacy_name}` : 'Medicines delivered'}</p>
             )}
             {event.type === 'treatment_completed' && (
               <p className="text-sm font-semibold text-gray-900">{c.diagnosis || c.sick_description || t('medicalFlow.card.fallback.treatment')} — {t('medicalFlow.card.resolvedSuffix')}</p>
@@ -283,19 +307,29 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
             </>
           )}
 
+          {event.type === 'prescription_preparing' && c && (
+            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
+              <span className="text-2xl">🧪</span>
+              <div>
+                <p className="text-sm font-bold text-blue-800">Pharmacist is Preparing Your Medicines</p>
+                {c.pharmacy_name && <p className="text-xs text-blue-700 mt-0.5">🏪 {c.pharmacy_name}</p>}
+              </div>
+            </div>
+          )}
+
           {event.type === 'prescription_dispensed' && c && (
             <>
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xl shrink-0">🏪</div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">Prescription Dispensed by Pharmacist</p>
+                  <p className="text-sm font-bold text-gray-900">Ready for Pickup / Delivery</p>
                   <p className="text-xs text-gray-500">For: {c.diagnosis || c.sick_description || 'consultation'}</p>
                   {c.doctor_display_name && <p className="text-xs text-gray-400 mt-0.5">Prescribed by Dr. {c.doctor_display_name}</p>}
                 </div>
               </div>
               {(c.medicines || []).length > 0 && (
                 <div>
-                  <p className="text-xs font-bold text-gray-500 mb-2">💊 Medicines Dispensed</p>
+                  <p className="text-xs font-bold text-gray-500 mb-2">💊 Medicines Ready</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {(c.medicines || []).map((m: any, i: number) => (
                       <div key={i} className="flex items-center gap-2 bg-white rounded-lg border border-gray-100 px-3 py-2 shadow-sm">
@@ -310,6 +344,16 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
                 </div>
               )}
             </>
+          )}
+
+          {event.type === 'prescription_delivered' && c && (
+            <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+              <span className="text-2xl">📦</span>
+              <div>
+                <p className="text-sm font-bold text-emerald-800">Medicines Delivered</p>
+                <p className="text-xs text-emerald-700 mt-0.5">{c.pharmacy_name ? `From ${c.pharmacy_name}` : 'Delivered to you'}</p>
+              </div>
+            </div>
           )}
 
           {event.type === 'treatment_completed' && c && (

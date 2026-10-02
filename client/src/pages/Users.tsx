@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { TFunction } from 'i18next';
 import { userApi, authApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import { Plus, Search, Edit2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ToggleLeft, ToggleRight, Eye } from 'lucide-react';
 
 // ── Profile field definitions per role ────────────────────────────────────────
 
@@ -131,6 +133,8 @@ export default function Users() {
   const { t } = useTranslation('admin');
   const { t: tc } = useTranslation('common');
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { impersonate } = useAuth();
   const [search, setSearch]         = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -221,6 +225,12 @@ export default function Users() {
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
     },
     onError: () => toast.error(t('users.toast.statusUpdateFailed')),
+  });
+
+  const impersonateMutation = useMutation({
+    mutationFn: (id: number) => authApi.impersonate(id),
+    onSuccess: (res: any) => { impersonate(res.user, res.token); navigate('/'); },
+    onError: (err: any) => toast.error(err.message || t('users.toast.viewAsFailed')),
   });
 
   const deleteMutation = useMutation({
@@ -325,6 +335,16 @@ export default function Users() {
                     <td className="px-5 py-3 text-gray-400 text-xs">{formatDate(u.created_at)}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">
+                        {u.role !== 'admin' && u.is_active && (
+                          <button
+                            onClick={() => impersonateMutation.mutate(u.id)}
+                            disabled={impersonateMutation.isPending}
+                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                            title={t('users.viewAs')}
+                          >
+                            <Eye size={14} />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEditOpen(u)}
                           className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

@@ -5,8 +5,9 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { labApi, userApi, authApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
-import { FlaskConical, Upload, Eye, X, ChevronDown, ChevronUp, Search, Send, Plus, Stethoscope, Download, Beaker } from 'lucide-react';
+import { FlaskConical, Upload, Eye, X, ChevronDown, ChevronUp, Search, Send, Plus, Stethoscope, Download, Beaker, XCircle, MessageCircle, Banknote } from 'lucide-react';
 import { SERVER_ORIGIN } from '../env';
+import ChatPanel from '../components/common/ChatPanel';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
@@ -763,7 +764,20 @@ interface ViewModalProps { req: any; onClose: () => void; }
 
 function ViewModal({ req: r, onClose }: ViewModalProps) {
   const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
+  const qc = useQueryClient();
   const isPDF = r.report_mimetype?.includes('pdf');
+  const [priceInput, setPriceInput] = useState(r.price != null ? String(r.price) : '');
+
+  const priceMutation = useMutation({
+    mutationFn: () => labApi.setPrice(r.id, { amount: parseFloat(priceInput) }),
+    onSuccess: () => {
+      toast.success(t('reports.viewModal.priceSaved'));
+      qc.invalidateQueries({ queryKey: ['lab-assigned-requests'] });
+    },
+    onError: (err: any) => toast.error(err.message || t('reports.viewModal.priceSaveFailed')),
+  });
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 flex items-start justify-center p-4 pt-8">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
@@ -826,6 +840,30 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
             <img src={`${API_BASE}/uploads/lab-reports/${r.report_file}`} alt="Report"
               className="w-full max-h-56 object-contain rounded-xl border border-gray-200 bg-gray-50" />
           )}
+
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+            <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1.5">
+              <Banknote size={13} strokeWidth={2} /> {t('reports.viewModal.priceHeading')}
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min="0" step="0.01" value={priceInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPriceInput(e.target.value)}
+                placeholder={t('reports.viewModal.pricePlaceholder')}
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+              <button
+                type="button"
+                disabled={!priceInput || priceMutation.isPending}
+                onClick={() => priceMutation.mutate()}
+                className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 rounded-xl disabled:opacity-50 hover:bg-emerald-700 transition-colors"
+              >
+                {priceMutation.isPending ? tc('actions.saving') : tc('actions.save')}
+              </button>
+            </div>
+          </div>
+
+          <ChatPanel labRequestId={r.id} />
         </div>
       </div>
     </div>
@@ -887,6 +925,51 @@ function SampleInfoModal({ req: r, onClose, onStarted }: SampleInfoModalProps) {
   );
 }
 
+// ── Reject Modal ───────────────────────────────────────────────────────────────
+interface RejectModalProps { req: any; onClose: () => void; onRejected: () => void; }
+
+function RejectModal({ req: r, onClose, onRejected }: RejectModalProps) {
+  const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
+  const [message, setMessage] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => labApi.reject(r.id, message),
+    onSuccess: () => { toast.success(t('reports.rejectModal.toastSuccess')); onRejected(); onClose(); },
+    onError: (err: any) => toast.error(err.message || t('reports.rejectModal.toastError')),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-red-500 to-rose-600">
+          <div>
+            <p className="text-sm font-bold text-white">{t('reports.rejectModal.title')}</p>
+            <p className="text-xs text-white/70">{t('reports.sampleModal.patientLabel')} {r.patient_name}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white">
+            <X size={15} />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="label">{t('reports.rejectModal.reasonLabel')}</label>
+            <textarea rows={3} className="input text-sm resize-none" placeholder={t('reports.rejectModal.reasonPlaceholder')}
+              value={message} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)} />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => mutation.mutate()} disabled={!message.trim() || mutation.isPending}
+              className="flex-1 py-2.5 text-sm font-bold text-white bg-red-600 rounded-2xl disabled:opacity-50 hover:bg-red-700 transition-colors">
+              {mutation.isPending ? tc('actions.saving') : t('reports.rejectModal.submitLabel')}
+            </button>
+            <button onClick={onClose} className="btn-secondary px-5">{tc('actions.cancel')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 function exportReportsCSV(rows: any[], headers: string[], doctorLabel: (name: string) => string): void {
   const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -914,6 +997,7 @@ export default function LaboratoryReports() {
   const [uploading, setUploading] = useState<any>(null);
   const [viewing,   setViewing]   = useState<any>(null);
   const [starting,  setStarting]  = useState<any>(null);
+  const [rejecting, setRejecting] = useState<any>(null);
   const [sending,   setSending]   = useState(false);
   const [filter,    setFilter]    = useState('all');
   const [search,    setSearch]    = useState('');
@@ -925,6 +1009,7 @@ export default function LaboratoryReports() {
     pending:     { badge: 'bg-yellow-100 text-yellow-700', label: tc('status.pending')     },
     in_progress: { badge: 'bg-blue-100   text-blue-700',   label: tc('status.inProgress') },
     completed:   { badge: 'bg-green-100  text-green-700',  label: tc('status.completed')   },
+    rejected:    { badge: 'bg-red-100    text-red-700',    label: tc('status.rejected')    },
   };
 
   const { data: requests = [], isLoading } = useQuery({
@@ -996,6 +1081,7 @@ export default function LaboratoryReports() {
           <option value="pending">{tc('status.pending')}</option>
           <option value="in_progress">{tc('status.inProgress')}</option>
           <option value="completed">{tc('status.completed')}</option>
+          <option value="rejected">{tc('status.rejected')}</option>
         </select>
       </div>
 
@@ -1044,6 +1130,13 @@ export default function LaboratoryReports() {
                         {r.report_type && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-violet-100 text-violet-700">{r.report_type}</span>
                         )}
+                        {r.price != null ? (
+                          <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+                            <Banknote size={10} strokeWidth={2.5} /> {t('reports.page.priceLabel', { amount: r.price })}
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">{t('reports.page.noPriceLabel')}</span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {t('shared.doctorPrefix', { name: r.doctor_name })} · {formatDate(r.created_at)}
@@ -1064,6 +1157,10 @@ export default function LaboratoryReports() {
                           className="text-xs bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 justify-center">
                           <Upload size={11} /> Upload Report
                         </button>
+                        <button onClick={() => setRejecting(r)}
+                          className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 justify-center">
+                          <XCircle size={11} /> {t('reports.page.rejectButton')}
+                        </button>
                       </>
                     )}
                     {r.status === 'in_progress' && (
@@ -1076,6 +1173,12 @@ export default function LaboratoryReports() {
                       <button onClick={() => openView(r.id)}
                         className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 justify-center">
                         <Eye size={11} /> View Report
+                      </button>
+                    )}
+                    {r.status !== 'completed' && (
+                      <button onClick={() => openView(r.id)}
+                        className="text-xs bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 justify-center">
+                        <MessageCircle size={11} /> {t('reports.page.detailsButton')}
                       </button>
                     )}
                   </div>
@@ -1094,6 +1197,13 @@ export default function LaboratoryReports() {
         />
       )}
       {viewing && <ViewModal req={viewing} onClose={() => setViewing(null)} />}
+      {rejecting && (
+        <RejectModal
+          req={rejecting}
+          onClose={() => setRejecting(null)}
+          onRejected={() => qc.invalidateQueries({ queryKey: ['lab-assigned-requests'] })}
+        />
+      )}
       {sending && (
         <SendReportModal
           onClose={() => setSending(false)}

@@ -39,8 +39,6 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/admin/users',          labelKey: 'nav.users',         icon: Users },
     { to: '/admin/medicines',      labelKey: 'nav.medicines',     icon: Pill },
     { to: '/admin/suppliers',      labelKey: 'nav.suppliers',     icon: Truck },
-    { to: '/admin/orders',         labelKey: 'nav.orders',        icon: ShoppingCart },
-    { to: '/admin/sales',          labelKey: 'nav.sales',         icon: Receipt },
     { to: '/admin/inventory',      labelKey: 'nav.inventory',     icon: BarChart2 },
   ],
   hospital: [
@@ -86,6 +84,7 @@ const NAV: Record<string, NavItem[]> = {
   laboratory: [
     { to: '/laboratory',         labelKey: 'nav.dashboard',  icon: LayoutDashboard, exact: true },
     { to: '/laboratory/reports', labelKey: 'nav.labReports', icon: ClipboardList },
+    { to: '/laboratory/catalog', labelKey: 'nav.catalog',    icon: Receipt },
   ],
 };
 
@@ -247,7 +246,10 @@ export default function Sidebar() {
       <div className="flex flex-col gap-0.5 pb-4 px-3 border-t border-white/5 pt-3 shrink-0 overflow-hidden">
 
         {/* Settings */}
-        <button className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-white/[0.08] hover:text-slate-200 transition-all duration-150 overflow-hidden">
+        <button
+          onClick={() => user?.role === 'patient' && navigate('/patient/settings')}
+          className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-white/[0.08] hover:text-slate-200 transition-all duration-150 overflow-hidden"
+        >
           <span className="w-11 h-11 flex items-center justify-center shrink-0">
             <Settings size={19} strokeWidth={1.8} />
           </span>

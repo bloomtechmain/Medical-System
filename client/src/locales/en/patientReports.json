@@ -23,7 +23,8 @@
     "statusLabels": {
       "pending": "Pending",
       "inProgress": "In Progress",
-      "reportReady": "Report Ready"
+      "reportReady": "Report Ready",
+      "rejected": "Declined"
     },
     "modal": {
       "title": "Book a Lab Test",
@@ -32,6 +33,10 @@
       "testLabel": "Test *",
       "selectLabFirst": "Select a laboratory first to see its available tests",
       "selectTestPlaceholder": "Select a test…",
+      "catalogOptionLabel": "{{name}} — LKR {{price}}",
+      "priceConfirmed": "Price confirmed: LKR {{price}}",
+      "otherOption": "Other (not listed)…",
+      "otherInputPlaceholder": "Type the test name",
       "testInputPlaceholder": "e.g. Full Blood Count",
       "dateTimeLabel": "Preferred Date & Time",
       "optional": "(optional)",
@@ -58,7 +63,12 @@
       "labReportNotes": "🔬 Lab Report Notes",
       "openPdf": "Open Lab Report (PDF)",
       "viewImage": "View Lab Report Image",
-      "clickToView": "Click to view or download your report"
+      "clickToView": "Click to view or download your report",
+      "priceHeading": "💰 Price",
+      "priceValue": "LKR {{price}}",
+      "priceNotSet": "Not set yet — the lab will confirm a price shortly.",
+      "rejectedHeading": "❌ Request Declined",
+      "rejectedHint": "See the lab's reason in the messages below."
     }
   },
   "myReports": {
@@ -170,7 +180,8 @@
       "labReports": "Lab Reports",
       "medicalHistory": "Medical History",
       "personalReports": "Personal Health Reports",
-      "contactInfo": "Contact Information"
+      "contactInfo": "Contact Information",
+      "fullRecord": "Full Health Record"
     },
     "statusMeta": {
       "pending": "Awaiting Response",
@@ -178,6 +189,7 @@
     },
     "card": {
       "accessRequested": "Access requested",
+      "fullRecordIncludes": "This grants access to:",
       "defaultSpecialization": "Medical Doctor",
       "reasonFromDoctor": "Reason from Doctor",
       "requestedOn": "Requested: {{date}}",

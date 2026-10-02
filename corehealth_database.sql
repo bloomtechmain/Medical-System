@@ -78,6 +78,7 @@ END $$;
 DROP SCHEMA IF EXISTS clinical CASCADE;
 
 -- public clinical/operational tables from a previous run
+DROP TABLE IF EXISTS public.impersonation_log      CASCADE;
 DROP TABLE IF EXISTS public.notifications          CASCADE;
 DROP TABLE IF EXISTS public.lab_view_requests      CASCADE;
 DROP TABLE IF EXISTS public.data_access_requests   CASCADE;
@@ -119,6 +120,20 @@ CREATE TABLE public.users (
 );
 CREATE INDEX idx_users_email ON public.users(email);
 CREATE INDEX idx_users_role  ON public.users(role);
+
+-- Admin "View As" session-start audit trail — not per-action logging, just
+-- who viewed as whom and when. Admin-only operational record, not patient
+-- PHI, so it lives in `public` with no RLS (read via an admin-only endpoint).
+CREATE TABLE public.impersonation_log (
+  id              SERIAL       PRIMARY KEY,
+  admin_id        INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  target_user_id  INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  target_name     VARCHAR(150) NOT NULL,
+  target_role     VARCHAR(20)  NOT NULL,
+  started_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_impersonation_admin ON public.impersonation_log(admin_id);
+CREATE INDEX idx_impersonation_started ON public.impersonation_log(started_at);
 
 -- 2.2 organizations  (the TENANT REGISTRY — the thing leaks must not cross)
 --
@@ -277,7 +292,12 @@ CREATE TABLE clinical.medical_consultations (
   ocr_text               TEXT,
   lab_tests_requested    TEXT,
   status                 VARCHAR(20) NOT NULL DEFAULT 'active'
-                         CHECK (status IN ('active','dispensed','completed')),
+                         -- Pharmacy fulfilment pipeline: active (prescription received) ->
+                         -- preparing (pharmacist gathering stock) -> dispensed (ready for
+                         -- pickup/delivery) -> delivered (patient has received it).
+                         -- 'completed' is a separate, unused-by-UI terminal value kept for
+                         -- forward compatibility with an eventual "treatment closed" action.
+                         CHECK (status IN ('active','preparing','dispensed','delivered','completed')),
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -321,7 +341,7 @@ CREATE TABLE clinical.lab_requests (
   report_type      VARCHAR(100),          -- e.g. one of the lab's own services_offered (Full Blood Count, X-Ray, ...)
   notes            TEXT,
   status           VARCHAR(20) NOT NULL DEFAULT 'pending'
-                   CHECK (status IN ('pending','in_progress','completed')),
+                   CHECK (status IN ('pending','in_progress','completed','rejected')),
   -- Result fields — populated by the lab when uploading the completed report
   report_file      VARCHAR(500),
   report_mimetype  VARCHAR(100),
@@ -346,6 +366,26 @@ CREATE INDEX idx_lr_org          ON clinical.lab_requests(organization_id);
 CREATE INDEX idx_lr_consultation ON clinical.lab_requests(consultation_id);
 CREATE INDEX idx_lr_status       ON clinical.lab_requests(status);
 
+-- Free-text chat thread between patient and laboratory (and the ordering
+-- doctor, if any) on a single lab request — e.g. "please bring a clearer
+-- prescription". Owner ids are denormalized from the parent lab_requests row
+-- at insert time (same convention as lab_view_requests below) so RLS stays a
+-- simple column check instead of a subquery.
+CREATE TABLE clinical.lab_request_messages (
+  id             SERIAL      PRIMARY KEY,
+  lab_request_id INTEGER     NOT NULL REFERENCES clinical.lab_requests(id) ON DELETE CASCADE,
+  patient_id     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  doctor_id      INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
+  laboratory_id  INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_id      INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_role    VARCHAR(20) NOT NULL,
+  body           TEXT        NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_lrm_lab_request ON clinical.lab_request_messages(lab_request_id);
+CREATE INDEX idx_lrm_patient     ON clinical.lab_request_messages(patient_id);
+CREATE INDEX idx_lrm_laboratory  ON clinical.lab_request_messages(laboratory_id);
+
 CREATE TABLE clinical.lab_view_requests (
   id             SERIAL      PRIMARY KEY,
   lab_request_id INTEGER     NOT NULL REFERENCES clinical.lab_requests(id) ON DELETE CASCADE,
@@ -368,7 +408,7 @@ CREATE TABLE clinical.data_access_requests (
   doctor_id    INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   patient_id   INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   access_type  VARCHAR(50) NOT NULL
-               CHECK (access_type IN ('lab_reports','medical_history','personal_reports','contact_info','vitals')),
+               CHECK (access_type IN ('lab_reports','medical_history','personal_reports','contact_info','vitals','all')),
   reason       TEXT,
   status       VARCHAR(20) NOT NULL DEFAULT 'pending'
                CHECK (status IN ('pending','accepted','declined')),
@@ -571,7 +611,7 @@ DECLARE t text;
 BEGIN
   FOR t IN SELECT unnest(ARRAY[
       'patient_profiles','medical_consultations','consultation_medicines',
-      'lab_requests','lab_view_requests','data_access_requests',
+      'lab_requests','lab_request_messages','lab_view_requests','data_access_requests',
       'doctor_weekly_availability','doctor_availability_overrides','doctor_appointments',
       'patient_reports','patient_vitals','notifications'])
   LOOP
@@ -642,6 +682,16 @@ CREATE POLICY lvr_all ON clinical.lab_view_requests FOR ALL USING (
   public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
 ) WITH CHECK (
   public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
+);
+
+-- lab_request_messages: the patient, the ordering doctor (if any), or the
+-- laboratory on the parent request; admin
+CREATE POLICY lrm_all ON clinical.lab_request_messages FOR ALL USING (
+  public.app_role() = 'admin' OR patient_id = public.app_uid()
+  OR doctor_id = public.app_uid() OR laboratory_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR patient_id = public.app_uid()
+  OR doctor_id = public.app_uid() OR laboratory_id = public.app_uid()
 );
 
 -- data_access_requests: the doctor or patient party; admin

@@ -294,42 +294,67 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
+// Pharmacy fulfilment pipeline — each stage can only move to the next one, so a
+// pharmacist can't accidentally skip straight from "active" to "delivered" via
+// a direct API call (the UI only ever offers the single next step anyway).
+const ALLOWED_STATUS_TRANSITIONS: Record<string, string> = {
+  active:    'preparing',
+  preparing: 'dispensed',
+  dispensed: 'delivered',
+};
+
+const STATUS_NOTIFICATIONS: Record<string, { title: string; patient: (phName: string) => string; doctor?: (ptName: string, phName: string) => string }> = {
+  preparing: {
+    title: 'Pharmacy Preparing Your Medicines',
+    patient: (phName) => `${phName} has started preparing your medicines.`,
+  },
+  dispensed: {
+    title: 'Medicines Ready ✅',
+    patient: (phName) => `Your medicines are ready for pickup/delivery at ${phName}.`,
+    doctor:  (ptName, phName) => `The prescription for patient ${ptName} is ready for pickup/delivery at ${phName}.`,
+  },
+  delivered: {
+    title: 'Medicines Delivered ✅',
+    patient: (phName) => `Your medicines from ${phName} have been delivered. Treatment complete!`,
+    doctor:  (ptName, phName) => `Patient ${ptName} has received their medicines from ${phName}.`,
+  },
+};
+
 const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { status } = req.body;
+
+    const { rows: currentRows } = await queryAs(actor(req),
+      'SELECT * FROM medical_consultations WHERE id=$1 AND assigned_pharmacist_id=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!currentRows.length) { res.status(404).json({ message: 'Not found' }); return; }
+
+    if (ALLOWED_STATUS_TRANSITIONS[currentRows[0].status] !== status) {
+      res.status(400).json({ message: `Cannot move from "${currentRows[0].status}" to "${status}"` });
+      return;
+    }
+
     const { rows } = await queryAs(actor(req),
       `UPDATE medical_consultations SET status=$1, updated_at=NOW()
        WHERE id=$2 AND assigned_pharmacist_id=$3
        RETURNING *`,
       [status, req.params.id, req.user.id]
     );
-    if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
-    if (status === 'dispensed') {
+    const notif = STATUS_NOTIFICATIONS[status];
+    if (notif) {
       const c = rows[0];
 
       const phRow = (await pool.query('SELECT name FROM users WHERE id=$1', [req.user.id])).rows[0];
       const phName = phRow?.name || 'the pharmacy';
 
-      const ptRow = (await pool.query('SELECT name FROM users WHERE id=$1', [c.patient_id])).rows[0];
-      const ptName = ptRow?.name || 'the patient';
+      await sendNotification(c.patient_id, `prescription_${status}`, notif.title, notif.patient(phName), { consultation_id: c.id });
 
-      await sendNotification(
-        c.patient_id,
-        'prescription_dispensed',
-        'Prescription Dispensed ✅',
-        `Your prescription has been dispensed by ${phName}. Please collect your medicines.`,
-        { consultation_id: c.id }
-      );
-
-      if (c.doctor_id) {
-        await sendNotification(
-          c.doctor_id,
-          'prescription_dispensed',
-          'Prescription Dispensed ✅',
-          `The prescription for patient ${ptName} has been dispensed by ${phName}.`,
-          { consultation_id: c.id }
-        );
+      if (c.doctor_id && notif.doctor) {
+        const ptRow = (await pool.query('SELECT name FROM users WHERE id=$1', [c.patient_id])).rows[0];
+        const ptName = ptRow?.name || 'the patient';
+        await sendNotification(c.doctor_id, `prescription_${status}`, notif.title, notif.doctor(ptName, phName), { consultation_id: c.id });
       }
     }
 

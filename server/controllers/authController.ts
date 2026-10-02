@@ -4,11 +4,17 @@ import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs } from '../config/db';
 import { DbUser } from '../types';
 
-const generateToken = (user: Pick<DbUser, 'id' | 'email' | 'role'>): string =>
+const generateToken = (
+  user: Pick<DbUser, 'id' | 'email' | 'role'>,
+  opts?: { expiresIn?: string; impersonatedBy?: number }
+): string =>
   jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    {
+      id: user.id, email: user.email, role: user.role,
+      ...(opts?.impersonatedBy ? { impersonatedBy: opts.impersonatedBy } : {}),
+    },
     process.env.JWT_SECRET as string,
-    { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any }
+    { expiresIn: (opts?.expiresIn || process.env.JWT_EXPIRES_IN || '7d') as any }
   );
 
 const getOrgForUser = async (userId: number) => {
@@ -206,4 +212,50 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
   }
 };
 
-export { register, login, getMe, createProfile, generateToken };
+/**
+ * Admin "View As" — mints a short-lived token for the target user so the
+ * admin's browser session becomes that user for every subsequent request
+ * (REST, RLS actor context, and socket room — see server/middleware/auth.ts
+ * and server/config/socket.ts, both of which just trust whatever identity
+ * is in the JWT). Session-start only; logged to impersonation_log for a
+ * lightweight "who viewed as whom and when" audit trail, not per-action.
+ */
+const impersonate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const targetId = parseInt(req.params.userId, 10);
+    const { rows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [targetId]);
+    if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+
+    const target = rows[0];
+    if (!target.is_active) { res.status(400).json({ message: 'Cannot view as an inactive account.' }); return; }
+    if (target.role === 'admin') { res.status(403).json({ message: 'Cannot view as another admin.' }); return; }
+
+    const organization = await getOrgForUser(target.id);
+    const { password: _, ...safeUser } = target;
+
+    await pool.query(
+      `INSERT INTO impersonation_log (admin_id, target_user_id, target_name, target_role) VALUES ($1,$2,$3,$4)`,
+      [req.user.id, target.id, target.name, target.role]
+    );
+
+    res.json({
+      user: { ...safeUser, organization },
+      token: generateToken(target, { expiresIn: '4h', impersonatedBy: req.user.id }),
+    });
+  } catch (err) { next(err); }
+};
+
+const listImpersonations = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT il.*, a.name AS admin_name
+      FROM impersonation_log il
+      JOIN users a ON a.id = il.admin_id
+      ORDER BY il.started_at DESC
+      LIMIT 20
+    `);
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
+export { register, login, getMe, createProfile, generateToken, impersonate, listImpersonations };

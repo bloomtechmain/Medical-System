@@ -104,6 +104,7 @@
       "noActivity": "No recent activity.",
       "labResultReady": "Lab result ready — {{name}}",
       "prescriptionDispensed": "Prescription dispensed — {{name}}",
+      "prescriptionDelivered": "Medicines delivered — {{name}}",
       "accessRequestResponse": "{{name}} {{status}} your access request"
     },
     "profile": {

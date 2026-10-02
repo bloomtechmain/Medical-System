@@ -1,0 +1,34 @@
+{
+  "title": "සැකසුම්",
+  "subtitle": "වෛද්‍යවරුන්ට සහ රසායනාගාරවලට ඔබව රැකබලා ගැනීමට අවශ්‍ය තොරතුරු ලබා දීම සඳහා ඔබේ ප්‍රොෆයිලය සම්පූර්ණ කරන්න.",
+  "sections": {
+    "account": "ගිණුම් තොරතුරු",
+    "health": "පුද්ගලික සෞඛ්‍ය තොරතුරු"
+  },
+  "fields": {
+    "dateOfBirth": "උපන් දිනය",
+    "bloodType": "රුධිර වර්ගය",
+    "emergencyContactName": "හදිසි සම්බන්ධතා නම",
+    "emergencyContactPhone": "හදිසි සම්බන්ධතා දුරකථන අංකය",
+    "allergies": "දන්නා අසාත්මිකතා",
+    "chronicConditions": "නිදන්ගත රෝග තත්ත්ව",
+    "insuranceProvider": "රක්ෂණ සපයන්නා",
+    "insurancePolicyNumber": "ප්‍රතිපත්ති අංකය"
+  },
+  "selectGenderPlaceholder": "ස්ත්‍රී/පුරුෂ භාවය තෝරන්න",
+  "bloodTypeUnknown": "නොදනී / විශ්වාස නැත",
+  "placeholders": {
+    "fullName": "ජේන් පෙරේරා",
+    "phone": "+94 77 123 4567",
+    "address": "අංක 12, ප්‍රධාන වීදිය, කොළඹ 03",
+    "emergencyContactName": "දෙමාපිය / කලත්‍රයාගේ නම",
+    "emergencyContactPhone": "+94 77 987 6543",
+    "allergies": "උදා., පෙනිසිලින්, ඇස්පිරින්, ලේටෙක්ස් (නැත්නම් කිසිවක් නැත)",
+    "chronicConditions": "උදා., දියවැඩියාව, අධි රුධිර පීඩනය, ඇදුම (නැත්නම් කිසිවක් නැත)",
+    "insuranceProvider": "උදා., Ceylinco, AIA, Union Assurance",
+    "insurancePolicyNumber": "උදා., POL-123456"
+  },
+  "optional": "(අත්‍යවශ්‍ය නොවේ)",
+  "toastSuccess": "ප්‍රොෆයිලය සාර්ථකව යාවත්කාලීන කරන ලදී",
+  "toastError": "ප්‍රොෆයිලය යාවත්කාලීන කිරීමට අසමත් විය"
+}

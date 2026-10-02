@@ -2,13 +2,13 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { userApi } from '../services/api';
+import { userApi, authApi } from '../services/api';
 import { formatDate, formatCurrency } from '../utils/helpers';
 import {
   Users, Stethoscope, FlaskConical, Pill, Truck,
-  ShoppingCart, BarChart2, Receipt, Activity, TrendingUp,
+  BarChart2, Activity, TrendingUp,
   AlertTriangle, Shield, UserCheck, Package, Building2,
-  CalendarCheck, Clock,
+  CalendarCheck, Clock, Eye,
 } from 'lucide-react';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -31,6 +31,11 @@ export default function AdminDashboard() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: userApi.getStats,
+  });
+
+  const { data: impersonations = [] } = useQuery({
+    queryKey: ['impersonations'],
+    queryFn: authApi.getImpersonations,
   });
 
   const toggleMutation = useMutation({
@@ -75,8 +80,6 @@ export default function AdminDashboard() {
     { to: '/admin/users',         label: t('dashboard.quickLinks.users'),          icon: Users,        color: 'text-red-600    bg-red-50    hover:bg-red-100    border-red-100' },
     { to: '/admin/medicines',     label: t('dashboard.quickLinks.medicines'),      icon: Pill,         color: 'text-purple-600 bg-purple-50 hover:bg-purple-100 border-purple-100' },
     { to: '/admin/suppliers',     label: t('dashboard.quickLinks.suppliers'),      icon: Truck,        color: 'text-orange-600 bg-orange-50 hover:bg-orange-100 border-orange-100' },
-    { to: '/admin/orders',        label: t('dashboard.quickLinks.orders'),         icon: ShoppingCart, color: 'text-teal-600   bg-teal-50   hover:bg-teal-100   border-teal-100' },
-    { to: '/admin/sales',         label: t('dashboard.quickLinks.sales'),          icon: Receipt,      color: 'text-green-600  bg-green-50  hover:bg-green-100  border-green-100' },
     { to: '/admin/inventory',     label: t('dashboard.quickLinks.inventory'),      icon: BarChart2,    color: 'text-blue-600   bg-blue-50   hover:bg-blue-100   border-blue-100' },
   ];
 
@@ -273,10 +276,31 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Recent View As activity */}
+      {impersonations.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100">
+          <div className="p-5 border-b border-gray-100">
+            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Eye size={15} className="text-amber-500" /> {t('dashboard.viewAsActivity.title')}
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {impersonations.slice(0, 8).map((log: any) => (
+              <div key={log.id} className="flex items-center justify-between px-5 py-2.5 text-sm">
+                <span className="text-gray-600">
+                  {t('dashboard.viewAsActivity.entry', { admin: log.admin_name, target: log.target_name, role: log.target_role })}
+                </span>
+                <span className="text-xs text-gray-400 shrink-0 ml-3">{formatDate(log.started_at)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quick navigation */}
       <section>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t('dashboard.quickNavigation')}</h2>
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
           {quickLinks.map((link) => {
             const Icon = link.icon;
             return (

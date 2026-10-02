@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
-import { inventoryApi, saleApi, authApi, orderApi, medicineApi } from '../services/api';
+import { inventoryApi, saleApi, authApi, orderApi, medicineApi, consultationApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatCurrency, formatDate, formatDateTime, stockStatus } from '../utils/helpers';
@@ -51,6 +51,7 @@ export default function PharmacistDashboard() {
   const { data: expiring = [] } = useQuery({ queryKey: ['expiring', 30], queryFn: () => inventoryApi.expiring(30) });
   const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: orderApi.getAll });
   const { data: analytics } = useQuery({ queryKey: ['sales-analytics'], queryFn: saleApi.analytics });
+  const { data: prescriptions = [] } = useQuery({ queryKey: ['pharmacist-consultations'], queryFn: consultationApi.getAll });
 
   const [medSearch, setMedSearch] = useState('');
   const debouncedMedSearch = useDebounce(medSearch);
@@ -81,6 +82,14 @@ export default function PharmacistDashboard() {
   const todayRevenue = todaySales.reduce((sum: number, s: any) => sum + parseFloat(s.total_amount), 0);
 
   const pendingOrders = orders.filter((o: any) => o.status === 'pending');
+
+  const pendingRx   = (prescriptions as any[]).filter((c: any) => c.status === 'active').length;
+  const preparingRx = (prescriptions as any[]).filter((c: any) => c.status === 'preparing').length;
+  const readyRx     = (prescriptions as any[]).filter((c: any) => c.status === 'dispensed').length;
+  const actionableRx = (prescriptions as any[])
+    .filter((c: any) => c.status === 'active' || c.status === 'preparing')
+    .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .slice(0, 5);
 
   const recentActivity = [
     ...sales.slice(0, 10).map((s: any) => ({
@@ -181,6 +190,53 @@ export default function PharmacistDashboard() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Incoming prescriptions from doctors & patients */}
+      <div className="bg-white rounded-xl border border-gray-100 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">{t('dashboard.prescriptions.title')}</h3>
+          <Link to="/pharmacist/consultations" className="text-xs font-semibold text-purple-600 hover:text-purple-700">{tc('actions.viewAll')}</Link>
+        </div>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <Link to="/pharmacist/consultations" className="rounded-xl border border-yellow-100 bg-yellow-50 p-3 hover:shadow-sm transition-shadow">
+            <p className="text-2xl font-bold text-gray-900">{pendingRx}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('dashboard.prescriptions.pending')}</p>
+          </Link>
+          <Link to="/pharmacist/consultations" className="rounded-xl border border-blue-100 bg-blue-50 p-3 hover:shadow-sm transition-shadow">
+            <p className="text-2xl font-bold text-gray-900">{preparingRx}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('dashboard.prescriptions.preparing')}</p>
+          </Link>
+          <Link to="/pharmacist/consultations" className="rounded-xl border border-green-100 bg-green-50 p-3 hover:shadow-sm transition-shadow">
+            <p className="text-2xl font-bold text-gray-900">{readyRx}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('dashboard.prescriptions.ready')}</p>
+          </Link>
+        </div>
+        {actionableRx.length === 0 ? (
+          <div className="text-center py-6 text-gray-400">
+            <p className="text-2xl mb-2">💊</p>
+            <p className="text-sm">{t('dashboard.prescriptions.empty')}</p>
+          </div>
+        ) : (
+          <ul className="space-y-1">
+            {actionableRx.map((c: any) => (
+              <li key={c.id}>
+                <Link to="/pharmacist/consultations" className="flex items-center justify-between text-sm py-2 px-1 border-b border-gray-50 last:border-0 hover:bg-gray-50 rounded-lg -mx-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-7 h-7 shrink-0 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">{c.patient_name?.charAt(0) || '?'}</span>
+                    <div className="min-w-0">
+                      <p className="text-gray-700 font-medium truncate">{c.patient_name}</p>
+                      <p className="text-xs text-gray-400">{c.doctor_display_name ? t('dashboard.prescriptions.fromDoctor', { name: c.doctor_display_name }) : t('dashboard.prescriptions.selfRequested')}</p>
+                    </div>
+                  </div>
+                  <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${c.status === 'preparing' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                    {c.status === 'preparing' ? t('dashboard.prescriptions.preparing') : t('dashboard.prescriptions.pending')}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Sales trend + revenue/profit summary */}

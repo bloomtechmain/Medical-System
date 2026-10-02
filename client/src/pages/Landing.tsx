@@ -370,7 +370,7 @@ export default function Landing() {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-bold text-gray-900 mb-1">New User Registration</h3>
-                    <p className="text-gray-500 text-sm mb-4">Register as a patient, doctor, pharmacist, or lab technician.</p>
+                    <p className="text-gray-500 text-sm mb-4">Register as a patient or doctor. Pharmacies and laboratories register as organizations.</p>
                     <Link
                       to="/register"
                       className="inline-flex items-center gap-2 border-2 border-teal-600 text-teal-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-50 transition-colors text-sm"

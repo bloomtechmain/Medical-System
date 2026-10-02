@@ -247,9 +247,9 @@ export default function DoctorDashboard() {
       at: r.updated_at || r.created_at, icon: '🧪',
       title: t('doctorDashboard.recent.labResultReady', { name: r.patient_name }), sub: r.test_description,
     })),
-    ...(consultations as any[]).filter((c: any) => c.status === 'dispensed').map((c: any) => ({
+    ...(consultations as any[]).filter((c: any) => c.status === 'delivered' || c.status === 'completed').map((c: any) => ({
       at: c.updated_at || c.visit_date, icon: '💊',
-      title: t('doctorDashboard.recent.prescriptionDispensed', { name: c.patient_name }), sub: c.pharmacy_name,
+      title: t('doctorDashboard.recent.prescriptionDelivered', { name: c.patient_name }), sub: c.pharmacy_name,
     })),
     ...(requests as any[]).filter((r: any) => r.status !== 'pending' && r.responded_at).map((r: any) => ({
       at: r.responded_at, icon: r.status === 'accepted' ? '✅' : '❌',

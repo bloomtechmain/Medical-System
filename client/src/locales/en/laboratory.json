@@ -85,7 +85,11 @@
       "sampleLabel": "Sample",
       "startProcessing": "Start Processing",
       "uploadReport": "Upload Report",
-      "viewReport": "View Report"
+      "viewReport": "View Report",
+      "rejectButton": "Reject",
+      "detailsButton": "Details & Chat",
+      "priceLabel": "LKR {{amount}}",
+      "noPriceLabel": "No price set"
     },
     "csv": {
       "patient": "Patient",
@@ -204,7 +208,11 @@
       "sampleIdLabel": "ID:",
       "collectedLabel": "Collected:",
       "reportNotesHeading": "📝 Report Notes",
-      "openReport": "Open Uploaded Report"
+      "openReport": "Open Uploaded Report",
+      "priceHeading": "Price",
+      "pricePlaceholder": "e.g. 850.00",
+      "priceSaved": "Price saved",
+      "priceSaveFailed": "Failed to save price"
     },
     "sampleModal": {
       "title": "Start Processing",
@@ -214,6 +222,47 @@
       "submitLabel": "Start Processing",
       "toastSuccess": "Processing started",
       "toastError": "Failed to start processing"
+    },
+    "rejectModal": {
+      "title": "Reject Request",
+      "reasonLabel": "Reason for rejecting (shown to the patient)",
+      "reasonPlaceholder": "e.g. We don't currently offer this test, please try another lab…",
+      "submitLabel": "Reject Request",
+      "toastSuccess": "Request rejected — patient notified",
+      "toastError": "Failed to reject request"
+    },
+    "catalog": {
+      "pageTitle": "Test Catalog",
+      "pageDescription": "Tests you offer and their prices — patients see these when booking with you.",
+      "addButton": "Add Test",
+      "searchPlaceholder": "Search by name or code…",
+      "inactive": "Inactive",
+      "activateButton": "Activate",
+      "deactivateButton": "Deactivate",
+      "columns": {
+        "code": "Code",
+        "testName": "Test Name",
+        "turnaround": "Turnaround",
+        "hoursValue": "{{count}} hrs"
+      },
+      "modal": {
+        "addTitle": "Add Test",
+        "editTitle": "Edit Test",
+        "testCode": "Test Code",
+        "testCodePlaceholder": "e.g. FBC",
+        "testName": "Test Name",
+        "testNamePlaceholder": "e.g. Full Blood Count",
+        "price": "Price (LKR)",
+        "turnaroundHours": "Turnaround (hours)",
+        "optional": "(optional)",
+        "description": "Description"
+      },
+      "toast": {
+        "added": "Test added to your catalog",
+        "updated": "Test updated",
+        "saveFailed": "Failed to save",
+        "statusUpdated": "Status updated"
+      }
     }
   }
 }

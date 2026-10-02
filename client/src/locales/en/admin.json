@@ -4,6 +4,10 @@
       "statusUpdated": "User status updated",
       "statusUpdateFailed": "Failed to update user status"
     },
+    "viewAsActivity": {
+      "title": "Recent View As Activity",
+      "entry": "{{admin}} viewed as {{target}} ({{role}})"
+    },
     "stats": {
       "totalUsers": "Total Users",
       "patients": "Patients",
@@ -130,7 +134,8 @@
       "updateFailed": "Failed to update user",
       "statusUpdateFailed": "Failed to update status",
       "removeSuccess": "User removed",
-      "removeFailed": "Failed to remove user"
+      "removeFailed": "Failed to remove user",
+      "viewAsFailed": "Failed to start View As session"
     },
     "pageTitle": "User Management",
     "pageSubtitle": "Create, edit, and manage all system users",
@@ -147,6 +152,7 @@
     },
     "inactive": "Inactive",
     "editUser": "Edit User",
+    "viewAs": "View As (impersonate this user)",
     "deactivate": "Deactivate",
     "activate": "Activate",
     "deleteUser": "Delete user",
