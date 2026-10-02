@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Stethoscope, Thermometer, CheckCircle2, Package, Pill,
-  MapPin, Calendar, ChevronDown, Pencil, X, Plus, Building2,
+  MapPin, Calendar, ChevronDown, Pencil, X, Plus,
   ArrowUpRight, Info, FlaskConical, Send, Search, FileImage,
   Eye, Download, ExternalLink, Microscope, Activity, FileText,
 } from 'lucide-react';
@@ -23,11 +23,23 @@ const PALETTES = [
 
 const STATUS_STYLE: Record<string, any> = {
   active:    { cls: 'bg-amber-100 text-amber-700',     dot: 'bg-amber-400'    },
-  dispensed: { cls: 'bg-blue-100 text-blue-700',       dot: 'bg-blue-400'     },
+  preparing: { cls: 'bg-blue-100 text-blue-700',       dot: 'bg-blue-400'     },
+  dispensed: { cls: 'bg-violet-100 text-violet-700',   dot: 'bg-violet-400'   },
+  delivered: { cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-400'  },
   completed: { cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-400'  },
 };
 
-const EMPTY_MED = { medicine_name: '', dosage: '', frequency: '', duration: '' };
+// Pharmacy fulfilment pipeline display config, keyed by medical_consultations.status.
+// 'dispensed' means "ready for pickup/delivery" (kept as the DB literal for
+// backward compatibility with existing rows) — not the final state anymore.
+const PHARMACY_STAGE_UI: Record<string, { headingKey: string; headingColor: string; iconBg: string; badgeKey: string; badgeCls: string }> = {
+  active:    { headingKey: 'page.wf.pharmacyNamed',   headingColor: 'text-violet-700', iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600', badgeKey: 'page.wf.awaitingDispensing', badgeCls: 'bg-amber-100 text-amber-700' },
+  preparing: { headingKey: 'page.wf.pharmacyPreparingHeading', headingColor: 'text-blue-700', iconBg: 'bg-gradient-to-br from-blue-500 to-indigo-600', badgeKey: 'page.wf.stagePreparing', badgeCls: 'bg-blue-100 text-blue-700' },
+  dispensed: { headingKey: 'page.wf.pharmacyReadyHeading', headingColor: 'text-violet-700', iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600', badgeKey: 'page.wf.stageReady', badgeCls: 'bg-violet-100 text-violet-700' },
+  delivered: { headingKey: 'page.wf.pharmacyDeliveredHeading', headingColor: 'text-emerald-600', iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600', badgeKey: 'page.wf.stageDelivered', badgeCls: 'bg-emerald-100 text-emerald-700' },
+  completed: { headingKey: 'page.wf.pharmacyDeliveredHeading', headingColor: 'text-emerald-600', iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600', badgeKey: 'page.wf.stageDelivered', badgeCls: 'bg-emerald-100 text-emerald-700' },
+};
+
 const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 function useDebounce(v: string, ms = 350) {
@@ -332,46 +344,105 @@ function SendToPharmacyModal({ consultation, onClose, onSent }: SendToPharmacyMo
   );
 }
 
+function DoctorNameAutocomplete({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = useTranslation('patientConsultations');
+  const dq              = useDebounce(value);
+  const [open, setOpen] = useState(false);
+  const ref              = useRef<HTMLDivElement>(null);
+
+  const { data: results = [], isFetching } = useQuery({
+    queryKey: ['search-doctors-consult', dq],
+    queryFn:  () => userApi.searchDoctors(dq),
+    enabled:  open && dq.trim().length >= 1,
+  });
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        type="text"
+        placeholder={t('selfRecordModal.fields.doctorNamePlaceholder')}
+        value={value}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+      />
+      {open && dq.trim().length >= 1 && (results as any[]).length > 0 && (
+        <ul className="absolute z-40 mt-1 w-full bg-white rounded-2xl shadow-xl border border-gray-100 max-h-48 overflow-y-auto">
+          {isFetching
+            ? <li className="px-4 py-3 flex items-center gap-2 text-sm text-gray-400">
+                <span className="w-3.5 h-3.5 border-2 border-gray-200 border-t-primary-400 rounded-full animate-spin shrink-0" />
+                {t('doctorSearch.loading')}
+              </li>
+            : (results as any[]).map((d: any) => (
+              <li key={d.id} onClick={() => { onChange(d.name); setOpen(false); }}
+                className="px-4 py-2.5 hover:bg-primary-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center gap-2">
+                <div className="w-7 h-7 bg-primary-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Stethoscope size={12} strokeWidth={2} className="text-primary-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{t('doctorSearch.namePrefix', { name: d.name })}</p>
+                  {d.specialization && <p className="text-xs text-gray-400">{d.specialization}</p>}
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+      )}
+    </div>
+  );
+}
+
 interface SelfRecordModalProps {
   onClose: () => void;
   onSaved: () => void;
 }
+
+interface MedicineRow { medicine_name: string; dosage: string; frequency: string; duration: string; }
+const emptyMedicineRow = (): MedicineRow => ({ medicine_name: '', dosage: '', frequency: '', duration: '' });
 
 function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
   const { t } = useTranslation('patientConsultations');
   const { t: tc } = useTranslation('common');
   const [fields, setFields] = useState({
     visit_date: new Date().toISOString().slice(0, 10),
-    doctor_name: '', hospital_clinic: '',
-    sick_description: '', diagnosis: '', treatment_description: '',
+    doctor_name: '', sick_description: '', diagnosis: '',
   });
-  const [meds,       setMeds]       = useState<any[]>([]);
-  const [file,       setFile]       = useState<File | null>(null);
-  const [preview,    setPreview]    = useState<string | null>(null);
+  const [prescriptionFile,    setPrescriptionFile]    = useState<File | null>(null);
+  const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
+  const [medicines,           setMedicines]           = useState<MedicineRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const sf = (k: string, v: string) => setFields(p => ({ ...p, [k]: v }));
-  const addMed    = () => setMeds((m: any[]) => [...m, { ...EMPTY_MED }]);
-  const removeMed = (i: number) => setMeds((m: any[]) => m.filter((_: any, j: number) => j !== i));
-  const updMed    = (i: number, k: string, v: string) => setMeds((m: any[]) => m.map((x: any, j: number) => j === i ? { ...x, [k]: v } : x));
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    setFile(f); setPreview(URL.createObjectURL(f));
+  const onPickPrescription = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setPrescriptionFile(file);
+    setPrescriptionPreview(file ? URL.createObjectURL(file) : null);
   };
+
+  const updateMedRow = (i: number, k: keyof MedicineRow, v: string) =>
+    setMedicines(rows => rows.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
+  const addMedRow    = () => setMedicines(rows => [...rows, emptyMedicineRow()]);
+  const removeMedRow = (i: number) => setMedicines(rows => rows.filter((_, idx) => idx !== i));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fields.visit_date) return setError(t('selfRecordModal.errors.visitDateRequired'));
     if (!fields.sick_description.trim()) return setError(t('selfRecordModal.errors.symptomsRequired'));
     setError(''); setSubmitting(true);
     try {
       const fd = new FormData();
-      Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
-      fd.append('manual_medicines', JSON.stringify(meds.filter((m: any) => m.medicine_name.trim())));
-      if (file) fd.append('prescription', file);
+      Object.entries(fields).forEach(([k, v]) => fd.append(k, v || ''));
+      if (!fields.visit_date) fd.set('visit_date', new Date().toISOString().slice(0, 10));
+      if (prescriptionFile) fd.append('prescription', prescriptionFile);
+      const validMeds = medicines.filter(m => m.medicine_name.trim());
+      if (validMeds.length) fd.append('manual_medicines', JSON.stringify(validMeds));
       await consultationApi.create(fd);
       onSaved(); onClose();
     } catch (err: any) {
@@ -381,7 +452,7 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 pt-6 overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg my-4">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-bold text-gray-900 text-lg">{t('selfRecordModal.title')}</h2>
@@ -393,81 +464,88 @@ function SelfRecordModal({ onClose, onSaved }: SelfRecordModalProps) {
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">{error}</p>}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('selfRecordModal.fields.visitDate')}</label>
-              <input type="date" required value={fields.visit_date} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('visit_date', e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('selfRecordModal.fields.doctorName')}</label>
-              <input type="text" placeholder={t('selfRecordModal.fields.doctorNamePlaceholder')} value={fields.doctor_name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('doctor_name', e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
-            </div>
-          </div>
+
           <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('selfRecordModal.fields.hospitalClinic')}</label>
-            <input type="text" placeholder={t('selfRecordModal.fields.hospitalClinicPlaceholder')} value={fields.hospital_clinic} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('hospital_clinic', e.target.value)}
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('selfRecordModal.fields.doctorName')}</label>
+            <DoctorNameAutocomplete value={fields.doctor_name} onChange={(v: string) => sf('doctor_name', v)} />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
+              {t('selfRecordModal.fields.visitDate')} <span className="text-gray-300 font-normal normal-case">{t('selfRecordModal.prescription.optional')}</span>
+            </label>
+            <input type="date" value={fields.visit_date} onChange={(e: React.ChangeEvent<HTMLInputElement>) => sf('visit_date', e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
           </div>
+
           {[
-            { key: 'sick_description',      label: t('selfRecordModal.fields.symptoms'),     ph: t('selfRecordModal.fields.symptomsPlaceholder'), req: true  },
-            { key: 'diagnosis',             label: t('selfRecordModal.fields.diagnosis'),      ph: t('selfRecordModal.fields.diagnosisPlaceholder'), req: false },
-            { key: 'treatment_description', label: t('selfRecordModal.fields.treatmentPlan'), ph: t('selfRecordModal.fields.treatmentPlanPlaceholder'), req: false },
+            { key: 'sick_description', label: t('selfRecordModal.fields.symptoms'),  ph: t('selfRecordModal.fields.symptomsPlaceholder'),  req: true  },
+            { key: 'diagnosis',        label: t('selfRecordModal.fields.diagnosis'), ph: t('selfRecordModal.fields.diagnosisPlaceholder'), req: false },
           ].map(({ key, label, ph, req }) => (
             <div key={key}>
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{label}</label>
-              <textarea rows={2} required={req} placeholder={ph} value={(fields as any)[key]} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => sf(key, e.target.value)}
+              <textarea rows={3} required={req} placeholder={ph} value={(fields as any)[key]} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => sf(key, e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
             </div>
           ))}
+
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
               {t('selfRecordModal.prescription.label')} <span className="text-gray-300 font-normal normal-case">{t('selfRecordModal.prescription.optional')}</span>
             </label>
-            {!preview ? (
-              <button type="button" onClick={() => fileRef.current?.click()}
-                className="w-full border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-primary-400 hover:bg-primary-50 transition-colors group">
-                <div className="flex items-center justify-center gap-2 text-gray-400 group-hover:text-primary-600">
-                  <FileImage size={18} strokeWidth={1.5} />
-                  <p className="text-sm font-medium">{t('selfRecordModal.prescription.uploadBtn')}</p>
-                </div>
-              </button>
-            ) : (
+            {prescriptionPreview ? (
               <div className="relative">
-                <img src={preview} alt="Preview" className="w-full max-h-40 object-contain rounded-xl border border-gray-200 bg-gray-50" />
-                <button type="button" onClick={() => { setFile(null); setPreview(null); if (fileRef.current) fileRef.current.value = ''; }}
-                  className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">{tc('actions.remove')}</button>
+                <img src={prescriptionPreview} alt="Prescription preview" className="w-full max-h-48 object-contain rounded-xl border border-gray-200 bg-gray-50" />
+                <button type="button" onClick={() => { setPrescriptionFile(null); setPrescriptionPreview(null); }}
+                  className="absolute top-2 right-2 w-7 h-7 bg-white/90 rounded-lg flex items-center justify-center shadow-sm text-gray-500 hover:text-red-500">
+                  <X size={14} strokeWidth={2.5} />
+                </button>
               </div>
+            ) : (
+              <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl px-4 py-5 text-sm text-gray-500 cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-colors">
+                <FileImage size={16} strokeWidth={2} className="text-gray-400" />
+                {t('selfRecordModal.prescription.uploadBtn')}
+                <input type="file" accept="image/*" className="hidden" onChange={onPickPrescription} />
+              </label>
             )}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           </div>
+
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1.5">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('selfRecordModal.medicines.label')}</label>
-              <button type="button" onClick={addMed}
-                className="flex items-center gap-1 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1.5 rounded-xl hover:bg-primary-100">
-                <Plus size={11} strokeWidth={2.5} /> {tc('actions.add')}
+              <button type="button" onClick={addMedRow} className="text-xs font-semibold text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                <Plus size={12} strokeWidth={2.5} /> {tc('actions.add')}
               </button>
             </div>
-            {meds.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-3 border-2 border-dashed border-gray-100 rounded-xl">{t('selfRecordModal.medicines.none')}</p>
-            ) : meds.map((m: any, i: number) => (
-              <div key={i} className="grid grid-cols-12 gap-2 bg-gray-50 rounded-2xl p-2.5 border border-gray-100 mb-2">
-                {[['col-span-12 sm:col-span-4','medicine_name',t('selfRecordModal.medicines.medicine')],['col-span-6 sm:col-span-2','dosage',t('selfRecordModal.medicines.dosage')],['col-span-6 sm:col-span-2','frequency',t('selfRecordModal.medicines.frequency')],['col-span-8 sm:col-span-2','duration',t('selfRecordModal.medicines.duration')]].map(([col, k, ph]) => (
-                  <div key={k} className={col}>
-                    <input type="text" placeholder={ph} value={m[k]} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updMed(i, k, e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-400" />
+            {medicines.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">{t('selfRecordModal.medicines.none')}</p>
+            ) : (
+              <div className="space-y-2">
+                {medicines.map((m, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-gray-50 border border-gray-100 rounded-xl p-2.5">
+                    <div className="flex-1 grid grid-cols-2 gap-1.5">
+                      <input className="col-span-2 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                        placeholder={t('selfRecordModal.medicines.medicine')} value={m.medicine_name}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateMedRow(i, 'medicine_name', e.target.value)} />
+                      <input className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                        placeholder={t('selfRecordModal.medicines.dosage')} value={m.dosage}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateMedRow(i, 'dosage', e.target.value)} />
+                      <input className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                        placeholder={t('selfRecordModal.medicines.frequency')} value={m.frequency}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateMedRow(i, 'frequency', e.target.value)} />
+                      <input className="col-span-2 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                        placeholder={t('selfRecordModal.medicines.duration')} value={m.duration}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateMedRow(i, 'duration', e.target.value)} />
+                    </div>
+                    <button type="button" onClick={() => removeMedRow(i)} className="text-gray-300 hover:text-red-500 shrink-0 mt-1.5">
+                      <X size={14} strokeWidth={2.5} />
+                    </button>
                   </div>
                 ))}
-                <div className="col-span-4 sm:col-span-2 flex items-center justify-center">
-                  <button type="button" onClick={() => removeMed(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50">
-                    <X size={12} strokeWidth={2.5} />
-                  </button>
-                </div>
               </div>
-            ))}
+            )}
           </div>
+
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
               className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">{tc('actions.cancel')}</button>
@@ -494,26 +572,24 @@ function EditModal({ consultation, onClose, onSave, isPending }: EditModalProps)
   const { t } = useTranslation('patientConsultations');
   const { t: tc } = useTranslation('common');
   const [form, setForm] = useState({
-    visit_date:            consultation.visit_date?.split('T')[0] || '',
-    doctor_name:           consultation.doctor_name || '',
-    hospital_clinic:       consultation.hospital_clinic || '',
-    sick_description:      consultation.sick_description || '',
-    diagnosis:             consultation.diagnosis || '',
-    treatment_description: consultation.treatment_description || '',
+    visit_date:       consultation.visit_date?.split('T')[0] || '',
+    doctor_name:      consultation.doctor_name || '',
+    sick_description: consultation.sick_description || '',
+    diagnosis:        consultation.diagnosis || '',
   });
-  const [meds, setMeds] = useState(
+  const [medicines, setMedicines] = useState<MedicineRow[]>(
     (consultation.medicines || []).map((m: any) => ({
-      medicine_name: m.medicine_name || '', dosage: m.dosage || '',
-      frequency: m.frequency || '', duration: m.duration || '',
+      medicine_name: m.medicine_name || '', dosage: m.dosage || '', frequency: m.frequency || '', duration: m.duration || '',
     }))
   );
-  const addMed    = () => setMeds((m: any[]) => [...m, { ...EMPTY_MED }]);
-  const removeMed = (i: number) => setMeds((m: any[]) => m.filter((_: any, j: number) => j !== i));
-  const updMed    = (i: number, f: string, v: string) => setMeds((m: any[]) => m.map((x: any, j: number) => j === i ? { ...x, [f]: v } : x));
+  const updateMedRow = (i: number, k: keyof MedicineRow, v: string) =>
+    setMedicines(rows => rows.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
+  const addMedRow    = () => setMedicines(rows => [...rows, emptyMedicineRow()]);
+  const removeMedRow = (i: number) => setMedicines(rows => rows.filter((_, idx) => idx !== i));
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-bold text-gray-900">{t('editModal.title')}</h2>
@@ -523,60 +599,64 @@ function EditModal({ consultation, onClose, onSave, isPending }: EditModalProps)
             <X size={15} strokeWidth={2.5} />
           </button>
         </div>
-        <form onSubmit={(e: React.FormEvent) => { e.preventDefault(); onSave({ ...form, medicines: meds.filter((m: any) => m.medicine_name.trim()) }); }}
+        <form onSubmit={(e: React.FormEvent) => { e.preventDefault(); onSave({ ...form, medicines: medicines.filter(m => m.medicine_name.trim()) }); }}
               className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('editModal.fields.visitDate')}</label>
-              <input type="date" required value={form.visit_date} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, visit_date: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('editModal.fields.doctorName')}</label>
-              <input type="text" value={form.doctor_name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, doctor_name: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
-            </div>
+          <div>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('editModal.fields.doctorName')}</label>
+            <DoctorNameAutocomplete value={form.doctor_name} onChange={(v: string) => setForm(f => ({ ...f, doctor_name: v }))} />
           </div>
           <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('editModal.fields.hospitalClinic')}</label>
-            <input type="text" value={form.hospital_clinic} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, hospital_clinic: e.target.value }))}
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('editModal.fields.visitDate')}</label>
+            <input type="date" required value={form.visit_date} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, visit_date: e.target.value }))}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
           </div>
           {[
-            { k: 'sick_description',      l: t('editModal.fields.symptoms'),      ph: t('editModal.fields.symptomsPlaceholder')    },
-            { k: 'diagnosis',             l: t('editModal.fields.diagnosis'),     ph: t('editModal.fields.diagnosisPlaceholder')    },
-            { k: 'treatment_description', l: t('editModal.fields.treatmentPlan'),ph: t('editModal.fields.treatmentPlanPlaceholder')       },
+            { k: 'sick_description', l: t('editModal.fields.symptoms'),  ph: t('editModal.fields.symptomsPlaceholder')  },
+            { k: 'diagnosis',        l: t('editModal.fields.diagnosis'), ph: t('editModal.fields.diagnosisPlaceholder') },
           ].map(({ k, l, ph }) => (
             <div key={k}>
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{l}</label>
-              <textarea rows={2} placeholder={ph} value={(form as any)[k]} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }))}
+              <textarea rows={3} placeholder={ph} value={(form as any)[k]} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
             </div>
           ))}
+
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1.5">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('editModal.medicines.label')}</label>
-              <button type="button" onClick={addMed}
-                className="flex items-center gap-1 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1.5 rounded-xl">
-                <Plus size={11} strokeWidth={2.5} /> {tc('actions.add')}
+              <button type="button" onClick={addMedRow} className="text-xs font-semibold text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                <Plus size={12} strokeWidth={2.5} /> {tc('actions.add')}
               </button>
             </div>
-            {meds.map((m: any, i: number) => (
-              <div key={i} className="grid grid-cols-12 gap-2 bg-gray-50 rounded-2xl p-2.5 border border-gray-100 mb-2">
-                {[['col-span-12 sm:col-span-4','medicine_name',t('editModal.medicines.medicine')],['col-span-6 sm:col-span-2','dosage',t('editModal.medicines.dosage')],['col-span-6 sm:col-span-2','frequency',t('editModal.medicines.frequency')],['col-span-8 sm:col-span-2','duration',t('editModal.medicines.duration')]].map(([col, k, ph]) => (
-                  <div key={k} className={col}>
-                    <input type="text" placeholder={ph} value={m[k]} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updMed(i, k, e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-400" />
+            {medicines.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">{t('selfRecordModal.medicines.none')}</p>
+            ) : (
+              <div className="space-y-2">
+                {medicines.map((m, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-gray-50 border border-gray-100 rounded-xl p-2.5">
+                    <div className="flex-1 grid grid-cols-2 gap-1.5">
+                      <input className="col-span-2 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                        placeholder={t('editModal.medicines.medicine')} value={m.medicine_name}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateMedRow(i, 'medicine_name', e.target.value)} />
+                      <input className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                        placeholder={t('editModal.medicines.dosage')} value={m.dosage}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateMedRow(i, 'dosage', e.target.value)} />
+                      <input className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                        placeholder={t('editModal.medicines.frequency')} value={m.frequency}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateMedRow(i, 'frequency', e.target.value)} />
+                      <input className="col-span-2 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                        placeholder={t('editModal.medicines.duration')} value={m.duration}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateMedRow(i, 'duration', e.target.value)} />
+                    </div>
+                    <button type="button" onClick={() => removeMedRow(i)} className="text-gray-300 hover:text-red-500 shrink-0 mt-1.5">
+                      <X size={14} strokeWidth={2.5} />
+                    </button>
                   </div>
                 ))}
-                <div className="col-span-4 sm:col-span-2 flex items-center justify-center">
-                  <button type="button" onClick={() => removeMed(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50">
-                    <X size={12} strokeWidth={2.5} />
-                  </button>
-                </div>
               </div>
-            ))}
+            )}
           </div>
+
           <div className="flex gap-3 pb-1">
             <button type="button" onClick={onClose}
               className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">{tc('actions.cancel')}</button>
@@ -647,8 +727,8 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
   const labDone          = labRequest?.status === 'completed';
   const labInProg        = labRequest?.status === 'in_progress';
   const hasPharmacy      = !!c.pharmacy_name || !!c.assigned_pharmacist_id;
-  const dispensed        = c.status === 'dispensed' || c.status === 'completed';
-  const canForwardPharm  = hasMeds && !hasPharmacy && c.status === 'active';
+  const pharmacyStage    = PHARMACY_STAGE_UI[c.status] || PHARMACY_STAGE_UI.active;
+  const canForwardPharm  = (hasMeds || hasRx) && !hasPharmacy && c.status === 'active';
 
   const subSteps = [
     hasSymptoms && 'symptoms',
@@ -656,7 +736,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
     hasTx       && 'treatment',
     hasMeds     && 'medicines',
     hasRx       && 'prescription',
-    (hasMeds || hasPharmacy) && 'pharmacy',
+    (hasMeds || hasRx || hasPharmacy) && 'pharmacy',
     hasLabReq   && 'lab',
   ].filter(Boolean);
 
@@ -667,8 +747,9 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
     <div className="flex gap-3">
       <div className="flex flex-col items-center shrink-0" style={{ width: 36 }}>
         <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 z-10 ring-2 ring-white shadow-md ${
-          c.status === 'completed' ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
-          : c.status === 'dispensed' ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
+          c.status === 'completed' || c.status === 'delivered' ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+          : c.status === 'dispensed' ? 'bg-gradient-to-br from-violet-500 to-purple-600'
+          : c.status === 'preparing' ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
           : `bg-gradient-to-br ${palette.grad}`
         }`}>
           <Stethoscope size={15} strokeWidth={2} className="text-white" />
@@ -796,12 +877,12 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                 )}
 
                 {/* Pharmacy workflow node */}
-                {(hasMeds || hasPharmacy) && (
+                {(hasMeds || hasRx || hasPharmacy) && (
                   <WFNode
                     icon={<Package size={12} strokeWidth={2} className={hasPharmacy ? 'text-white' : 'text-violet-600'} />}
-                    iconBg={hasPharmacy ? (dispensed ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-violet-500 to-purple-600') : 'bg-violet-100'}
-                    label={hasPharmacy ? (dispensed ? t('page.wf.pharmacyDispensed') : t('page.wf.pharmacyNamed', { name: c.pharmacy_name || t('page.wf.pharmacyAssignedFallback') })) : t('page.wf.pharmacy')}
-                    labelColor={hasPharmacy ? (dispensed ? 'text-emerald-600' : 'text-violet-700') : 'text-violet-600'}
+                    iconBg={hasPharmacy ? pharmacyStage.iconBg : 'bg-violet-100'}
+                    label={hasPharmacy ? t(pharmacyStage.headingKey, { name: c.pharmacy_name || t('page.wf.pharmacyAssignedFallback') }) : t('page.wf.pharmacy')}
+                    labelColor={hasPharmacy ? pharmacyStage.headingColor : 'text-violet-600'}
                     isLast={subSteps[subSteps.length-1] === 'pharmacy' && !hasLabReq}
                   >
                     {hasPharmacy ? (
@@ -809,10 +890,8 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                         <p className="text-sm font-bold text-gray-900">{c.pharmacy_name || t('page.wf.assignedPharmacyFallback')}</p>
                         {c.pharmacy_address && <p className="text-xs text-gray-400 flex items-center gap-1"><MapPin size={9} strokeWidth={2} />{c.pharmacy_address}</p>}
                         {c.pharmacy_phone   && <p className="text-xs text-gray-400">{c.pharmacy_phone}</p>}
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          dispensed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {dispensed ? t('page.wf.medicinesDispensed') : t('page.wf.awaitingDispensing')}
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${pharmacyStage.badgeCls}`}>
+                          {t(pharmacyStage.badgeKey)}
                         </span>
                       </div>
                     ) : canForwardPharm ? (
@@ -917,85 +996,6 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
   );
 }
 
-interface DoctorCardProps {
-  group: any;
-  palette: any;
-  onEdit: (c: any) => void;
-  onSendToLab: (c: any) => void;
-  onSendToPharmacy: (c: any) => void;
-  labRequestMap: Record<number, any>;
-}
-
-function DoctorCard({ group, palette, onEdit, onSendToLab, onSendToPharmacy, labRequestMap }: DoctorCardProps) {
-  const { t } = useTranslation('patientConsultations');
-  const { t: tc } = useTranslation('common');
-  const [collapsed, setCollapsed] = useState(false);
-  const initial = group.doctorKey.replace(/^Dr\.?\s*/i, '').charAt(0).toUpperCase();
-
-  return (
-    <div className="ios-tile overflow-hidden">
-      <div
-        className={`relative bg-gradient-to-br ${palette.grad} px-5 pt-5 pb-4 cursor-pointer overflow-hidden`}
-        onClick={() => setCollapsed((c: boolean) => !c)}
-      >
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10" />
-        <div className="absolute top-8 -right-16 w-32 h-32 rounded-full bg-white/5" />
-
-        <div className="relative flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center text-white text-lg font-bold shadow-lg shrink-0">
-              {initial}
-            </div>
-            <div>
-              <p className="text-white font-bold text-base leading-snug">
-                {group.doctorKey === 'Self-Recorded' ? t('page.doctorCard.selfRecorded') : t('page.doctorCard.doctorPrefix', { name: group.doctorKey })}
-              </p>
-              {group.hospital && (
-                <p className="text-white/70 text-xs flex items-center gap-1 mt-0.5">
-                  <Building2 size={10} strokeWidth={2} /> {group.hospital}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="text-right">
-              <p className="text-white font-bold text-sm leading-none">{group.consultations.length}</p>
-              <p className="text-white/60 text-[10px]">{t('page.doctorCard.visits')}</p>
-            </div>
-            {group.isSystemDoctor && (
-              <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">{t('page.doctorCard.verified')}</span>
-            )}
-            {group.hasActive && (
-              <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-400/30 text-amber-100 border border-amber-300/30 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 bg-amber-300 rounded-full animate-pulse" /> {tc('status.active')}
-              </span>
-            )}
-            <ChevronDown size={16} strokeWidth={2.5} className={`text-white/80 transition-transform duration-200 ${collapsed ? '-rotate-180' : ''}`} />
-          </div>
-        </div>
-      </div>
-
-      {!collapsed && (
-        <div className="bg-slate-50/40 px-4 pt-4 pb-3">
-          {group.consultations.map((c: any, i: number) => (
-            <ConsultationCommit
-              key={c.id}
-              c={c}
-              palette={palette}
-              labRequest={labRequestMap[c.id]}
-              isLast={i === group.consultations.length - 1}
-              onEdit={onEdit}
-              onSendToLab={onSendToLab}
-              onSendToPharmacy={onSendToPharmacy}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function PatientConsultations() {
   const { t } = useTranslation('patientConsultations');
   const qc = useQueryClient();
@@ -1004,6 +1004,7 @@ export default function PatientConsultations() {
   const [sendPharmConsultation, setSendPharmConsultation] = useState<any>(null);
   const [showSelfRecord,        setShowSelfRecord]        = useState(false);
   const [toast,                 setToast]                 = useState<{ msg: string; type: string } | null>(null);
+  const [doctorFilter,          setDoctorFilter]          = useState('all');
 
   const { data: consultations = [], isLoading } = useQuery({
     queryKey: ['consultations'],
@@ -1021,25 +1022,33 @@ export default function PatientConsultations() {
     return map;
   }, [labRequests]);
 
-  const doctorGroups = useMemo(() => {
-    const groups: Record<string, any> = {};
-    (consultations as any[]).forEach((c: any) => {
-      const key = c.doctor_display_name || c.doctor_name || 'Self-Recorded';
-      if (!groups[key]) groups[key] = { doctorKey: key, isSystemDoctor: !!c.doctor_display_name, hospital: '', hasActive: false, consultations: [] };
-      groups[key].consultations.push(c);
-      if (c.hospital_clinic) groups[key].hospital = c.hospital_clinic;
-      if (c.status === 'active') groups[key].hasActive = true;
-    });
-    return Object.values(groups).sort((a: any, b: any) => {
-      if (a.hasActive !== b.hasActive) return a.hasActive ? -1 : 1;
-      return new Date(b.consultations[0]?.visit_date || 0).getTime() - new Date(a.consultations[0]?.visit_date || 0).getTime();
-    });
-  }, [consultations]);
+  // Newest visit first, flat across all doctors (no per-doctor grouping).
+  const sortedConsultations = useMemo(() =>
+    [...(consultations as any[])].sort((a, b) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime()),
+    [consultations]
+  );
+
+  const doctorNames = useMemo(() =>
+    [...new Set(sortedConsultations.map((c: any) => c.doctor_display_name || c.doctor_name || t('page.doctorCard.selfRecorded')))],
+    [sortedConsultations, t]
+  );
+
+  // Stable color per doctor so the same doctor's visits always share a palette, even though they're no longer spatially grouped.
+  const doctorPalette = useMemo(() => {
+    const map: Record<string, any> = {};
+    doctorNames.forEach((name, i) => { map[name] = PALETTES[i % PALETTES.length]; });
+    return map;
+  }, [doctorNames]);
+
+  const filteredConsultations = useMemo(() => {
+    if (doctorFilter === 'all') return sortedConsultations;
+    return sortedConsultations.filter((c: any) => (c.doctor_display_name || c.doctor_name || t('page.doctorCard.selfRecorded')) === doctorFilter);
+  }, [sortedConsultations, doctorFilter, t]);
 
   const pendingLabs = (consultations as any[]).filter((c: any) => c.lab_tests_requested && !labRequestMap[c.id]).length;
   const stats = {
     total:   (consultations as any[]).length,
-    doctors: doctorGroups.length,
+    doctors: doctorNames.length,
     active:  (consultations as any[]).filter((c: any) => c.status === 'active').length,
   };
 
@@ -1110,7 +1119,7 @@ export default function PatientConsultations() {
         </div>
       )}
 
-      {doctorGroups.length === 0 && (
+      {sortedConsultations.length === 0 && (
         <div className="text-center py-24">
           <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <Stethoscope size={28} strokeWidth={1.5} className="text-gray-300" />
@@ -1120,19 +1129,46 @@ export default function PatientConsultations() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {doctorGroups.map((group: any, idx: number) => (
-          <DoctorCard
-            key={group.doctorKey}
-            group={group}
-            palette={PALETTES[idx % PALETTES.length]}
-            onEdit={setEditConsultation}
-            onSendToLab={setSendLabConsultation}
-            onSendToPharmacy={setSendPharmConsultation}
-            labRequestMap={labRequestMap}
-          />
-        ))}
-      </div>
+      {doctorNames.length > 1 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => setDoctorFilter('all')}
+            className={`shrink-0 text-xs font-semibold px-3.5 py-1.5 rounded-full transition-colors ${
+              doctorFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            {t('page.doctorFilter.all', { count: sortedConsultations.length })}
+          </button>
+          {doctorNames.map((name) => (
+            <button
+              key={name}
+              onClick={() => setDoctorFilter(name)}
+              className={`shrink-0 text-xs font-semibold px-3.5 py-1.5 rounded-full transition-colors ${
+                doctorFilter === name ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {name === t('page.doctorCard.selfRecorded') ? name : t('page.doctorCard.doctorPrefix', { name })}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {filteredConsultations.length > 0 && (
+        <div className="ios-tile p-5">
+          {filteredConsultations.map((c: any, i: number) => (
+            <ConsultationCommit
+              key={c.id}
+              c={c}
+              palette={doctorPalette[c.doctor_display_name || c.doctor_name || t('page.doctorCard.selfRecorded')]}
+              labRequest={labRequestMap[c.id]}
+              isLast={i === filteredConsultations.length - 1}
+              onEdit={setEditConsultation}
+              onSendToLab={setSendLabConsultation}
+              onSendToPharmacy={setSendPharmConsultation}
+            />
+          ))}
+        </div>
+      )}
 
       {(consultations as any[]).some((c: any) => !!c.doctor_id) && (
         <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">

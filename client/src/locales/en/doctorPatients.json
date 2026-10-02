@@ -21,7 +21,19 @@
       "medicationWorkflow": { "label": "Medication Workflow", "desc": "Consultation records, diagnoses & full prescriptions" },
       "personalReports": { "label": "Personal Health Reports", "desc": "Patient-uploaded medical documents & reports" },
       "personalDetails": { "label": "Personal Details", "desc": "Personal contact, address & insurance details" },
-      "vitals": { "label": "Patient Vitals", "desc": "Blood work, CBC, metabolic & vital sign readings" }
+      "vitals": { "label": "Patient Vitals", "desc": "Blood work, CBC, metabolic & vital sign readings" },
+      "fullRecord": { "label": "Full Health Record" }
+    },
+    "fullAccess": {
+      "title": "Request Full Access",
+      "grantedTitle": "Full access granted",
+      "grantedDesc": "You can view this patient's complete health record below.",
+      "noneDesc": "Send one request to view lab reports, medical history, personal reports, contact info and vitals — all at once.",
+      "pendingDesc": "Waiting for the patient to approve your request, sent {{date}}.",
+      "declinedDesc": "The patient declined your last request.",
+      "requestButton": "Request Full Access",
+      "reRequestButton": "Re-request",
+      "pendingButton": "Pending…"
     },
     "accessSection": {
       "granted": "Granted",
@@ -29,7 +41,7 @@
       "requestAccess": "Request Access",
       "waitingApproval": "Request sent — waiting for patient approval",
       "patientDeclined": "Patient declined this request",
-      "accessRequired": "Access required to view this data",
+      "accessRequired": "Request full access above to unlock this",
       "requestedOn": "Requested on {{date}}"
     },
     "requestModal": {

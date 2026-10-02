@@ -49,6 +49,15 @@
     "critical": "බරපතලයි",
     "ready": "සූදානම්"
   },
+  "chat": {
+    "title": "පණිවිඩ",
+    "empty": "තවම පණිවිඩ නැත — හෙලෝ කියන්න.",
+    "placeholder": "පණිවිඩයක් ටයිප් කරන්න…"
+  },
+  "impersonation": {
+    "viewingAs": "{{name}} ({{role}}) ලෙස බලමින්",
+    "exitButton": "පරිපාලකට පිටවන්න"
+  },
   "fields": {
     "name": "නම",
     "email": "විද්‍යුත් තැපෑල",
@@ -95,6 +104,7 @@
     "users": "පරිශීලකයින්",
     "organizations": "සංවිධාන",
     "labReports": "රසායනාගාර වාර්තා",
+    "catalog": "පරීක්ෂණ නාමාවලිය",
     "accessRequests": "ප්‍රවේශ ඉල්ලීම්",
     "doctorRequests": "වෛද්‍ය ඉල්ලීම්",
     "prescriptions": "බෙහෙත් වට්ටෝරු",
@@ -112,6 +122,7 @@
     "labTests": "රසායනාගාර පරීක්ෂණ",
     "bookDoctor": "වෛද්‍යවරයා වෙන් කරන්න",
     "labReports": "රසායනාගාර වාර්තා",
+    "catalog": "නාමාවලිය",
     "medicines": "බෙහෙත්",
     "orders": "ඇණවුම්",
     "users": "පරිශීලකයින්",
@@ -122,6 +133,7 @@
     "medsShort": "බෙහෙත්",
     "reports": "වාර්තා",
     "more": "තව",
+    "settings": "සැකසුම්",
     "signOut": "ඉවත් වන්න"
   },
   "roleLabels": {

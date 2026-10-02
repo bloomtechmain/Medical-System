@@ -27,6 +27,8 @@ import DoctorPatientView from './pages/DoctorPatientView';
 import DoctorAccessRequests from './pages/DoctorAccessRequests';
 import DoctorAppointments from './pages/DoctorAppointments';
 import BookDoctor from './pages/BookDoctor';
+import PatientSettings from './pages/PatientSettings';
+import LaboratoryCatalog from './pages/LaboratoryCatalog';
 import Medicines from './pages/Medicines';
 import Suppliers from './pages/Suppliers';
 import Orders from './pages/Orders';
@@ -87,8 +89,6 @@ export default function App() {
         <Route path="users" element={<Users />} />
         <Route path="medicines" element={<Medicines />} />
         <Route path="suppliers" element={<Suppliers />} />
-        <Route path="orders" element={<Orders />} />
-        <Route path="sales" element={<Sales />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="organizations" element={<Organizations />} />
       </Route>
@@ -144,12 +144,14 @@ export default function App() {
         <Route path="my-reports"   element={<PatientMyReports />} />
         <Route path="requests"     element={<PatientAccessRequests />} />
         <Route path="book-doctor"  element={<BookDoctor />} />
+        <Route path="settings"     element={<PatientSettings />} />
       </Route>
 
       {/* Laboratory routes */}
       <Route path="/laboratory" element={<PrivateRoute roles={['laboratory']}><Layout /></PrivateRoute>}>
         <Route index element={<LaboratoryDashboard />} />
         <Route path="reports" element={<LaboratoryReports />} />
+        <Route path="catalog" element={<LaboratoryCatalog />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

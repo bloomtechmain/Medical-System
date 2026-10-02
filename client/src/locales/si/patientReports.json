@@ -23,7 +23,8 @@
     "statusLabels": {
       "pending": "අපේක්ෂිත",
       "inProgress": "ක්‍රියාත්මක වෙමින්",
-      "reportReady": "වාර්තාව සූදානම්"
+      "reportReady": "වාර්තාව සූදානම්",
+      "rejected": "ප්‍රතික්ෂේප කරන ලදී"
     },
     "modal": {
       "title": "රසායනාගාර පරීක්ෂණයක් වෙන් කරන්න",
@@ -32,6 +33,10 @@
       "testLabel": "පරීක්ෂණය *",
       "selectLabFirst": "එහි ලබා ගත හැකි පරීක්ෂණ බැලීමට පළමුව රසායනාගාරයක් තෝරන්න",
       "selectTestPlaceholder": "පරීක්ෂණයක් තෝරන්න…",
+      "catalogOptionLabel": "{{name}} — රු. {{price}}",
+      "priceConfirmed": "මිල තහවුරු කරන ලදී: රු. {{price}}",
+      "otherOption": "වෙනත් (ලැයිස්තුවේ නැත)…",
+      "otherInputPlaceholder": "පරීක්ෂණයේ නම ටයිප් කරන්න",
       "testInputPlaceholder": "උදා. සම්පූර්ණ රුධිර ගණන (FBC)",
       "dateTimeLabel": "කැමති දිනය සහ වේලාව",
       "optional": "(අත්‍යවශ්‍ය නොවේ)",
@@ -58,7 +63,12 @@
       "labReportNotes": "🔬 රසායනාගාර වාර්තා සටහන්",
       "openPdf": "රසායනාගාර වාර්තාව විවෘත කරන්න (PDF)",
       "viewImage": "රසායනාගාර වාර්තා රූපය බලන්න",
-      "clickToView": "ඔබේ වාර්තාව බැලීමට හෝ බාගත කිරීමට ක්ලික් කරන්න"
+      "clickToView": "ඔබේ වාර්තාව බැලීමට හෝ බාගත කිරීමට ක්ලික් කරන්න",
+      "priceHeading": "💰 මිල",
+      "priceValue": "රු. {{price}}",
+      "priceNotSet": "තවම සකසා නැත — රසායනාගාරය ඉක්මනින් මිලක් තහවුරු කරනු ඇත.",
+      "rejectedHeading": "❌ ඉල්ලීම ප්‍රතික්ෂේප කරන ලදී",
+      "rejectedHint": "පහත පණිවිඩවල රසායනාගාරයේ හේතුව බලන්න."
     }
   },
   "myReports": {
@@ -170,7 +180,8 @@
       "labReports": "රසායනාගාර වාර්තා",
       "medicalHistory": "වෛද්‍ය ඉතිහාසය",
       "personalReports": "පුද්ගලික සෞඛ්‍ය වාර්තා",
-      "contactInfo": "සම්බන්ධතා තොරතුරු"
+      "contactInfo": "සම්බන්ධතා තොරතුරු",
+      "fullRecord": "සම්පූර්ණ සෞඛ්‍ය වාර්තාව"
     },
     "statusMeta": {
       "pending": "ප්‍රතිචාරය අපේක්ෂිතයි",
@@ -178,6 +189,7 @@
     },
     "card": {
       "accessRequested": "ප්‍රවේශය ඉල්ලා ඇත",
+      "fullRecordIncludes": "මෙය පහත සඳහා ප්‍රවේශය ලබා දේ:",
       "defaultSpecialization": "වෛද්‍ය විශේෂඥ",
       "reasonFromDoctor": "වෛද්‍යවරයාගෙන් හේතුව",
       "requestedOn": "ඉල්ලූ දිනය: {{date}}",

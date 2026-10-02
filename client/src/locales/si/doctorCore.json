@@ -104,6 +104,7 @@
       "noActivity": "මෑත ක්‍රියාකාරකම් නොමැත.",
       "labResultReady": "රසායනාගාර ප්‍රතිඵලය සූදානම් — {{name}}",
       "prescriptionDispensed": "බෙහෙත් වට්ටෝරුව නිකුත් කරන ලදී — {{name}}",
+      "prescriptionDelivered": "බෙහෙත් භාර දෙන ලදී — {{name}}",
       "accessRequestResponse": "{{name}} ඔබේ ප්‍රවේශ ඉල්ලීමට {{status}} ලෙස ප්‍රතිචාර දැක්වීය"
     },
     "profile": {

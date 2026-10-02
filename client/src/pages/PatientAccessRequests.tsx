@@ -12,6 +12,7 @@ const TYPE_META: Record<string, { labelKey: string; Icon: any; grad: string; lig
   medical_history:  { labelKey:'medicalHistory',  Icon: ClipboardList, grad:'from-teal-500 to-emerald-600',  light:'bg-teal-50',   accent:'text-teal-600'  },
   personal_reports: { labelKey:'personalReports', Icon: FolderOpen,    grad:'from-violet-500 to-purple-600', light:'bg-violet-50', accent:'text-violet-600'},
   contact_info:     { labelKey:'contactInfo',     Icon: Phone,         grad:'from-rose-500 to-pink-600',     light:'bg-rose-50',   accent:'text-rose-600'  },
+  all:              { labelKey:'fullRecord',      Icon: Shield,        grad:'from-primary-600 to-primary-800', light:'bg-primary-50', accent:'text-primary-600' },
 };
 
 const STATUS_STYLE: Record<string, { cls: string; dot: string }> = {
@@ -75,6 +76,20 @@ function RequestCard({ request, onAccept, onDecline, accepting, declining }: Req
           </div>
           <Stethoscope size={16} strokeWidth={1.5} className="text-gray-300 shrink-0" />
         </div>
+
+        {request.access_type === 'all' && (
+          <div className="bg-white rounded-2xl px-4 py-3 border border-gray-100">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{t('accessRequests.card.fullRecordIncludes')}</p>
+            <ul className="text-sm text-gray-600 space-y-1">
+              {['labReports', 'medicalHistory', 'personalReports', 'contactInfo'].map(k => (
+                <li key={k} className="flex items-center gap-2">
+                  <span className="w-1 h-1 rounded-full bg-primary-400 shrink-0" />
+                  {t(`accessRequests.typeMeta.${k}`)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {request.reason && (
           <div className="bg-white rounded-2xl px-4 py-3 border border-gray-100">

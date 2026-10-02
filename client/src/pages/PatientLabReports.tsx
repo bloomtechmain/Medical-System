@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { labApi, userApi } from '../services/api';
+import { labApi, userApi, labCatalogApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
 import { Plus, Search, X, FlaskConical, Send, Upload } from 'lucide-react';
+import ChatPanel from '../components/common/ChatPanel';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
@@ -93,6 +94,7 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
   const { t: tc } = useTranslation('common');
   const [lab,          setLab]          = useState<any>(null);
   const [reportType,   setReportType]   = useState('');
+  const [customTest,   setCustomTest]   = useState('');
   const [notes,        setNotes]        = useState('');
   const [scheduledAt,  setScheduledAt]  = useState('');
   const [referral,     setReferral]     = useState<File | null>(null);
@@ -104,12 +106,26 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
     ? lab.services_offered.split(',').map((s: string) => s.trim()).filter(Boolean)
     : [];
 
+  const { data: catalogTests = [] } = useQuery({
+    queryKey: ['lab-catalog-for', lab?.id],
+    queryFn:  () => labCatalogApi.getForLab(lab.id),
+    enabled:  !!lab,
+  });
+  const hasCatalog = (catalogTests as any[]).length > 0;
+
+  const isOther = reportType === '__other__';
+  const selectedCatalogTest = hasCatalog && !isOther
+    ? (catalogTests as any[]).find((c: any) => String(c.id) === reportType)
+    : null;
+  const effectiveReportType = isOther ? customTest.trim() : (selectedCatalogTest ? selectedCatalogTest.test_name : reportType);
+
   const mutation = useMutation({
     mutationFn: () => {
       const fd = new FormData();
       fd.append('laboratory_id', String(lab.id));
-      fd.append('test_description', reportType);
-      fd.append('report_type', reportType);
+      fd.append('test_description', effectiveReportType);
+      fd.append('report_type', effectiveReportType);
+      if (selectedCatalogTest) fd.append('test_catalog_id', String(selectedCatalogTest.id));
       if (scheduledAt)     fd.append('scheduled_at', new Date(scheduledAt).toISOString());
       if (notes.trim())    fd.append('notes', notes.trim());
       if (referral)        fd.append('referral', referral);
@@ -121,8 +137,8 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lab)             return setError(t('labTests.modal.errors.selectLab'));
-    if (!reportType)      return setError(t('labTests.modal.errors.selectTest'));
+    if (!lab)                 return setError(t('labTests.modal.errors.selectLab'));
+    if (!effectiveReportType) return setError(t('labTests.modal.errors.selectTest'));
     setError('');
     mutation.mutate();
   };
@@ -155,7 +171,7 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
             fetchFn={userApi.searchLaboratories}
             queryKey="patient-search-labs"
             selected={lab}
-            onSelect={(l: any) => { setLab(l); setReportType(''); }}
+            onSelect={(l: any) => { setLab(l); setReportType(''); setCustomTest(''); }}
             renderItem={(l: any) => (
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 bg-cyan-100 rounded-xl flex items-center justify-center shrink-0">
@@ -181,12 +197,37 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
               <div className="text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl px-3.5 py-2.5">
                 {t('labTests.modal.selectLabFirst')}
               </div>
+            ) : hasCatalog ? (
+              <div className="space-y-2">
+                <select className="input text-sm" value={reportType}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setReportType(e.target.value); if (e.target.value !== '__other__') setCustomTest(''); }}>
+                  <option value="">{t('labTests.modal.selectTestPlaceholder')}</option>
+                  {(catalogTests as any[]).map((c: any) => (
+                    <option key={c.id} value={String(c.id)}>{t('labTests.modal.catalogOptionLabel', { name: c.test_name, price: c.price })}</option>
+                  ))}
+                  <option value="__other__">{t('labTests.modal.otherOption')}</option>
+                </select>
+                {isOther && (
+                  <input type="text" className="input text-sm" placeholder={t('labTests.modal.otherInputPlaceholder')}
+                    value={customTest} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTest(e.target.value)} autoFocus />
+                )}
+                {selectedCatalogTest && (
+                  <p className="text-xs text-emerald-600 font-medium">{t('labTests.modal.priceConfirmed', { price: selectedCatalogTest.price })}</p>
+                )}
+              </div>
             ) : services.length > 0 ? (
-              <select className="input text-sm" value={reportType}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setReportType(e.target.value)}>
-                <option value="">{t('labTests.modal.selectTestPlaceholder')}</option>
-                {services.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <div className="space-y-2">
+                <select className="input text-sm" value={reportType}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setReportType(e.target.value); if (e.target.value !== '__other__') setCustomTest(''); }}>
+                  <option value="">{t('labTests.modal.selectTestPlaceholder')}</option>
+                  {services.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value="__other__">{t('labTests.modal.otherOption')}</option>
+                </select>
+                {isOther && (
+                  <input type="text" className="input text-sm" placeholder={t('labTests.modal.otherInputPlaceholder')}
+                    value={customTest} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTest(e.target.value)} autoFocus />
+                )}
+              </div>
             ) : (
               <input type="text" className="input text-sm" placeholder={t('labTests.modal.testInputPlaceholder')}
                 value={reportType} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReportType(e.target.value)} />
@@ -249,6 +290,7 @@ const STATUS_STYLE: Record<string, { badge: string; labelKey: string; icon: stri
   pending:     { badge: 'bg-yellow-100 text-yellow-700', labelKey: 'pending',     icon: '⏳' },
   in_progress: { badge: 'bg-blue-100   text-blue-700',   labelKey: 'inProgress', icon: '🔄' },
   completed:   { badge: 'bg-green-100  text-green-700',  labelKey: 'reportReady', icon: '✅' },
+  rejected:    { badge: 'bg-red-100    text-red-700',    labelKey: 'rejected',   icon: '❌' },
 };
 
 interface ReportModalProps {
@@ -296,6 +338,25 @@ function ReportModal({ req: r, onClose }: ReportModalProps) {
             <p className="text-xs font-bold text-cyan-700 mb-1">{t('labTests.reportModal.testsPerformed')}</p>
             <p className="text-sm text-gray-800 whitespace-pre-wrap">{r.test_description}</p>
           </div>
+
+          {/* Price */}
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+            <p className="text-xs font-bold text-emerald-700 mb-1">{t('labTests.reportModal.priceHeading')}</p>
+            <p className="text-sm text-gray-800">
+              {r.price != null ? t('labTests.reportModal.priceValue', { price: r.price }) : t('labTests.reportModal.priceNotSet')}
+            </p>
+          </div>
+
+          {/* Rejected */}
+          {r.status === 'rejected' && (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+              <p className="text-xs font-bold text-red-700 mb-1">{t('labTests.reportModal.rejectedHeading')}</p>
+              <p className="text-sm text-gray-700">{t('labTests.reportModal.rejectedHint')}</p>
+            </div>
+          )}
+
+          {/* Chat */}
+          <ChatPanel labRequestId={r.id} />
 
           {/* Report */}
           {r.report_notes && (
@@ -368,6 +429,7 @@ export default function PatientLabReports() {
             <option value="pending">{tc('status.pending')}</option>
             <option value="in_progress">{tc('status.inProgress')}</option>
             <option value="completed">{t('labTests.filters.reportsReady')}</option>
+            <option value="rejected">{tc('status.rejected')}</option>
           </select>
         </div>
       </div>
@@ -376,7 +438,7 @@ export default function PatientLabReports() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: t('labTests.stats.totalTests'),    value: (reports as any[]).length,                                                            icon: '🔬', bg: 'bg-cyan-50   border-cyan-100'   },
-          { label: tc('status.inProgress'),    value: (reports as any[]).filter((r: any) => r.status !== 'completed').length, icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
+          { label: tc('status.inProgress'),    value: (reports as any[]).filter((r: any) => r.status === 'pending' || r.status === 'in_progress').length, icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
           { label: t('labTests.stats.reportsReady'),  value: (reports as any[]).filter((r: any) => r.status === 'completed').length, icon: '📋', bg: 'bg-green-50  border-green-100'  },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
@@ -419,6 +481,11 @@ export default function PatientLabReports() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-bold text-gray-900">{r.lab_name || t('labTests.labFallback')}</p>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{t(`labTests.statusLabels.${st.labelKey}`)}</span>
+                        {r.price != null && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+                            {t('labTests.reportModal.priceValue', { price: r.price })}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {r.doctor_name ? `Dr. ${r.doctor_name}` : t('labTests.selfBooked')} · {formatDate(r.created_at)}

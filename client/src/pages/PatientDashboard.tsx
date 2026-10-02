@@ -1,19 +1,20 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { LucideIcon } from 'lucide-react';
 import {
-  Stethoscope, CheckCircle2, Pill,
-  ArrowUpRight, Download, Calendar, Building2, ChevronDown,
-  Thermometer, Microscope, Package, Clock,
+  Download, Activity, CalendarPlus, Stethoscope, FlaskConical, FolderOpen,
+  Phone, MapPin, Droplet, User, Calendar, CreditCard, Settings, ArrowRight,
 } from 'lucide-react';
-import { authApi, consultationApi, labApi, patientReportApi } from '../services/api';
+import { authApi, consultationApi, labApi, patientVitalsApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/helpers';
 import MiniCalendar from '../components/common/MiniCalendar';
 import VitalsOverview from '../components/common/VitalsOverview';
+import Modal from '../components/common/Modal';
 
 function downloadHealthReport(me: any, profile: any, consultations: any[], t: TFunction) {
   const doc   = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -140,282 +141,177 @@ function downloadHealthReport(me: any, profile: any, consultations: any[], t: TF
   doc.save(filename);
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{children}</h2>;
-}
-
-const STATUS_META: Record<string, { bg: string; dot: string }> = {
-  active:     { bg: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-400' },
-  dispensed:  { bg: 'bg-blue-100   text-blue-700   border-blue-200',   dot: 'bg-blue-400'   },
-  completed:  { bg: 'bg-green-100  text-green-700  border-green-200',  dot: 'bg-green-400'  },
-};
-
-function StatusBadge({ status }: { status: string }) {
+function ProfileSetupPrompt({ onComplete, onDismiss }: { onComplete: () => void; onDismiss: () => void }) {
   const { t } = useTranslation('patientDashboard');
-  const { t: tc } = useTranslation('common');
-  const m = STATUS_META[status] || STATUS_META.active;
-  const label = status === 'dispensed' ? t('shared.dispensed') : status === 'completed' ? tc('status.completed') : tc('status.active');
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${m.bg}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
-      {label}
-    </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-primary-100 flex items-center justify-center mx-auto mb-4 text-3xl">
+          👋
+        </div>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">{t('setupPrompt.title')}</h2>
+        <p className="text-sm text-gray-500 mb-6">{t('setupPrompt.message')}</p>
+        <div className="flex flex-col gap-2">
+          <button onClick={onComplete} className="btn-primary w-full py-2.5">{t('setupPrompt.completeButton')}</button>
+          <button onClick={onDismiss} className="text-sm text-gray-400 hover:text-gray-600 py-1">{t('setupPrompt.laterButton')}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function TreatmentFlow({ consultation }: { consultation: any }) {
-  const { t } = useTranslation('patientDashboard');
-  const steps = [
-    { label: t('shared.steps.symptom'),    done: !!consultation.sick_description,      icon: '🤒' },
-    { label: t('shared.steps.diagnosed'),  done: !!consultation.diagnosis,              icon: '🔍' },
-    { label: t('shared.steps.treated'),    done: !!consultation.treatment_description,  icon: '💉' },
-    {
-      label: consultation.status === 'completed' ? t('shared.steps.resolved')
-           : consultation.status === 'dispensed' ? t('shared.steps.dispensed')
-           : t('shared.steps.ongoing'),
-      done:  consultation.status === 'completed' || consultation.status === 'dispensed',
-      icon:  consultation.status === 'completed' ? '✅' : consultation.status === 'dispensed' ? '💊' : '⏳',
-    },
-  ];
+interface QuickAction { key: string; label: string; Icon: LucideIcon; to?: string; onClick?: () => void; }
+
+function QuickActionsRow({ actions }: { actions: QuickAction[] }) {
   return (
-    <div className="flex items-center gap-1 mt-3">
-      {steps.map((s, i) => (
-        <div key={i} className="flex items-center gap-1 flex-1">
-          <div className={`flex flex-col items-center flex-1`}>
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs
-              ${s.done ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-400'}`}>
-              {s.icon}
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {actions.map(a => {
+        const inner = (
+          <>
+            <div className="w-11 h-11 rounded-2xl bg-primary-50 flex items-center justify-center mb-2 group-hover:bg-primary-100 transition-colors">
+              <a.Icon size={20} strokeWidth={1.8} className="text-primary-600" />
             </div>
-            <p className={`text-xs mt-0.5 text-center ${s.done ? 'text-primary-600 font-medium' : 'text-gray-300'}`}>
-              {s.label}
-            </p>
+            <p className="text-sm font-semibold text-gray-800">{a.label}</p>
+          </>
+        );
+        const cls = 'group flex flex-col items-center text-center bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:border-primary-200 hover:shadow-md transition-all';
+        return a.to
+          ? <Link key={a.key} to={a.to} className={cls}>{inner}</Link>
+          : <button key={a.key} type="button" onClick={a.onClick} className={cls}>{inner}</button>;
+      })}
+    </div>
+  );
+}
+
+function PersonalDetailsCard({ profile, age, allergies, conditions }: { profile: any; age: number | null; allergies: string[]; conditions: string[] }) {
+  const { t } = useTranslation('patientDashboard');
+
+  const fields: { label: string; value: string | null; Icon: LucideIcon }[] = [
+    { label: t('personalDetails.fields.phone'),  value: profile?.phone || null, Icon: Phone },
+    { label: t('personalDetails.fields.dob'),    value: profile?.date_of_birth ? formatDate(profile.date_of_birth) : null, Icon: Calendar },
+    { label: t('personalDetails.fields.gender'), value: profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : null, Icon: User },
+    { label: t('personalDetails.fields.bloodType'), value: profile?.blood_type || null, Icon: Droplet },
+    { label: t('personalDetails.fields.address'), value: profile?.address || null, Icon: MapPin },
+    { label: t('personalDetails.fields.insurance'), value: profile?.insurance_provider || null, Icon: CreditCard },
+  ].filter(f => f.value);
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('personalDetails.title')}</p>
+        <Link to="/patient/settings" className="flex items-center gap-1 text-xs font-bold text-primary-600 hover:text-primary-700 transition-colors">
+          <Settings size={12} strokeWidth={2.5} /> {t('personalDetails.editLink')}
+        </Link>
+      </div>
+
+      {fields.length === 0 ? (
+        <p className="text-sm text-gray-400">{t('personalDetails.empty')}</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {fields.map(f => (
+            <div key={f.label} className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center shrink-0">
+                <f.Icon size={14} className="text-gray-400" strokeWidth={2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-400">{f.label}</p>
+                <p className="text-sm font-semibold text-gray-800 truncate">{f.value}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {allergies.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-[11px] text-gray-400 mb-1.5">{t('personalDetails.allergiesLabel')}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {allergies.map((a: string) => (
+              <span key={a} className="bg-red-50 text-red-700 border border-red-100 text-xs font-semibold px-2.5 py-1 rounded-full">{a}</span>
+            ))}
           </div>
-          {i < steps.length - 1 && (
-            <div className={`h-0.5 flex-1 mb-4 ${steps[i + 1].done ? 'bg-primary-300' : 'bg-gray-100'}`} />
+        </div>
+      )}
+
+      {conditions.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-[11px] text-gray-400 mb-1.5">{t('personalDetails.conditionsLabel')}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {conditions.map((c: string) => (
+              <span key={c} className="bg-orange-50 text-orange-700 border border-orange-100 text-xs font-semibold px-2.5 py-1 rounded-full">{c}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {profile?.emergency_contact_name && (
+        <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[11px] text-gray-400">{t('personalDetails.fields.emergencyContact')}</p>
+            <p className="text-sm font-semibold text-gray-800 truncate">{profile.emergency_contact_name}</p>
+          </div>
+          {profile.emergency_contact_phone && (
+            <p className="text-sm text-gray-500 shrink-0">{profile.emergency_contact_phone}</p>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuickStatsRow({ stats }: { stats: { label: string; value: number; Icon: LucideIcon }[] }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {stats.map(s => (
+        <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+          <div className="w-9 h-9 rounded-2xl bg-primary-50 flex items-center justify-center mx-auto mb-2">
+            <s.Icon size={16} className="text-primary-600" strokeWidth={2} />
+          </div>
+          <p className="text-xl font-bold text-gray-900">{s.value}</p>
+          <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mt-0.5">{s.label}</p>
         </div>
       ))}
     </div>
   );
 }
 
-interface TimelineItemProps {
-  icon: string;
-  title: string;
-  subtitle?: string;
-  date: string;
-  color: string;
-  last: boolean;
-}
+// Non-value keys on the vitals record — everything else is a measurable field.
+const VITALS_META_KEYS = ['id', 'user_id', 'patient_id', 'created_at', 'updated_at', 'recorded_at', 'field_meta'];
 
-function TimelineItem({ icon, title, subtitle, date, color, last }: TimelineItemProps) {
-  return (
-    <div className="flex gap-3">
-      <div className="flex flex-col items-center">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${color}`}>
-          {icon}
-        </div>
-        {!last && <div className="w-0.5 flex-1 bg-gray-100 mt-1" />}
-      </div>
-      <div className="pb-4 flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
-        {subtitle && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{subtitle}</p>}
-        <p className="text-xs text-gray-400 mt-0.5">{date}</p>
-      </div>
-    </div>
-  );
-}
-
-const DASH_PALETTES = [
-  { grad:'from-violet-500 to-purple-700',   step:'bg-violet-500',  line:'bg-violet-300',  light:'bg-violet-50',  accent:'text-violet-600', badge:'bg-violet-100 text-violet-700'  },
-  { grad:'from-blue-500 to-indigo-700',      step:'bg-blue-500',    line:'bg-blue-300',    light:'bg-blue-50',    accent:'text-blue-600',   badge:'bg-blue-100 text-blue-700'      },
-  { grad:'from-teal-500 to-emerald-700',     step:'bg-teal-500',    line:'bg-teal-300',    light:'bg-teal-50',    accent:'text-teal-600',   badge:'bg-teal-100 text-teal-700'      },
-  { grad:'from-rose-500 to-pink-700',        step:'bg-rose-500',    line:'bg-rose-300',    light:'bg-rose-50',    accent:'text-rose-600',   badge:'bg-rose-100 text-rose-700'      },
-  { grad:'from-amber-500 to-orange-600',     step:'bg-amber-500',   line:'bg-amber-300',   light:'bg-amber-50',   accent:'text-amber-600',  badge:'bg-amber-100 text-amber-700'    },
-  { grad:'from-cyan-500 to-sky-700',         step:'bg-cyan-500',    line:'bg-cyan-300',    light:'bg-cyan-50',    accent:'text-cyan-600',   badge:'bg-cyan-100 text-cyan-700'      },
-];
-
-function DashboardDoctorTiles({ consultations }: { consultations: any[] }) {
+function VitalsSummaryCard({ onOpen }: { onOpen: () => void }) {
   const { t } = useTranslation('patientDashboard');
-  const { t: tc } = useTranslation('common');
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const selfRecordedLabel = t('shared.fallbacks.selfRecorded');
+  const { data: vitals } = useQuery({ queryKey: ['patient-vitals'], queryFn: patientVitalsApi.get });
 
-  const doctorGroups = useMemo(() => {
-    const groups: Record<string, any> = {};
-    consultations.forEach((c: any) => {
-      const key = c.doctor_display_name || c.doctor_name || selfRecordedLabel;
-      if (!groups[key]) groups[key] = { doctorKey:key, isSystemDoctor:!!c.doctor_display_name, hospital:'', hasActive:false, consultations:[] };
-      groups[key].consultations.push(c);
-      if (c.hospital_clinic) groups[key].hospital = c.hospital_clinic;
-      if (c.status === 'active') groups[key].hasActive = true;
-    });
-    return Object.values(groups).sort((a: any, b: any) => {
-      if (a.hasActive !== b.hasActive) return a.hasActive ? -1 : 1;
-      return new Date(b.consultations[0]?.visit_date||0).getTime() - new Date(a.consultations[0]?.visit_date||0).getTime();
-    });
-  }, [consultations, selfRecordedLabel]);
-
-  if (doctorGroups.length === 0) return null;
+  const filledCount = vitals
+    ? Object.entries(vitals).filter(([k, v]) => !VITALS_META_KEYS.includes(k) && v != null).length
+    : 0;
+  const lastRecorded = vitals?.updated_at || vitals?.recorded_at;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <SectionTitle>{t('sectionTitles.consultationsByDoctor')}</SectionTitle>
-        <Link to="/patient/consultations"
-          className="flex items-center gap-1 text-xs font-bold text-primary-600 hover:text-primary-700 transition-colors">
-          {t('doctorTiles.viewAllManage')}
-          <ArrowUpRight size={12} strokeWidth={2.5} />
-        </Link>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-600 to-teal-600 flex items-center justify-center shrink-0">
+          <Activity size={18} className="text-white" strokeWidth={2} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-gray-900">{t('vitalsSummary.title')}</p>
+          <p className="text-xs text-gray-400">
+            {filledCount > 0
+              ? t('vitalsSummary.fieldsRecorded', { count: filledCount })
+              : t('vitalsSummary.noVitals')}
+          </p>
+        </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {doctorGroups.map((group: any, idx: number) => {
-          const pal     = DASH_PALETTES[idx % DASH_PALETTES.length];
-          const initial = group.doctorKey.replace(/^Dr\.?\s*/i,'').charAt(0).toUpperCase();
-
-          return (
-            <div key={group.doctorKey} className="ios-tile">
-              <div className={`relative bg-gradient-to-br ${pal.grad} px-4 pt-4 pb-10 overflow-hidden`}>
-                <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center text-white font-bold text-base shadow-md">
-                    {initial}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-bold text-sm leading-snug">
-                      {group.doctorKey === selfRecordedLabel ? selfRecordedLabel : `${t('shared.doctorPrefix')} ${group.doctorKey}`}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {group.hospital && (
-                        <span className="flex items-center gap-1 text-white/70 text-[11px]">
-                          <Building2 size={9} strokeWidth={2} />{group.hospital}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1 text-white/70 text-[11px]">
-                        <Calendar size={9} strokeWidth={2} />
-                        {t('doctorTiles.visitCount', { count: group.consultations.length })}
-                      </span>
-                      {group.hasActive && (
-                        <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-400/30 text-amber-100 border border-amber-200/30 px-2 py-0.5 rounded-full">
-                          <span className="w-1 h-1 bg-amber-300 rounded-full animate-pulse" />{tc('status.active')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-50/60 -mt-6 pt-7 px-3 pb-3 rounded-b-3xl space-y-2">
-                {group.consultations.map((c: any) => {
-                  const isOpen = expandedId === c.id;
-                  const meds   = c.medicines || [];
-                  const wfSteps = [
-                    { done:!!c.sick_description,     Icon:Thermometer,   label:t('shared.steps.symptom')   },
-                    { done:!!c.diagnosis,             Icon:Stethoscope,   label:t('shared.steps.diagnosed') },
-                    { done:!!c.treatment_description, Icon:Microscope,    label:t('shared.steps.treated')   },
-                    { done: c.status !== 'active',
-                      Icon: c.status==='completed' ? CheckCircle2 : c.status==='dispensed' ? Package : Clock,
-                      label: c.status==='completed' ? t('shared.steps.resolved') : c.status==='dispensed' ? t('shared.steps.dispensed') : t('shared.steps.ongoing') },
-                  ];
-
-                  return (
-                    <div key={c.id} className={`rounded-2xl border bg-white overflow-hidden shadow-sm transition-all duration-200 ${
-                      c.status==='active' ? 'border-amber-200' : c.status==='completed' ? 'border-emerald-100' : 'border-gray-100'
-                    }`}>
-                      <button type="button" className="w-full text-left px-3.5 pt-3 pb-2"
-                        onClick={() => setExpandedId(isOpen ? null : c.id)}>
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-bold text-gray-900 leading-snug">
-                            {c.diagnosis || c.sick_description || 'Medical Visit'}
-                          </p>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {meds.length > 0 && (
-                              <span className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-lg ${pal.badge}`}>
-                                <Pill size={9} strokeWidth={2.5} />{meds.length}
-                              </span>
-                            )}
-                            <ChevronDown size={13} strokeWidth={2} className={`text-gray-400 transition-transform duration-200 ${isOpen?'rotate-180':''}`} />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                            <Calendar size={10} strokeWidth={2} />
-                            {formatDate(c.visit_date)}
-                          </span>
-                        </div>
-
-                        <div className="flex items-start pt-2.5">
-                          {wfSteps.map((s, i) => (
-                            <div key={i} className="flex items-start flex-1">
-                              <div className="flex flex-col items-center flex-1">
-                                <div className={`w-7 h-7 rounded-full flex items-center justify-center ring-2 ${
-                                  s.done ? `bg-gradient-to-br ${pal.grad} ring-transparent shadow-sm` : 'bg-white ring-gray-200'
-                                }`}>
-                                  <s.Icon size={12} strokeWidth={2} className={s.done ? 'text-white' : 'text-gray-300'} />
-                                </div>
-                                <p className={`text-[9px] font-semibold mt-1 text-center leading-tight ${s.done ? pal.accent : 'text-gray-300'}`}>
-                                  {s.label}
-                                </p>
-                              </div>
-                              {i < wfSteps.length - 1 && (
-                                <div className={`step-connector mt-3.5 mx-0.5 ${s.done && wfSteps[i+1].done ? pal.line : ''}`}
-                                  style={{ background: s.done && wfSteps[i+1].done ? undefined : '#e5e7eb' }} />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </button>
-
-                      {isOpen && (
-                        <div className="px-3.5 pb-3 pt-2 border-t border-gray-50 space-y-2">
-                          {c.sick_description && (
-                            <div className="bg-orange-50 rounded-xl px-3 py-2 border border-orange-100">
-                              <p className="text-[9px] font-bold text-orange-500 uppercase tracking-wider mb-0.5">Symptoms</p>
-                              <p className="text-xs text-gray-700">{c.sick_description}</p>
-                            </div>
-                          )}
-                          {c.diagnosis && (
-                            <div className={`${pal.light} rounded-xl px-3 py-2 border border-gray-100`}>
-                              <p className={`text-[9px] font-bold uppercase tracking-wider mb-0.5 ${pal.accent}`}>Diagnosis</p>
-                              <p className="text-xs text-gray-700">{c.diagnosis}</p>
-                            </div>
-                          )}
-                          {c.treatment_description && (
-                            <div className="bg-teal-50 rounded-xl px-3 py-2 border border-teal-100">
-                              <p className="text-[9px] font-bold text-teal-600 uppercase tracking-wider mb-0.5">Treatment</p>
-                              <p className="text-xs text-gray-700">{c.treatment_description}</p>
-                            </div>
-                          )}
-                          {meds.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {meds.map((m: any, i: number) => (
-                                <span key={i} className="flex items-center gap-1 bg-white border border-gray-100 rounded-xl px-2 py-1 text-[11px] shadow-sm">
-                                  <div className={`w-4 h-4 rounded-lg ${pal.step} flex items-center justify-center`}>
-                                    <Pill size={8} strokeWidth={2.5} className="text-white" />
-                                  </div>
-                                  <span className="font-semibold text-gray-800">{m.medicine_name}</span>
-                                  {m.dosage && <span className="text-gray-400">· {m.dosage}</span>}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {!c.doctor_id && (
-                            <Link to="/patient/consultations"
-                              className={`inline-flex items-center gap-1 text-xs font-semibold ${pal.accent} hover:opacity-70 transition-opacity`}>
-                              Edit this consultation <ArrowUpRight size={11} strokeWidth={2.5} />
-                            </Link>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {lastRecorded && (
+        <p className="text-xs text-gray-400 mb-3">{t('vitalsSummary.recordedOn', { date: formatDate(lastRecorded) })}</p>
+      )}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full flex items-center justify-center gap-1.5 text-sm font-bold text-primary-600 bg-primary-50 hover:bg-primary-100 py-2.5 rounded-xl transition-colors"
+      >
+        {t('vitalsSummary.viewFullButton')} <ArrowRight size={14} strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
@@ -423,126 +319,33 @@ function DashboardDoctorTiles({ consultations }: { consultations: any[] }) {
 export default function PatientDashboard() {
   const { t } = useTranslation('patientDashboard');
   const { user } = useAuth();
-  const [downloading, setDownloading]     = useState(false);
-  const [expandedDisease, setExpandedDisease] = useState<number | null>(null);
-  const [diseaseFilter, setDiseaseFilter] = useState('all');
+  const navigate = useNavigate();
+  const [downloading, setDownloading] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
+  const [vitalsModalOpen, setVitalsModalOpen] = useState(false);
 
-  const { data: me }                 = useQuery({ queryKey: ['me'],                  queryFn: authApi.me });
-  const { data: consultations = [] } = useQuery({ queryKey: ['consultations'],        queryFn: consultationApi.getAll });
-  const { data: labReports = [] }    = useQuery({ queryKey: ['patient-lab-reports'],  queryFn: labApi.getAll });
-  const { data: patientReports = [] } = useQuery({ queryKey: ['patient-reports'],      queryFn: patientReportApi.getAll });
+  const { data: me }                 = useQuery({ queryKey: ['me'],                 queryFn: authApi.me });
+  const { data: consultations = [] } = useQuery({ queryKey: ['consultations'],       queryFn: consultationApi.getAll });
+  const { data: labReports = [] }    = useQuery({ queryKey: ['patient-lab-reports'], queryFn: labApi.getAll });
 
   const profile   = me?.profile as any;
   const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Patient';
+  const showSetupPrompt = !!me && !profile?.phone && !setupDismissed;
 
+  // Kept only for the PDF export, which still lists recent diagnosed visits.
   const diseases = useMemo(() =>
     (consultations as any[])
       .filter((c: any) => c.diagnosis || c.sick_description)
-      .map((c: any) => ({
-        ...c,
-        title:  c.diagnosis || c.sick_description,
-        doctor: c.doctor_display_name || null,
-        meds:   c.medicines || [],
-      })),
+      .map((c: any) => ({ ...c, title: c.diagnosis || c.sick_description })),
     [consultations]
   );
 
-  const filteredDiseases = useMemo(() => {
-    if (diseaseFilter === 'active')   return diseases.filter((d: any) => d.status === 'active');
-    if (diseaseFilter === 'resolved') return diseases.filter((d: any) => d.status === 'completed' || d.status === 'dispensed');
-    return diseases;
-  }, [diseases, diseaseFilter]);
-
   const activeConsultations = useMemo(() => (consultations as any[]).filter((c: any) => c.status === 'active'), [consultations]);
-
-  const activeMeds = useMemo(() =>
-    activeConsultations.flatMap((c: any) =>
-      (c.medicines || []).map((m: any) => ({ ...m, consultationTitle: c.diagnosis || c.sick_description }))
-    ),
-    [activeConsultations]
-  );
-
-  const medCount = useMemo(() => {
-    const map: Record<string, { name: string; count: number }> = {};
-    (consultations as any[]).forEach((c: any) => (c.medicines || []).forEach((m: any) => {
-      const key = m.medicine_name.toLowerCase();
-      map[key] = { name: m.medicine_name, count: (map[key]?.count || 0) + 1 };
-    }));
-    return Object.values(map).sort((a, b) => b.count - a.count);
-  }, [consultations]);
 
   const doctors = useMemo(() =>
     [...new Set((consultations as any[]).map((c: any) => c.doctor_display_name).filter(Boolean))],
     [consultations]
   );
-
-  // Real per-row detail for the stat list — each derived from the same
-  // consultations/lab-reports data already fetched above, never hardcoded.
-  const latestConsultation = useMemo(() =>
-    [...(consultations as any[])].sort((a, b) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())[0] || null,
-    [consultations]
-  );
-
-  const latestActiveTreatment = useMemo(() =>
-    [...activeConsultations].sort((a: any, b: any) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())[0] || null,
-    [activeConsultations]
-  );
-
-  const lastResolved = useMemo(() =>
-    diseases
-      .filter((d: any) => d.status === 'completed')
-      .sort((a: any, b: any) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())[0] || null,
-    [diseases]
-  );
-
-  const labStatusCounts = useMemo(() =>
-    (labReports as any[]).reduce((acc: Record<string, number>, r: any) => {
-      acc[r.status] = (acc[r.status] || 0) + 1;
-      return acc;
-    }, {}),
-    [labReports]
-  );
-
-  // Lab tests come from two independent sources: doctor/lab-assigned requests
-  // (clinical.lab_requests) and reports the patient uploaded themselves
-  // (clinical.patient_reports, tagged report_type='lab_report') — both must
-  // count toward "Lab Tests" or self-uploads silently disappear from the stat.
-  const selfUploadedLabReports = useMemo(() =>
-    (patientReports as any[]).filter((r: any) => r.report_type === 'lab_report'),
-    [patientReports]
-  );
-
-  const allLabTests = useMemo(() => [
-    ...(labReports as any[]).map((r: any) => ({
-      id:       `lr-${r.id}`,
-      source:   'lab_request' as const,
-      title:    r.lab_name || 'Laboratory',
-      subtitle: r.test_description,
-      doctor:   r.doctor_name,
-      status:   r.status,
-      date:     r.created_at,
-    })),
-    ...selfUploadedLabReports.map((r: any) => ({
-      id:       `pr-${r.id}`,
-      source:   'patient_upload' as const,
-      title:    r.title || 'Lab Report',
-      subtitle: r.laboratory_name || r.description,
-      doctor:   r.doctor_name,
-      status:   'uploaded',
-      date:     r.created_at,
-    })),
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [labReports, selfUploadedLabReports]
-  );
-
-  const topDoctor = useMemo(() => {
-    if (doctors.length === 0) return null;
-    const counts = (doctors as string[]).map(name => ({
-      name,
-      visits: (consultations as any[]).filter((c: any) => c.doctor_display_name === name).length,
-    }));
-    return counts.sort((a, b) => b.visits - a.visits)[0];
-  }, [doctors, consultations]);
 
   const allergies = useMemo(() =>
     profile?.allergies
@@ -562,41 +365,10 @@ export default function PatientDashboard() {
     ? Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 3600 * 1000))
     : null;
 
-  const timeline = useMemo(() => {
-    const events = [
-      ...(consultations as any[]).map((c: any) => ({
-        id:       `c-${c.id}`,
-        type:     'consultation',
-        icon:     '🏥',
-        color:    'bg-teal-100',
-        title:    c.diagnosis || c.sick_description || 'Medical Visit',
-        subtitle: c.doctor_display_name ? `Dr. ${c.doctor_display_name}` : undefined,
-        date:     c.visit_date,
-        status:   c.status,
-      })),
-      ...(labReports as any[]).map((r: any) => ({
-        id:       `l-${r.id}`,
-        type:     'lab',
-        icon:     '🔬',
-        color:    'bg-blue-100',
-        title:    r.test_description || 'Lab Test',
-        subtitle: r.lab_name || undefined,
-        date:     r.created_at,
-        status:   r.status,
-      })),
-      ...selfUploadedLabReports.map((r: any) => ({
-        id:       `pr-${r.id}`,
-        type:     'lab-upload',
-        icon:     '📄',
-        color:    'bg-violet-100',
-        title:    r.title || 'Lab Report',
-        subtitle: 'Uploaded by you',
-        date:     r.created_at,
-        status:   'uploaded',
-      })),
-    ];
-    return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [consultations, labReports, selfUploadedLabReports]);
+  const visitDates = useMemo(() =>
+    (consultations as any[]).map((c: any) => c.visit_date?.split('T')[0]).filter(Boolean),
+    [consultations]
+  );
 
   const handleDownload = () => {
     setDownloading(true);
@@ -604,576 +376,89 @@ export default function PatientDashboard() {
     finally { setTimeout(() => setDownloading(false), 800); }
   };
 
-  const visitDates = useMemo(() =>
-    (consultations as any[]).map((c: any) => c.visit_date?.split('T')[0]).filter(Boolean),
-    [consultations]
-  );
+  const quickActions: QuickAction[] = [
+    { key: 'vitals',        label: t('quickActions.vitals'),        Icon: Activity,     onClick: () => setVitalsModalOpen(true) },
+    { key: 'book-doctor',   label: t('quickActions.bookDoctor'),    Icon: CalendarPlus, to: '/patient/book-doctor' },
+    { key: 'consultations', label: t('quickActions.consultations'), Icon: Stethoscope,  to: '/patient/consultations' },
+    { key: 'lab-tests',     label: t('quickActions.labTests'),      Icon: FlaskConical, to: '/patient/lab-tests' },
+    { key: 'my-reports',    label: t('quickActions.myReports'),     Icon: FolderOpen,   to: '/patient/my-reports' },
+  ];
+
+  const quickStats = [
+    { label: t('quickStats.doctorVisits'),     value: (consultations as any[]).length, Icon: Stethoscope },
+    { label: t('quickStats.activeTreatments'), value: activeConsultations.length,      Icon: Activity },
+    { label: t('quickStats.labTests'),         value: (labReports as any[]).length,    Icon: FlaskConical },
+    { label: t('quickStats.doctorsSeen'),      value: doctors.length,                  Icon: User },
+  ];
 
   return (
     <div className="space-y-6">
 
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-10 items-start">
-
-        <div className="w-full lg:w-3/4 space-y-4">
-        <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-6 text-white relative overflow-hidden">
-          <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full" />
-          <div className="absolute -bottom-12 -right-4 w-56 h-56 bg-white/5 rounded-full" />
-
-          <div className="relative flex flex-col h-full justify-between gap-4">
-            <div>
-              <p className="text-primary-200 text-sm font-medium">Welcome back,</p>
-              <h1 className="text-3xl font-bold mt-1 leading-tight">{firstName}</h1>
-              <div className="flex flex-wrap items-center gap-2 mt-4">
-                {profile?.blood_type && (
-                  <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
-                    🩸 {profile.blood_type}
-                  </span>
-                )}
-                {age != null && (
-                  <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
-                    🎂 {age} yrs
-                  </span>
-                )}
-                {profile?.gender && (
-                  <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20 capitalize">
-                    {profile.gender === 'male' ? '♂' : profile.gender === 'female' ? '♀' : '⚧'} {profile.gender}
-                  </span>
-                )}
-                {activeConsultations.length > 0 && (
-                  <span className="bg-yellow-400/25 text-yellow-100 text-xs font-semibold px-3 py-1.5 rounded-full border border-yellow-300/30">
-                    ⚕️ {activeConsultations.length} active treatment{activeConsultations.length !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={handleDownload}
-                disabled={downloading || !me}
-                className="shrink-0 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-2 border border-white/20 backdrop-blur-sm"
-              >
-                {downloading
-                  ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  : <Download size={15} strokeWidth={2} />
-                }
-                {downloading ? 'Generating…' : 'Health Report'}
-              </button>
-            </div>
-
-            <div className="-mx-6 border-t border-white/15 divide-y divide-white/10">
-              {(() => {
-                const fields = [
-                  { label: 'Blood Type', value: profile?.blood_type || '—' },
-                  { label: 'Age',        value: age != null ? `${age} yrs` : '—' },
-                  { label: 'Gender',     value: profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : '—' },
-                  { label: 'Insurance',  value: profile?.insurance_provider || '—' },
-                  { label: 'Phone',      value: profile?.phone || '—' },
-                  { label: 'Address',    value: profile?.address || '—' },
-                  { label: 'Policy No.', value: profile?.insurance_policy_number || '—' },
-                  { label: 'DOB',        value: profile?.date_of_birth ? formatDate(profile.date_of_birth) : '—' },
-                ];
-                const rows = [];
-                for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
-                return rows.map((row, i) => (
-                  <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10">
-                    {row.map((s) => (
-                      <div key={s.label} className="grid grid-cols-[100px_1fr] items-center gap-3 px-6 py-3 min-w-0">
-                        <span className="text-sm text-primary-100">{s.label}</span>
-                        <span className="text-base font-bold text-white truncate text-right">{s.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                ));
-              })()}
-            </div>
-          </div>
-        </div>
-
-        <VitalsOverview />
-        </div>
-
-        <div className="hidden lg:block shrink-0 w-[26rem] space-y-3">
-          <MiniCalendar highlightDates={visitDates} title="My Schedule" />
-
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Health Summary</p>
-            <div className="divide-y divide-gray-100">
-              {[
-                {
-                  label: 'Doctor Visits',
-                  value: (consultations as any[]).length,
-                  detail: latestConsultation
-                    ? `Last: ${formatDate(latestConsultation.visit_date)}${latestConsultation.doctor_display_name ? ` · Dr. ${latestConsultation.doctor_display_name}` : ''}`
-                    : null,
-                },
-                {
-                  label: 'Active Treatments',
-                  value: activeConsultations.length,
-                  detail: latestActiveTreatment
-                    ? (latestActiveTreatment.diagnosis || latestActiveTreatment.sick_description || null)
-                    : null,
-                },
-                {
-                  label: 'Resolved',
-                  value: diseases.filter((d: any) => d.status === 'completed').length,
-                  detail: lastResolved
-                    ? `${lastResolved.title} · ${formatDate(lastResolved.visit_date)}`
-                    : null,
-                },
-                {
-                  label: 'Lab Tests',
-                  value: allLabTests.length,
-                  detail: allLabTests.length > 0
-                    ? [
-                        ...Object.entries(labStatusCounts).map(([k, v]) => `${v} ${k.replace('_', ' ')}`),
-                        selfUploadedLabReports.length > 0 ? `${selfUploadedLabReports.length} self-uploaded` : null,
-                      ].filter(Boolean).join(' · ')
-                    : null,
-                },
-                {
-                  label: 'Medicines',
-                  value: medCount.length,
-                  detail: medCount[0] ? `Most used: ${medCount[0].name} (${medCount[0].count}×)` : null,
-                },
-                {
-                  label: 'Doctors Seen',
-                  value: doctors.length,
-                  detail: topDoctor ? `Primary: Dr. ${topDoctor.name} (${topDoctor.visits} visit${topDoctor.visits !== 1 ? 's' : ''})` : null,
-                },
-              ].map((s) => (
-                <div key={s.label} className="grid grid-cols-[110px_1fr] gap-3 text-sm py-2 first:pt-0 last:pb-0">
-                  <span className="text-gray-400">{s.label}</span>
-                  <div>
-                    <span className="text-gray-800 font-medium">{s.value}</span>
-                    {s.detail && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{s.detail}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {activeConsultations.length > 0 && (
-            <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Active Treatments</p>
-              <div className="space-y-2">
-                {activeConsultations.slice(0, 3).map((c: any) => (
-                  <div key={c.id} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-sm shrink-0 font-bold text-yellow-700">
-                      {(c.doctor_display_name || c.doctor_name || 'S').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-800 truncate">
-                        {c.diagnosis || c.sick_description || 'Treatment'}
-                      </p>
-                      <p className="text-xs text-gray-400 truncate">
-                        {c.doctor_display_name ? `Dr. ${c.doctor_display_name}` : c.doctor_name ? `Dr. ${c.doctor_name}` : 'Self-recorded'}
-                      </p>
-                    </div>
-                    <span className="w-2 h-2 bg-yellow-400 rounded-full shrink-0 animate-pulse" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {allergies.length > 0 && (
-          <div className="bg-red-50 border-l-4 border-red-500 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-2xl shrink-0">⚠️</span>
-            <div className="flex-1">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-sm font-bold text-red-700">ALLERGY ALERT — {allergies.length} Known Allergen{allergies.length !== 1 ? 's' : ''}</p>
-                <span className="text-xs text-red-500">Inform all treating professionals</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {allergies.map((a: string) => (
-                  <span key={a} className="bg-red-100 text-red-800 border border-red-200 text-xs font-bold px-2.5 py-1 rounded-full">
-                    🚫 {a}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeConsultations.length > 0 && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-2xl shrink-0">⚕️</span>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-yellow-700">ACTIVE TREATMENT IN PROGRESS</p>
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {activeConsultations.map((c: any) => (
-                  <span key={c.id} className="bg-yellow-100 text-yellow-800 border border-yellow-200 text-xs font-semibold px-2.5 py-1 rounded-full">
-                    {c.diagnosis || c.sick_description || 'Treatment'}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {(labReports as any[]).filter((r: any) => r.status !== 'completed').length > 0 && (
-          <div className="bg-blue-50 border-l-4 border-blue-400 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-2xl shrink-0">🔬</span>
-            <div>
-              <p className="text-sm font-bold text-blue-700">
-                {(labReports as any[]).filter((r: any) => r.status !== 'completed').length} Lab Result{(labReports as any[]).filter((r: any) => r.status !== 'completed').length !== 1 ? 's' : ''} Pending
-              </p>
-              <p className="text-xs text-blue-600 mt-0.5">Results will appear in your Lab Reports section when ready.</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {(consultations as any[]).length > 0 && (
-        <DashboardDoctorTiles consultations={consultations as any[]} />
+      {showSetupPrompt && (
+        <ProfileSetupPrompt
+          onComplete={() => navigate('/patient/settings')}
+          onDismiss={() => setSetupDismissed(true)}
+        />
       )}
 
-      {activeMeds.length > 0 && (
-        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl border border-yellow-200 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <SectionTitle>Current Active Medications</SectionTitle>
-            <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full font-semibold">
-              {activeMeds.length} medicine{activeMeds.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {activeMeds.map((m: any, i: number) => (
-              <div key={i} className="flex items-start gap-2.5 bg-white rounded-xl border border-yellow-100 p-3 shadow-sm">
-                <span className="text-xl mt-0.5">💊</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900">{m.medicine_name}</p>
-                  <div className="flex flex-wrap gap-1.5 mt-1">
-                    {m.dosage    && <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{m.dosage}</span>}
-                    {m.frequency && <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{m.frequency}</span>}
-                    {m.duration  && <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{m.duration}</span>}
-                  </div>
-                  {m.consultationTitle && (
-                    <p className="text-xs text-yellow-600 mt-1 truncate">For: {m.consultationTitle}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full" />
+        <div className="absolute -bottom-12 -right-4 w-56 h-56 bg-white/5 rounded-full" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <SectionTitle>Chronic Conditions</SectionTitle>
-          {conditions.length === 0 ? (
-            <div className="flex items-center gap-2 text-green-600">
-              <span className="text-xl">✅</span>
-              <p className="text-sm font-medium">No chronic conditions recorded</p>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {conditions.map((c: string) => (
-                <span key={c} className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-800 text-xs font-semibold px-3 py-1.5 rounded-full">
-                  📋 {c}
+        <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <p className="text-primary-200 text-sm font-medium">{t('welcomeBanner.welcomeBack')}</p>
+            <h1 className="text-3xl font-bold mt-1 leading-tight">{firstName}</h1>
+            <div className="flex flex-wrap items-center gap-2 mt-4">
+              {profile?.blood_type && (
+                <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
+                  🩸 {profile.blood_type}
                 </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5">
-          <SectionTitle>🆘 Emergency Contact</SectionTitle>
-          {profile?.emergency_contact_name ? (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-orange-600 font-medium">Name</span>
-                <span className="text-gray-900 font-bold">{profile.emergency_contact_name}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-orange-600 font-medium">Phone</span>
-                <span className="text-gray-900 font-bold">{profile.emergency_contact_phone || '—'}</span>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-orange-600">No emergency contact provided.</p>
-          )}
-        </div>
-      </div>
-
-      {diseases.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <div>
-              <SectionTitle>Previous Diseases & Treatments</SectionTitle>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 mr-1">
-                {filteredDiseases.length} record{filteredDiseases.length !== 1 ? 's' : ''}
-              </span>
-              {['all', 'active', 'resolved'].map((f: string) => (
-                <button
-                  key={f}
-                  onClick={() => setDiseaseFilter(f)}
-                  className={`text-xs font-semibold px-3 py-1 rounded-full transition-colors capitalize ${
-                    diseaseFilter === f
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >
-                  {f === 'all'      ? `All (${diseases.length})` :
-                   f === 'active'   ? `Active (${diseases.filter((d: any) => d.status === 'active').length})` :
-                                      `Resolved (${diseases.filter((d: any) => d.status === 'completed' || d.status === 'dispensed').length})`}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {filteredDiseases.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <p className="text-3xl mb-2">📋</p>
-              <p className="text-sm">No {diseaseFilter !== 'all' ? diseaseFilter : ''} records found</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredDiseases.map((d: any, i: number) => (
-                <div key={d.id} className={`rounded-xl border transition-all
-                  ${d.status === 'active'    ? 'border-yellow-200 bg-yellow-50/30' :
-                    d.status === 'completed' ? 'border-green-100  bg-green-50/20'  :
-                                               'border-gray-100   bg-gray-50/50'}`}>
-
-                  <button
-                    type="button"
-                    className="w-full text-left p-4"
-                    onClick={() => setExpandedDisease(expandedDisease === d.id ? null : d.id)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold
-                          ${d.status === 'active'    ? 'bg-yellow-100 text-yellow-700' :
-                            d.status === 'completed' ? 'bg-green-100  text-green-700'  :
-                                                       'bg-primary-100 text-primary-700'}`}>
-                          {d.status === 'active' ? '⚕️' : d.status === 'completed' ? '✅' : i + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-gray-900 truncate">{d.title}</p>
-                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                            <span className="text-xs text-gray-400">{formatDate(d.visit_date)}</span>
-                            {d.doctor && <span className="text-xs text-primary-600 font-medium">Dr. {d.doctor}</span>}
-                            {d.hospital_clinic && <span className="text-xs text-gray-400">· {d.hospital_clinic}</span>}
-                            <StatusBadge status={d.status} />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {d.meds.length > 0 && (
-                          <span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-medium">
-                            💊 {d.meds.length}
-                          </span>
-                        )}
-                        <svg className={`w-4 h-4 text-gray-400 transition-transform ${expandedDisease === d.id ? 'rotate-180' : ''}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </button>
-
-                  {expandedDisease === d.id && (
-                    <div className="px-4 pb-4 border-t border-gray-100 space-y-3 pt-3">
-                      <TreatmentFlow consultation={d} />
-
-                      {d.sick_description && d.diagnosis && (
-                        <div className="bg-orange-50 rounded-lg px-3 py-2.5 border border-orange-100">
-                          <p className="text-xs font-bold text-orange-600 mb-0.5">🤒 Symptoms</p>
-                          <p className="text-sm text-gray-700">{d.sick_description}</p>
-                        </div>
-                      )}
-                      {d.treatment_description && (
-                        <div className="bg-teal-50 rounded-lg px-3 py-2.5 border border-teal-100">
-                          <p className="text-xs font-bold text-teal-600 mb-0.5">💉 Treatment Plan</p>
-                          <p className="text-sm text-gray-700">{d.treatment_description}</p>
-                        </div>
-                      )}
-                      {d.meds.length > 0 && (
-                        <div>
-                          <p className="text-xs font-bold text-gray-500 mb-2">💊 Medicines Prescribed</p>
-                          <div className="flex flex-wrap gap-2">
-                            {d.meds.map((m: any, mi: number) => (
-                              <div key={mi} className="inline-flex items-center gap-1.5 bg-white border border-gray-200 rounded-full pl-2 pr-3 py-1 text-xs shadow-sm">
-                                <span>💊</span>
-                                <span className="font-semibold text-gray-800">{m.medicine_name}</span>
-                                {m.dosage    && <span className="text-gray-400">· {m.dosage}</span>}
-                                {m.frequency && <span className="text-gray-400">· {m.frequency}</span>}
-                                {m.duration  && <span className="text-gray-400">· {m.duration}</span>}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {d.status === 'completed' && (
-                        <div className="flex items-center gap-2 bg-green-50 rounded-lg px-3 py-2 border border-green-100">
-                          <span>✅</span>
-                          <p className="text-xs font-semibold text-green-700">Treatment completed — condition resolved</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <SectionTitle>All-Time Medicine History</SectionTitle>
-          {medCount.length === 0 ? (
-            <div className="text-center py-6 text-gray-400">
-              <p className="text-3xl mb-2">💊</p>
-              <p className="text-sm">No medicines prescribed yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {medCount.slice(0, 8).map(({ name, count }) => (
-                <div key={name} className="flex items-center gap-3">
-                  <span className="text-base">💊</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{name}</p>
-                      <span className="text-xs text-gray-400 ml-2 shrink-0">{count}×</span>
-                    </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary-400 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (count / (medCount[0]?.count || 1)) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {medCount.length > 8 && (
-                <p className="text-xs text-gray-400 text-center pt-1">+{medCount.length - 8} more medicines</p>
+              )}
+              {age != null && (
+                <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
+                  {t('welcomeBanner.ageBadge', { age })}
+                </span>
+              )}
+              {activeConsultations.length > 0 && (
+                <span className="bg-yellow-400/25 text-yellow-100 text-xs font-semibold px-3 py-1.5 rounded-full border border-yellow-300/30">
+                  {t('welcomeBanner.activeTreatments', { count: activeConsultations.length })}
+                </span>
               )}
             </div>
-          )}
-        </div>
+          </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <SectionTitle>Treating Doctors</SectionTitle>
-          {doctors.length === 0 ? (
-            <div className="text-center py-6 text-gray-400">
-              <p className="text-3xl mb-2">🩺</p>
-              <p className="text-sm">No doctor visits recorded</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {doctors.map((doc: any) => {
-                const visits  = (consultations as any[]).filter((c: any) => c.doctor_display_name === doc);
-                const latest  = visits[0];
-                const hasActive = visits.some((v: any) => v.status === 'active');
-                return (
-                  <div key={doc} className={`flex items-center gap-3 p-3 rounded-xl border
-                    ${hasActive ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0
-                      ${hasActive ? 'bg-yellow-200 text-yellow-800' : 'bg-primary-100 text-primary-700'}`}>
-                      {doc.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-gray-900">Dr. {doc}</p>
-                        {hasActive && <span className="text-xs bg-yellow-200 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">Active</span>}
-                      </div>
-                      <p className="text-xs text-gray-400">
-                        {visits.length} visit{visits.length !== 1 ? 's' : ''}
-                        {latest ? ` · Last: ${formatDate(latest.visit_date)}` : ''}
-                        {latest?.hospital_clinic ? ` · ${latest.hospital_clinic}` : ''}
-                      </p>
-                    </div>
-                    <span className="text-xs bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full font-medium shrink-0">
-                      {visits.length}×
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <button
+            onClick={handleDownload}
+            disabled={downloading || !me}
+            className="shrink-0 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-2 border border-white/20 backdrop-blur-sm"
+          >
+            {downloading
+              ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              : <Download size={15} strokeWidth={2} />
+            }
+            {downloading ? t('welcomeBanner.generating') : t('welcomeBanner.healthReportButton')}
+          </button>
         </div>
       </div>
 
-      {allLabTests.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <SectionTitle>Recent Lab Reports</SectionTitle>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {allLabTests.slice(0, 4).map((r) => {
-              const STATUS: Record<string, string> = {
-                pending:     'bg-yellow-100 text-yellow-700',
-                in_progress: 'bg-blue-100   text-blue-700',
-                completed:   'bg-green-100  text-green-700',
-                uploaded:    'bg-violet-100 text-violet-700',
-              };
-              return (
-                <div key={r.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <span className="text-xl mt-0.5">{r.source === 'patient_upload' ? '📄' : '🔬'}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{r.title}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS[r.status]}`}>
-                        {r.source === 'patient_upload' ? 'Uploaded by you' : r.status.replace('_', ' ')}
-                      </span>
-                    </div>
-                    {r.subtitle && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{r.subtitle}</p>}
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {r.doctor ? `Dr. ${r.doctor} · ` : ''}{formatDate(r.date)}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {allLabTests.length > 4 && (
-            <p className="text-xs text-center text-gray-400 mt-3">
-              +{allLabTests.length - 4} more lab reports — view in Lab Reports tab
-            </p>
-          )}
-        </div>
-      )}
+      <QuickActionsRow actions={quickActions} />
 
-      {timeline.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <SectionTitle>Health Timeline</SectionTitle>
-            <span className="text-xs text-gray-400">{timeline.length} events</span>
-          </div>
-          <div className="max-h-80 overflow-y-auto pr-1 space-y-0">
-            {timeline.slice(0, 12).map((event: any, i: number) => (
-              <TimelineItem
-                key={event.id}
-                icon={event.icon}
-                title={event.title}
-                subtitle={event.subtitle}
-                date={formatDate(event.date)}
-                color={event.color}
-                last={i === Math.min(timeline.length, 12) - 1}
-              />
-            ))}
-            {timeline.length > 12 && (
-              <p className="text-xs text-center text-gray-400 mt-2 pb-2">
-                +{timeline.length - 12} earlier events not shown
-              </p>
-            )}
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 space-y-4">
+          <PersonalDetailsCard profile={profile} age={age} allergies={allergies} conditions={conditions} />
+          <QuickStatsRow stats={quickStats} />
         </div>
-      )}
 
-      {(consultations as any[]).length === 0 && allLabTests.length === 0 && (
-        <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-2xl border border-primary-100 p-8 text-center">
-          <span className="text-4xl block mb-3">🏥</span>
-          <p className="text-gray-700 font-semibold">Your health dashboard is ready</p>
-          <p className="text-sm text-gray-500 mt-1">
-            Your medical history, diagnoses, and lab reports will appear here as your doctors add them.
-          </p>
+        <div className="space-y-4">
+          <VitalsSummaryCard onOpen={() => setVitalsModalOpen(true)} />
+          <MiniCalendar highlightDates={visitDates} title={t('calendar.title')} />
         </div>
-      )}
+      </div>
+
+      <Modal isOpen={vitalsModalOpen} onClose={() => setVitalsModalOpen(false)} title={t('vitalsSummary.title')} size="xl">
+        <VitalsOverview />
+      </Modal>
     </div>
   );
 }

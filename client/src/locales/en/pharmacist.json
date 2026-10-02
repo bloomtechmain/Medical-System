@@ -54,30 +54,49 @@
     "toast": {
       "orderReceived": "Order received — stock updated",
       "orderReceiveFailed": "Failed to receive order"
+    },
+    "prescriptions": {
+      "title": "Incoming Prescriptions",
+      "pending": "Pending",
+      "preparing": "Preparing",
+      "ready": "Ready",
+      "empty": "No prescriptions waiting on you right now.",
+      "fromDoctor": "From Dr. {{name}}",
+      "selfRequested": "Patient-requested"
     }
   },
   "consultations": {
     "pageTitle": "Assigned Prescriptions",
-    "pageDescription": "Prescriptions assigned to your pharmacy by doctors",
+    "pageDescription": "Prescriptions assigned to your pharmacy by doctors and patients",
     "filter": {
       "all": "All",
       "pending": "Pending",
-      "dispensed": "Dispensed"
+      "preparing": "Preparing",
+      "ready": "Ready",
+      "delivered": "Delivered"
     },
     "status": {
       "pending": "Pending",
-      "dispensed": "Dispensed",
+      "preparing": "Preparing",
+      "ready": "Ready",
+      "delivered": "Delivered",
       "completed": "Completed"
     },
     "stats": {
       "totalAssigned": "Total Assigned",
       "pending": "Pending",
-      "dispensed": "Dispensed"
+      "preparing": "Preparing",
+      "ready": "Ready"
+    },
+    "action": {
+      "startPreparing": "Start Preparing",
+      "markReady": "Mark Ready ✅",
+      "markDelivered": "Mark Delivered 📦"
     },
     "loading": "Loading prescriptions...",
     "emptyTitleFiltered": "No {{filter}} prescriptions",
     "emptyTitleAll": "No prescriptions",
-    "emptySubtitle": "Prescriptions assigned by doctors will appear here.",
+    "emptySubtitle": "Prescriptions assigned by doctors and patients will appear here.",
     "doctorLabel": "Doctor",
     "doctorPrefix": "Dr. {{name}}",
     "dxPrefix": "Dx: {{diagnosis}}",
@@ -85,7 +104,9 @@
     "rxImage": "Rx Image",
     "dispenseButton": "Dispense ✅",
     "toast": {
-      "dispensed": "Marked as dispensed — patient notified!",
+      "preparing": "Marked as preparing — patient notified!",
+      "dispensed": "Marked ready for pickup — patient notified!",
+      "delivered": "Marked as delivered — treatment complete!",
       "updateFailed": "Failed to update status",
       "loadFailed": "Failed to load"
     },
@@ -111,8 +132,9 @@
       "hideOcr": "Hide raw OCR text",
       "showOcr": "Show raw OCR text",
       "markDispensedButton": "Mark as Dispensed — Notify Patient",
-      "dispenseNote": "This will notify the patient that their medicines are ready to collect.",
-      "dispensedNote": "Medicines dispensed · Patient has been notified"
+      "dispenseNote": "This will notify the patient of the status change.",
+      "dispensedNote": "Medicines dispensed · Patient has been notified",
+      "deliveredNote": "Delivered · Treatment complete"
     }
   },
   "medicines": {

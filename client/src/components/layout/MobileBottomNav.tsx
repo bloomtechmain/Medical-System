@@ -6,7 +6,7 @@ import { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Stethoscope, Activity, FolderOpen, Users, Pill,
   Truck, ShoppingCart, Receipt, BarChart2, ClipboardList, Microscope,
-  ShieldCheck, MoreHorizontal, X, LogOut, CalendarClock, CalendarPlus,
+  ShieldCheck, MoreHorizontal, X, LogOut, CalendarClock, CalendarPlus, Settings,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { accessRequestApi, labViewRequestApi, appointmentApi } from '../../services/api';
@@ -60,6 +60,7 @@ const TABS: Record<string, TabConfig> = {
       { to: '/patient/medical-flow',  labelKey: 'navShort.medicalFlow', icon: Activity },
       { to: '/patient/lab-tests',     labelKey: 'navShort.labTests',    icon: Microscope },
       { to: '/patient/book-doctor',   labelKey: 'navShort.bookDoctor',  icon: CalendarPlus },
+      { to: '/patient/settings',      labelKey: 'navShort.settings',    icon: Settings },
     ],
   },
   doctor: {
@@ -104,7 +105,9 @@ const TABS: Record<string, TabConfig> = {
       { to: '/laboratory',         labelKey: 'navShort.home',    icon: LayoutDashboard, exact: true },
       { to: '/laboratory/reports', labelKey: 'navShort.reports', icon: ClipboardList },
     ],
-    more: [],
+    more: [
+      { to: '/laboratory/catalog', labelKey: 'navShort.catalog', icon: Receipt },
+    ],
   },
 };
 

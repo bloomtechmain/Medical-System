@@ -29,132 +29,52 @@
     "footerConfidential": "රහස්‍ය වෛද්‍ය වාර්තාවකි",
     "footerAuthorized": "අවසර ලත් භාවිතය සඳහා පමණි"
   },
-  "sectionTitles": {
-    "consultationsByDoctor": "වෛද්‍යවරයා අනුව හමුවීම්",
-    "currentActiveMedications": "වර්තමාන ක්‍රියාත්මක බෙහෙත්",
-    "chronicConditions": "දිගුකාලීන රෝග තත්ත්ව",
-    "allTimeMedicineHistory": "සම්පූර්ණ බෙහෙත් ඉතිහාසය",
-    "treatingDoctors": "ප්‍රතිකාර කළ වෛද්‍යවරු",
-    "recentLabReports": "මෑත රසායනාගාර වාර්තා",
-    "healthTimeline": "සෞඛ්‍ය කාලරේඛාව",
-    "previousDiseasesTreatments": "පෙර රෝග හා ප්‍රතිකාර"
-  },
-  "shared": {
-    "doctorPrefix": "Dr.",
-    "dispensed": "නිකුත් කළා",
-    "uploadedByYou": "ඔබ විසින් උඩුගත කරන ලදී",
-    "fallbacks": {
-      "selfRecorded": "ස්වයං-සටහන්",
-      "medicalVisit": "වෛද්‍ය හමුවීම",
-      "laboratory": "රසායනාගාරය",
-      "labReport": "රසායනාගාර වාර්තාව",
-      "labTest": "රසායනාගාර පරීක්ෂණය",
-      "treatment": "ප්‍රතිකාරය"
-    },
-    "steps": {
-      "symptom": "රෝග ලක්ෂණය",
-      "diagnosed": "විනිශ්චය කළා",
-      "treated": "ප්‍රතිකාර කළා",
-      "resolved": "විසඳුණි",
-      "dispensed": "නිකුත් කළා",
-      "ongoing": "සිදුවෙමින්"
-    }
-  },
-  "doctorTiles": {
-    "viewAllManage": "සියල්ල බලන්න සහ කළමනාකරණය කරන්න",
-    "visitCount": "හමුවීම් {{count}}",
-    "symptomsHeader": "රෝග ලක්ෂණ",
-    "diagnosisHeader": "රෝග විනිශ්චය",
-    "treatmentHeader": "ප්‍රතිකාරය",
-    "editConsultation": "මෙම හමුවීම සංස්කරණය කරන්න"
-  },
   "welcomeBanner": {
     "welcomeBack": "නැවත සාදරයෙන් පිළිගනිමු,",
     "patientFallback": "රෝගියා",
     "ageBadge": "වයස {{age}}",
     "activeTreatments": "ක්‍රියාත්මක ප්‍රතිකාර {{count}}",
     "generating": "සකස් කරමින්…",
-    "healthReportButton": "සෞඛ්‍ය වාර්තාව",
+    "healthReportButton": "සෞඛ්‍ය වාර්තාව"
+  },
+  "quickActions": {
+    "vitals": "ජීවී සංඥා",
+    "bookDoctor": "වෛද්‍යවරයා වෙන් කරන්න",
+    "consultations": "හමුවීම්",
+    "labTests": "රසායනාගාර පරීක්ෂණ",
+    "myReports": "මගේ වාර්තා"
+  },
+  "personalDetails": {
+    "title": "පුද්ගලික විස්තර",
+    "editLink": "සැකසුම්වල සංස්කරණය කරන්න",
+    "empty": "තවම පුද්ගලික විස්තර සටහන් වී නැත.",
+    "allergiesLabel": "අසාත්මිකතා",
+    "conditionsLabel": "දිගුකාලීන රෝග තත්ත්ව",
     "fields": {
-      "bloodType": "රුධිර වර්ගය",
-      "age": "වයස",
-      "gender": "ලිංගභේදය",
-      "insurance": "රක්ෂණය",
       "phone": "දුරකථනය",
+      "dob": "උපන් දිනය",
+      "gender": "ලිංගභේදය",
+      "bloodType": "රුධිර වර්ගය",
       "address": "ලිපිනය",
-      "policyNo": "ප්‍රතිපත්ති අංකය",
-      "dob": "උපන් දිනය"
+      "insurance": "රක්ෂණය",
+      "emergencyContact": "හදිසි සම්බන්ධතාවය"
     }
   },
-  "sidebar": {
-    "myScheduleTitle": "මගේ කාලසටහන",
-    "healthSummaryTitle": "සෞඛ්‍ය සාරාංශය",
-    "stats": {
-      "doctorVisits": "වෛද්‍ය හමුවීම්",
-      "activeTreatments": "ක්‍රියාත්මක ප්‍රතිකාර",
-      "resolved": "විසඳුණි",
-      "labTests": "රසායනාගාර පරීක්ෂණ",
-      "medicines": "බෙහෙත්",
-      "doctorsSeen": "හමුවූ වෛද්‍යවරු"
-    },
-    "lastVisit": "අවසන්: {{date}}",
-    "selfUploaded": "ඔබ විසින් උඩුගත කළ {{count}}",
-    "mostUsed": "වැඩිපුර භාවිතා කළේ: {{name}} ({{count}}×)",
-    "primaryDoctor": "ප්‍රධාන: {{prefix}}{{name}} (හමුවීම් {{count}})",
-    "activeTreatmentsCardTitle": "ක්‍රියාත්මක ප්‍රතිකාර",
-    "selfRecordedLower": "ස්වයං-සටහන්",
-    "treatmentFallback": "ප්‍රතිකාරය"
+  "quickStats": {
+    "doctorVisits": "වෛද්‍ය හමුවීම්",
+    "activeTreatments": "ක්‍රියාත්මක ප්‍රතිකාර",
+    "labTests": "රසායනාගාර පරීක්ෂණ",
+    "doctorsSeen": "හමුවූ වෛද්‍යවරු"
   },
-  "alerts": {
-    "allergyAlert": "අසාත්මිකතා අනතුරු ඇඟවීම — දන්නා අසාත්මිකතා {{count}}",
-    "allergyInform": "ප්‍රතිකාර කරන සියලුම වෘත්තිකයන්ට දන්වන්න",
-    "activeTreatmentTitle": "ක්‍රියාත්මක ප්‍රතිකාරයක් සිදුවෙමින් පවතී",
-    "labPending": "රසායනාගාර ප්‍රතිඵල {{count}}ක් අපේක්ෂිතයි",
-    "labPendingNote": "ප්‍රතිඵල සූදානම් වූ පසු ඔබගේ රසායනාගාර වාර්තා අංශයේ දිස්වනු ඇත."
+  "vitalsSummary": {
+    "title": "ජීවී සංඥා දළ විශ්ලේෂණය",
+    "noVitals": "තවම ජීවී සංඥා සටහන් වී නැත",
+    "recordedOn": "අවසන් වරට සටහන් කළේ {{date}}",
+    "fieldsRecorded": "අගයන් {{count}}ක් සටහන් වී ඇත",
+    "viewFullButton": "සම්පූර්ණ ජීවී සංඥා බලන්න"
   },
-  "activeMeds": {
-    "count": "බෙහෙත් {{count}}",
-    "forLabel": "සඳහා: {{title}}"
-  },
-  "chronicConditionsSection": {
-    "empty": "දිගුකාලීන රෝග තත්ත්ව සටහන් වී නැත"
-  },
-  "emergencyContact": {
-    "title": "හදිසි සම්බන්ධතාවය",
-    "empty": "හදිසි සම්බන්ධතාවයක් සපයා නැත."
-  },
-  "diseases": {
-    "recordCount": "වාර්තා {{count}}",
-    "filterAll": "සියල්ල ({{count}})",
-    "filterActive": "ක්‍රියාත්මකයි ({{count}})",
-    "filterResolved": "විසඳුණි ({{count}})",
-    "resolvedLabel": "විසඳුණි",
-    "emptyGeneric": "වාර්තා හමු නොවීය",
-    "emptyFiltered": "{{filter}} වාර්තා හමු නොවීය",
-    "symptomsHeader": "රෝග ලක්ෂණ",
-    "treatmentPlanHeader": "ප්‍රතිකාර සැලැස්ම",
-    "medicinesPrescribedHeader": "නියම කළ බෙහෙත්",
-    "treatmentCompletedNote": "ප්‍රතිකාරය සම්පූර්ණයි — තත්ත්වය විසඳී ඇත"
-  },
-  "medicineHistory": {
-    "empty": "තවම බෙහෙත් නියම කර නැත",
-    "more": "තවත් බෙහෙත් {{count}}ක්"
-  },
-  "treatingDoctorsSection": {
-    "empty": "වෛද්‍ය හමුවීම් සටහන් වී නැත",
-    "visitCount": "හමුවීම් {{count}}",
-    "lastVisitSuffix": "අවසන්: {{date}}"
-  },
-  "labReportsSection": {
-    "more": "තවත් රසායනාගාර වාර්තා {{count}}ක් — රසායනාගාර වාර්තා පටිත්තෙන් බලන්න"
-  },
-  "healthTimelineSection": {
-    "eventCount": "සිදුවීම් {{count}}",
-    "moreEvents": "පෙර සිදුවීම් {{count}}ක් පෙන්වා නැත"
-  },
-  "emptyDashboard": {
-    "title": "ඔබගේ සෞඛ්‍ය උපකරණ පුවරුව සූදානම්",
-    "subtitle": "ඔබගේ වෛද්‍යවරු ඒවා එකතු කරන විට ඔබගේ වෛද්‍ය ඉතිහාසය, රෝග විනිශ්චය සහ රසායනාගාර වාර්තා මෙහි දිස්වනු ඇත."
+  "calendar": {
+    "title": "මගේ කාලසටහන"
   },
   "vitalsOverview": {
     "vitalsDef": {
@@ -235,5 +155,11 @@
     "groupHeader": {
       "valuesRecorded": "අගයන් {{total}}න් {{filled}}ක් සටහන් වී ඇත"
     }
+  },
+  "setupPrompt": {
+    "title": "Core Health වෙත සාදරයෙන් පිළිගනිමු!",
+    "message": "ඔබේ ප්‍රොෆයිලය සම්පූර්ණ කරන්න — දුරකථන අංකය, උපන් දිනය, රුධිර වර්ගය, හදිසි සම්බන්ධතාව සහ තවත් — වෛද්‍යවරුන්ට සහ රසායනාගාරවලට ඔබව රැකබලා ගැනීමට අවශ්‍ය තොරතුරු ලබා දීම සඳහා.",
+    "completeButton": "සැකසුම සම්පූර්ණ කරන්න",
+    "laterButton": "පසුව"
   }
 }

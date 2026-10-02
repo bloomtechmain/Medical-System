@@ -98,12 +98,22 @@ const upsertRoleProfile = async (
         profile.pharmacy_address||null, parseInt(profile.years_experience)||0, profile.specialization_area||null]);
   } else if (role === 'patient') {
     await client.query(`
-      INSERT INTO clinical.patient_profiles (user_id, date_of_birth, gender, phone, address, blood_type, allergies, chronic_conditions)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      INSERT INTO clinical.patient_profiles (
+        user_id, date_of_birth, gender, phone, address,
+        emergency_contact_name, emergency_contact_phone,
+        blood_type, allergies, chronic_conditions,
+        insurance_provider, insurance_policy_number
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       ON CONFLICT (user_id) DO UPDATE SET
-        date_of_birth=$2, gender=$3, phone=$4, address=$5, blood_type=$6, allergies=$7, chronic_conditions=$8, updated_at=NOW()
+        date_of_birth=$2, gender=$3, phone=$4, address=$5,
+        emergency_contact_name=$6, emergency_contact_phone=$7,
+        blood_type=$8, allergies=$9, chronic_conditions=$10,
+        insurance_provider=$11, insurance_policy_number=$12, updated_at=NOW()
     `, [userId, profile.date_of_birth||null, profile.gender||null, profile.phone||null,
-        profile.address||null, profile.blood_type||null, profile.allergies||null, profile.chronic_conditions||null]);
+        profile.address||null, profile.emergency_contact_name||null, profile.emergency_contact_phone||null,
+        profile.blood_type||null, profile.allergies||null, profile.chronic_conditions||null,
+        profile.insurance_provider||null, profile.insurance_policy_number||null]);
   } else if (role === 'laboratory') {
     await client.query(`
       INSERT INTO public.laboratory_profiles (user_id, phone, lab_name, lab_type, license_number, accreditation, address, services_offered, operating_hours)

@@ -4,6 +4,7 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 
 import enCommon from './locales/en/common.json';
 import enPatientDashboard from './locales/en/patientDashboard.json';
+import enPatientSettings from './locales/en/patientSettings.json';
 import enPatientConsultations from './locales/en/patientConsultations.json';
 import enPatientReports from './locales/en/patientReports.json';
 import enDoctorCore from './locales/en/doctorCore.json';
@@ -15,6 +16,7 @@ import enAdmin from './locales/en/admin.json';
 
 import siCommon from './locales/si/common.json';
 import siPatientDashboard from './locales/si/patientDashboard.json';
+import siPatientSettings from './locales/si/patientSettings.json';
 import siPatientConsultations from './locales/si/patientConsultations.json';
 import siPatientReports from './locales/si/patientReports.json';
 import siDoctorCore from './locales/si/doctorCore.json';
@@ -31,7 +33,7 @@ import siAdmin from './locales/si/admin.json';
 // namespace's pair of JSON files without ever touching the same file.
 const NS = [
   'common',
-  'patientDashboard', 'patientConsultations', 'patientReports',
+  'patientDashboard', 'patientSettings', 'patientConsultations', 'patientReports',
   'doctorCore', 'doctorClinical', 'doctorPatients',
   'pharmacist', 'laboratory', 'admin',
 ] as const;
@@ -43,13 +45,13 @@ i18n
     resources: {
       en: {
         common: enCommon,
-        patientDashboard: enPatientDashboard, patientConsultations: enPatientConsultations, patientReports: enPatientReports,
+        patientDashboard: enPatientDashboard, patientSettings: enPatientSettings, patientConsultations: enPatientConsultations, patientReports: enPatientReports,
         doctorCore: enDoctorCore, doctorClinical: enDoctorClinical, doctorPatients: enDoctorPatients,
         pharmacist: enPharmacist, laboratory: enLaboratory, admin: enAdmin,
       },
       si: {
         common: siCommon,
-        patientDashboard: siPatientDashboard, patientConsultations: siPatientConsultations, patientReports: siPatientReports,
+        patientDashboard: siPatientDashboard, patientSettings: siPatientSettings, patientConsultations: siPatientConsultations, patientReports: siPatientReports,
         doctorCore: siDoctorCore, doctorClinical: siDoctorClinical, doctorPatients: siDoctorPatients,
         pharmacist: siPharmacist, laboratory: siLaboratory, admin: siAdmin,
       },

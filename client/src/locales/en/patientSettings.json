@@ -1,0 +1,34 @@
+{
+  "title": "Settings",
+  "subtitle": "Complete your profile so doctors and labs have what they need to care for you.",
+  "sections": {
+    "account": "Account Information",
+    "health": "Personal Health Information"
+  },
+  "fields": {
+    "dateOfBirth": "Date of Birth",
+    "bloodType": "Blood Type",
+    "emergencyContactName": "Emergency Contact Name",
+    "emergencyContactPhone": "Emergency Contact Phone",
+    "allergies": "Known Allergies",
+    "chronicConditions": "Chronic Conditions",
+    "insuranceProvider": "Insurance Provider",
+    "insurancePolicyNumber": "Policy Number"
+  },
+  "selectGenderPlaceholder": "Select gender",
+  "bloodTypeUnknown": "Unknown / Not sure",
+  "placeholders": {
+    "fullName": "Jane Perera",
+    "phone": "+94 77 123 4567",
+    "address": "No. 12, Main Street, Colombo 03",
+    "emergencyContactName": "Parent / Spouse name",
+    "emergencyContactPhone": "+94 77 987 6543",
+    "allergies": "e.g., Penicillin, Aspirin, Latex (or None)",
+    "chronicConditions": "e.g., Diabetes, Hypertension, Asthma (or None)",
+    "insuranceProvider": "e.g., Ceylinco, AIA, Union Assurance",
+    "insurancePolicyNumber": "e.g., POL-123456"
+  },
+  "optional": "(optional)",
+  "toastSuccess": "Profile updated successfully",
+  "toastError": "Failed to update profile"
+}

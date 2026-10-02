@@ -1,7 +1,7 @@
 {
   "page": {
     "title": "මගේ වෛද්‍ය හමුවීම්",
-    "subtitle": "වෛද්‍යවරයා අනුව වර්ග කළ සම්පූර්ණ ක්‍රියාවලි ඉතිහාසය — විස්තර දැකීමට ඕනෑම හමුවීමක් ක්ලික් කරන්න",
+    "subtitle": "අලුත්ම හමුවීම මුලින්ම — විස්තර දැකීමට ඕනෑම හමුවීමක් ක්ලික් කරන්න",
     "recordVisit": "හමුවීම වාර්තා කරන්න",
     "loading": "වෛද්‍ය හමුවීම් පූරණය වේ…",
     "stats": {
@@ -36,13 +36,18 @@
       "verified": "සත්‍යාපිතයි",
       "visits": "හමුවීම්"
     },
+    "doctorFilter": {
+      "all": "සියලුම වෛද්‍යවරු ({{count}})"
+    },
     "commit": {
       "medicalVisit": "වෛද්‍ය හමුවීම",
       "labPending": "රසායනාගාරය රැඳී ඇත",
       "labDone": "රසායනාගාරය සම්පූර්ණයි",
       "status": {
         "active": "ක්‍රියාත්මකයි",
-        "dispensed": "නිකුත් කළා",
+        "preparing": "සූදානම් කරමින්",
+        "dispensed": "සූදානම්",
+        "delivered": "භාර දුන්නා",
         "completed": "විසඳුණි"
       }
     },
@@ -56,6 +61,9 @@
       "pharmacy": "ෆාමසිය",
       "pharmacyDispensed": "ෆාමසිය මගින් නිකුත් කරන ලදී ✅",
       "pharmacyNamed": "ෆාමසිය: {{name}}",
+      "pharmacyPreparingHeading": "{{name}} සූදානම් කරමින්",
+      "pharmacyReadyHeading": "{{name}} හි සූදානම්",
+      "pharmacyDeliveredHeading": "{{name}} විසින් භාර දෙන ලදී",
       "pharmacyAssignedFallback": "පවරා ඇත",
       "assignedPharmacyFallback": "පවරන ලද ෆාමසිය",
       "labTestsRequested": "ඉල්ලූ රසායනාගාර පරීක්ෂණ",
@@ -71,12 +79,19 @@
       "forwardToPharmacyBtn": "ෆාමසියට යොමු කරන්න",
       "noPharmacyAssigned": "කිසිදු ෆාමසියක් පවරා නොමැත.",
       "medicinesDispensed": "✓ බෙහෙත් නිකුත් කර ඇත",
-      "awaitingDispensing": "නිකුත් කිරීම බලාපොරොත්තුවෙන්",
+      "awaitingDispensing": "ෆාමසිස්ට්වරයා බලාපොරොත්තුවෙන්",
+      "stagePreparing": "සූදානම් කරමින්",
+      "stageReady": "ලබා ගැනීමට සූදානම්",
+      "stageDelivered": "✓ භාර දී ඇත",
       "sendToLaboratoryBtn": "රසායනාගාරයට යවන්න",
       "orderedByDoctor": "ඉල්ලූයේ වෛද්‍ය {{name}}",
       "labNotesSummary": "රසායනාගාර සටහන් / ප්‍රතිඵල සාරාංශය",
       "downloadReport": "වාර්තාව බාගන්න"
     }
+  },
+  "doctorSearch": {
+    "loading": "වෛද්‍යවරුන් සොයමින්…",
+    "namePrefix": "වෛද්‍ය {{name}}"
   },
   "labSearch": {
     "placeholder": "සියලුම රසායනාගාර බැලීමට තට්ටු කරන්න, නැතහොත් සෙවීමට ටයිප් කරන්න…",
@@ -205,7 +220,9 @@
       "sick": "අසනීප වාර්තා කරන ලදී",
       "doctorVisit": "වෛද්‍ය හමුවීම",
       "diagnosis": "රෝග විනිශ්චය",
-      "prescriptionDispensed": "බෙහෙත් වට්ටෝරුව නිකුත් කරන ලදී",
+      "prescriptionPreparing": "ෆාමසිය සූදානම් කරමින්",
+      "prescriptionDispensed": "ලබා ගැනීමට සූදානම්",
+      "prescriptionDelivered": "බෙහෙත් භාර දී ඇත",
       "treatmentCompleted": "ප්‍රතිකාරය සම්පූර්ණයි",
       "labRequested": "රසායනාගාර පරීක්ෂණයක් ඉල්ලා ඇත",
       "labInProgress": "රසායනාගාර පරීක්ෂණය සිදුවෙමින්",

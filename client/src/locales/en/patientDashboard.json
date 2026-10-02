@@ -29,132 +29,52 @@
     "footerConfidential": "Confidential Medical Record",
     "footerAuthorized": "For authorized use only"
   },
-  "sectionTitles": {
-    "consultationsByDoctor": "Consultations by Doctor",
-    "currentActiveMedications": "Current Active Medications",
-    "chronicConditions": "Chronic Conditions",
-    "allTimeMedicineHistory": "All-Time Medicine History",
-    "treatingDoctors": "Treating Doctors",
-    "recentLabReports": "Recent Lab Reports",
-    "healthTimeline": "Health Timeline",
-    "previousDiseasesTreatments": "Previous Diseases & Treatments"
-  },
-  "shared": {
-    "doctorPrefix": "Dr.",
-    "dispensed": "Dispensed",
-    "uploadedByYou": "Uploaded by you",
-    "fallbacks": {
-      "selfRecorded": "Self-Recorded",
-      "medicalVisit": "Medical Visit",
-      "laboratory": "Laboratory",
-      "labReport": "Lab Report",
-      "labTest": "Lab Test",
-      "treatment": "Treatment"
-    },
-    "steps": {
-      "symptom": "Symptom",
-      "diagnosed": "Diagnosed",
-      "treated": "Treated",
-      "resolved": "Resolved",
-      "dispensed": "Dispensed",
-      "ongoing": "Ongoing"
-    }
-  },
-  "doctorTiles": {
-    "viewAllManage": "View all & manage",
-    "visitCount": "{{count}} visits",
-    "symptomsHeader": "Symptoms",
-    "diagnosisHeader": "Diagnosis",
-    "treatmentHeader": "Treatment",
-    "editConsultation": "Edit this consultation"
-  },
   "welcomeBanner": {
     "welcomeBack": "Welcome back,",
     "patientFallback": "Patient",
     "ageBadge": "{{age}} yrs",
     "activeTreatments": "{{count}} active treatments",
     "generating": "Generating…",
-    "healthReportButton": "Health Report",
+    "healthReportButton": "Health Report"
+  },
+  "quickActions": {
+    "vitals": "Vitals",
+    "bookDoctor": "Book a Doctor",
+    "consultations": "Consultations",
+    "labTests": "Lab Tests",
+    "myReports": "My Reports"
+  },
+  "personalDetails": {
+    "title": "Personal Details",
+    "editLink": "Edit in Settings",
+    "empty": "No personal details on file yet.",
+    "allergiesLabel": "Allergies",
+    "conditionsLabel": "Chronic Conditions",
     "fields": {
-      "bloodType": "Blood Type",
-      "age": "Age",
-      "gender": "Gender",
-      "insurance": "Insurance",
       "phone": "Phone",
+      "dob": "Date of Birth",
+      "gender": "Gender",
+      "bloodType": "Blood Type",
       "address": "Address",
-      "policyNo": "Policy No.",
-      "dob": "DOB"
+      "insurance": "Insurance",
+      "emergencyContact": "Emergency Contact"
     }
   },
-  "sidebar": {
-    "myScheduleTitle": "My Schedule",
-    "healthSummaryTitle": "Health Summary",
-    "stats": {
-      "doctorVisits": "Doctor Visits",
-      "activeTreatments": "Active Treatments",
-      "resolved": "Resolved",
-      "labTests": "Lab Tests",
-      "medicines": "Medicines",
-      "doctorsSeen": "Doctors Seen"
-    },
-    "lastVisit": "Last: {{date}}",
-    "selfUploaded": "{{count}} self-uploaded",
-    "mostUsed": "Most used: {{name}} ({{count}}×)",
-    "primaryDoctor": "Primary: {{prefix}}{{name}} ({{count}} visits)",
-    "activeTreatmentsCardTitle": "Active Treatments",
-    "selfRecordedLower": "Self-recorded",
-    "treatmentFallback": "Treatment"
+  "quickStats": {
+    "doctorVisits": "Doctor Visits",
+    "activeTreatments": "Active Treatments",
+    "labTests": "Lab Tests",
+    "doctorsSeen": "Doctors Seen"
   },
-  "alerts": {
-    "allergyAlert": "ALLERGY ALERT — {{count}} Known Allergens",
-    "allergyInform": "Inform all treating professionals",
-    "activeTreatmentTitle": "ACTIVE TREATMENT IN PROGRESS",
-    "labPending": "{{count}} Lab Results Pending",
-    "labPendingNote": "Results will appear in your Lab Reports section when ready."
+  "vitalsSummary": {
+    "title": "Vitals Overview",
+    "noVitals": "No vitals recorded yet",
+    "recordedOn": "Last recorded {{date}}",
+    "fieldsRecorded": "{{count}} values recorded",
+    "viewFullButton": "View Full Vitals"
   },
-  "activeMeds": {
-    "count": "{{count}} medicines",
-    "forLabel": "For: {{title}}"
-  },
-  "chronicConditionsSection": {
-    "empty": "No chronic conditions recorded"
-  },
-  "emergencyContact": {
-    "title": "Emergency Contact",
-    "empty": "No emergency contact provided."
-  },
-  "diseases": {
-    "recordCount": "{{count}} records",
-    "filterAll": "All ({{count}})",
-    "filterActive": "Active ({{count}})",
-    "filterResolved": "Resolved ({{count}})",
-    "resolvedLabel": "Resolved",
-    "emptyGeneric": "No records found",
-    "emptyFiltered": "No {{filter}} records found",
-    "symptomsHeader": "Symptoms",
-    "treatmentPlanHeader": "Treatment Plan",
-    "medicinesPrescribedHeader": "Medicines Prescribed",
-    "treatmentCompletedNote": "Treatment completed — condition resolved"
-  },
-  "medicineHistory": {
-    "empty": "No medicines prescribed yet",
-    "more": "+{{count}} more medicines"
-  },
-  "treatingDoctorsSection": {
-    "empty": "No doctor visits recorded",
-    "visitCount": "{{count}} visits",
-    "lastVisitSuffix": "Last: {{date}}"
-  },
-  "labReportsSection": {
-    "more": "+{{count}} more lab reports — view in Lab Reports tab"
-  },
-  "healthTimelineSection": {
-    "eventCount": "{{count}} events",
-    "moreEvents": "+{{count}} earlier events not shown"
-  },
-  "emptyDashboard": {
-    "title": "Your health dashboard is ready",
-    "subtitle": "Your medical history, diagnoses, and lab reports will appear here as your doctors add them."
+  "calendar": {
+    "title": "My Schedule"
   },
   "vitalsOverview": {
     "vitalsDef": {
@@ -235,5 +155,11 @@
     "groupHeader": {
       "valuesRecorded": "{{filled}} of {{total}} values recorded"
     }
+  },
+  "setupPrompt": {
+    "title": "Welcome to Core Health!",
+    "message": "Complete your profile — phone, date of birth, blood type, emergency contact and more — so doctors and labs have what they need to care for you.",
+    "completeButton": "Complete Setup",
+    "laterButton": "Later"
   }
 }

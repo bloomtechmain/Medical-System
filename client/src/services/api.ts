@@ -33,6 +33,8 @@ export const authApi = {
   login:    (data: unknown): Promise<any> => api.post('/auth/login', data),
   register: (data: unknown): Promise<any> => api.post('/auth/register', data),
   me:       (): Promise<any>              => api.get('/auth/me'),
+  impersonate:       (userId: number): Promise<any> => api.post(`/auth/impersonate/${userId}`),
+  getImpersonations: (): Promise<any>               => api.get('/auth/impersonations'),
 };
 
 export const medicineApi = {
@@ -92,7 +94,19 @@ export const labApi = {
   createDirect: (formData: FormData): Promise<any>             => api.post('/lab-requests/direct', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   uploadReport: (id: number, formData: FormData): Promise<any> => api.patch(`/lab-requests/${id}/report`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   updateStatus: (id: number, status: string, extra?: Record<string, unknown>): Promise<any> => api.patch(`/lab-requests/${id}/status`, { status, ...extra }),
+  reject:       (id: number, message: string): Promise<any>    => api.patch(`/lab-requests/${id}/reject`, { message }),
+  setPrice:     (id: number, data: { amount?: number; test_catalog_id?: number }): Promise<any> => api.patch(`/lab-requests/${id}/price`, data),
   remove:       (id: number): Promise<any>                     => api.delete(`/lab-requests/${id}`),
+  getMessages:  (id: number): Promise<any>                     => api.get(`/lab-requests/${id}/messages`),
+  sendMessage:  (id: number, body: string): Promise<any>       => api.post(`/lab-requests/${id}/messages`, { body }),
+};
+
+export const labCatalogApi = {
+  getMine:      (): Promise<any>                     => api.get('/lab-catalog'),
+  getForLab:    (laboratoryId: number): Promise<any> => api.get(`/lab-catalog/lab/${laboratoryId}`),
+  create:       (data: unknown): Promise<any>        => api.post('/lab-catalog', data),
+  update:       (id: number, data: unknown): Promise<any> => api.put(`/lab-catalog/${id}`, data),
+  toggleActive: (id: number): Promise<any>           => api.patch(`/lab-catalog/${id}/toggle`),
 };
 
 export const labViewRequestApi = {
@@ -149,6 +163,7 @@ export const orgApi = {
   getAll:       (): Promise<any>                                      => api.get('/organizations'),
   provision:    (data: unknown): Promise<any>                        => api.post('/organizations', data),
   register:     (data: unknown): Promise<any>                        => api.post('/organizations/register', data),
+  searchOwner:  (org_type: string, q: string): Promise<any>          => api.get('/organizations/search-owner', { params: { org_type, q } }),
   getMembers:   (id: number): Promise<any>                          => api.get(`/organizations/${id}/members`),
   addMember:    (id: number, data: unknown): Promise<any>           => api.post(`/organizations/${id}/members`, data),
   removeMember: (id: number, userId: number): Promise<any>          => api.delete(`/organizations/${id}/members/${userId}`),

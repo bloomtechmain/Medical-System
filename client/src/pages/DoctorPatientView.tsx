@@ -19,6 +19,11 @@ const ACCESS_TYPES = [
   { key: 'vitals',           labelKey: 'patientView.accessTypes.vitals',               Icon: Activity,      grad: 'from-orange-500 to-amber-500',  light: 'bg-orange-50', accent: 'text-orange-600' },
 ];
 
+const FULL_ACCESS_TYPE_CONF = {
+  key: 'all', labelKey: 'patientView.accessTypes.fullRecord',
+  Icon: Shield, grad: 'from-primary-600 to-primary-800', light: 'bg-primary-50', accent: 'text-primary-600',
+};
+
 const fmtDate = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
@@ -139,11 +144,10 @@ function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: Request
 interface AccessSectionProps {
   typeConf: any;
   accessStatus: any;
-  onRequestAccess: (typeConf: any) => void;
   children: React.ReactNode;
 }
 
-function AccessSection({ typeConf, accessStatus, onRequestAccess, children }: AccessSectionProps) {
+function AccessSection({ typeConf, accessStatus, children }: AccessSectionProps) {
   const { t } = useTranslation('doctorPatients');
   const { t: tc } = useTranslation('common');
   const [expanded, setExpanded] = useState(false);
@@ -184,20 +188,6 @@ function AccessSection({ typeConf, accessStatus, onRequestAccess, children }: Ac
             <span className="flex items-center gap-1 text-xs font-bold bg-red-100 text-red-600 px-2.5 py-1 rounded-full">
               <XCircle size={11} strokeWidth={2.5} /> {tc('status.declined')}
             </span>
-          )}
-
-          {(!status || isDeclined) && (
-            <button
-              onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRequestAccess(typeConf); }}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-opacity hover:opacity-90 shadow-sm ${
-                isDeclined
-                  ? `${typeConf.light} ${typeConf.accent} border border-current/20`
-                  : `bg-gradient-to-br ${typeConf.grad} text-white`
-              }`}
-            >
-              <Lock size={11} strokeWidth={2.5} />
-              {isDeclined ? t('patientView.accessSection.reRequest') : t('patientView.accessSection.requestAccess')}
-            </button>
           )}
 
           {isAccepted && (
@@ -776,6 +766,15 @@ export default function DoctorPatientView() {
   const conditions = patient.chronic_conditions?.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean) || [];
   const pid        = parseInt(patientId!, 10);
 
+  const allAccess       = access.all;
+  const hasAllAccess    = allAccess?.status === 'accepted';
+  const allAccessStatus = allAccess?.status || null;
+  // A section unlocks if full access was granted, or if it was individually
+  // granted under the old per-category flow (kept for backward compatibility
+  // with requests sent before the single "full access" request existed).
+  const sectionAccess = (key: string) =>
+    hasAllAccess ? { status: 'accepted' } : (access[key]?.status === 'accepted' ? access[key] : allAccess);
+
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
 
@@ -900,6 +899,51 @@ export default function DoctorPatientView() {
         </div>
       )}
 
+      {/* Full-access request banner */}
+      <div className="ios-tile p-5">
+        {hasAllAccess ? (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
+              <CheckCircle2 size={18} strokeWidth={2} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">{t('patientView.fullAccess.grantedTitle')}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{t('patientView.fullAccess.grantedDesc')}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${FULL_ACCESS_TYPE_CONF.grad} flex items-center justify-center shrink-0 shadow-sm`}>
+                <Shield size={18} strokeWidth={1.8} className="text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">{t('patientView.fullAccess.title')}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {allAccessStatus === 'pending'
+                    ? t('patientView.fullAccess.pendingDesc', { date: fmtDate(allAccess?.created_at) })
+                    : allAccessStatus === 'declined'
+                      ? t('patientView.fullAccess.declinedDesc')
+                      : t('patientView.fullAccess.noneDesc')}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveModal(FULL_ACCESS_TYPE_CONF)}
+              disabled={allAccessStatus === 'pending'}
+              className={`shrink-0 flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl text-white bg-gradient-to-br ${FULL_ACCESS_TYPE_CONF.grad} disabled:opacity-50 shadow-sm hover:opacity-90 transition-opacity`}
+            >
+              <Lock size={11} strokeWidth={2.5} />
+              {allAccessStatus === 'pending'
+                ? t('patientView.fullAccess.pendingButton')
+                : allAccessStatus === 'declined'
+                  ? t('patientView.fullAccess.reRequestButton')
+                  : t('patientView.fullAccess.requestButton')}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Protected sections */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
@@ -911,8 +955,7 @@ export default function DoctorPatientView() {
           <AccessSection
             key={typeConf.key}
             typeConf={typeConf}
-            accessStatus={access[typeConf.key]}
-            onRequestAccess={setActiveModal}
+            accessStatus={sectionAccess(typeConf.key)}
           >
             {typeConf.key === 'lab_reports'      && <LabReportsData      reports={accessData.lab_reports}        patientId={pid}                   />}
             {typeConf.key === 'medical_history'  && <MedicalHistoryData  consultations={accessData.consultations}                                  />}

@@ -85,7 +85,11 @@
       "sampleLabel": "නියැදිය",
       "startProcessing": "සැකසීම ආරම්භ කරන්න",
       "uploadReport": "වාර්තාව උඩුගත කරන්න",
-      "viewReport": "වාර්තාව බලන්න"
+      "viewReport": "වාර්තාව බලන්න",
+      "rejectButton": "ප්‍රතික්ෂේප කරන්න",
+      "detailsButton": "විස්තර සහ පණිවිඩ",
+      "priceLabel": "රු. {{amount}}",
+      "noPriceLabel": "මිලක් සකසා නැත"
     },
     "csv": {
       "patient": "රෝගියා",
@@ -204,7 +208,11 @@
       "sampleIdLabel": "අංකය:",
       "collectedLabel": "එකතු කළ දිනය:",
       "reportNotesHeading": "📝 වාර්තා සටහන්",
-      "openReport": "උඩුගත කළ වාර්තාව විවෘත කරන්න"
+      "openReport": "උඩුගත කළ වාර්තාව විවෘත කරන්න",
+      "priceHeading": "මිල",
+      "pricePlaceholder": "උදා. 850.00",
+      "priceSaved": "මිල සුරකින ලදී",
+      "priceSaveFailed": "මිල සුරැකීම අසාර්ථක විය"
     },
     "sampleModal": {
       "title": "සැකසීම ආරම්භ කරන්න",
@@ -214,6 +222,47 @@
       "submitLabel": "සැකසීම ආරම්භ කරන්න",
       "toastSuccess": "සැකසීම ආරම්භ කරන ලදී",
       "toastError": "සැකසීම ආරම්භ කිරීම අසාර්ථක විය"
+    },
+    "rejectModal": {
+      "title": "ඉල්ලීම ප්‍රතික්ෂේප කරන්න",
+      "reasonLabel": "ප්‍රතික්ෂේප කිරීමට හේතුව (රෝගියාට පෙන්වනු ලැබේ)",
+      "reasonPlaceholder": "උදා. අපි දැනට මෙම පරීක්ෂණය ලබා නොදෙමු, කරුණාකර වෙනත් රසායනාගාරයක් උත්සාහ කරන්න…",
+      "submitLabel": "ඉල්ලීම ප්‍රතික්ෂේප කරන්න",
+      "toastSuccess": "ඉල්ලීම ප්‍රතික්ෂේප කරන ලදී — රෝගියාට දැනුම් දී ඇත",
+      "toastError": "ඉල්ලීම ප්‍රතික්ෂේප කිරීම අසාර්ථක විය"
+    },
+    "catalog": {
+      "pageTitle": "පරීක්ෂණ නාමාවලිය",
+      "pageDescription": "ඔබ ලබා දෙන පරීක්ෂණ සහ ඒවායේ මිල — රෝගීන් ඔබ සමඟ වෙන් කරන විට මේවා දකිනු ඇත.",
+      "addButton": "පරීක්ෂණයක් එකතු කරන්න",
+      "searchPlaceholder": "නම හෝ කේතය අනුව සොයන්න…",
+      "inactive": "අක්‍රියයි",
+      "activateButton": "සක්‍රිය කරන්න",
+      "deactivateButton": "අක්‍රිය කරන්න",
+      "columns": {
+        "code": "කේතය",
+        "testName": "පරීක්ෂණයේ නම",
+        "turnaround": "කාලය",
+        "hoursValue": "පැය {{count}}"
+      },
+      "modal": {
+        "addTitle": "පරීක්ෂණයක් එකතු කරන්න",
+        "editTitle": "පරීක්ෂණය සංස්කරණය කරන්න",
+        "testCode": "පරීක්ෂණ කේතය",
+        "testCodePlaceholder": "උදා. FBC",
+        "testName": "පරීක්ෂණයේ නම",
+        "testNamePlaceholder": "උදා. සම්පූර්ණ රුධිර ගණන",
+        "price": "මිල (රු.)",
+        "turnaroundHours": "කාලය (පැය)",
+        "optional": "(අත්‍යවශ්‍ය නොවේ)",
+        "description": "විස්තරය"
+      },
+      "toast": {
+        "added": "පරීක්ෂණය නාමාවලියට එකතු කරන ලදී",
+        "updated": "පරීක්ෂණය යාවත්කාලීන කරන ලදී",
+        "saveFailed": "සුරැකීම අසාර්ථක විය",
+        "statusUpdated": "තත්ත්වය යාවත්කාලීන කරන ලදී"
+      }
     }
   }
 }

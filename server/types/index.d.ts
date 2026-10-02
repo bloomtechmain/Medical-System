@@ -4,6 +4,7 @@ export interface JwtUser {
   id: number;
   email: string;
   role: UserRole;
+  impersonatedBy?: number;
 }
 
 // Augment Express Request to carry the decoded JWT user
