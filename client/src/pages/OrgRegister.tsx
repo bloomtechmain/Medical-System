@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { orgApi } from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
+import OperatingHoursPicker from '../components/common/OperatingHoursPicker';
 
 interface OwnerCandidate {
   id: number;
@@ -82,16 +83,38 @@ function slugify(str: string): string {
     .replace(/-+/g, '-');
 }
 
+const STEP3_FIELDS: Record<string, string[]> = {
+  hospital:   ['phone', 'specialization', 'license_number'],
+  clinic:     ['phone', 'specialization', 'license_number'],
+  pharmacy:   ['phone', 'license_number', 'pharmacy_name'],
+  laboratory: ['phone', 'license_number', 'lab_name', 'address'],
+};
+
+const STEP3_TITLE: Record<string, string> = {
+  hospital: 'Doctor / Director Profile',
+  clinic: 'Doctor / Director Profile',
+  pharmacy: 'Pharmacy Details',
+  laboratory: 'Laboratory Details',
+};
+
+const STEP_LABELS = ['Organization Type', 'Organization Details', 'Role Details', 'Owner Account'];
+
 export default function OrgRegister() {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm();
+  const { register, handleSubmit, watch, setValue, trigger, formState: { errors } } = useForm();
   const password = watch('owner_password');
   const orgName = watch('org_name', '');
+  const operatingHours = watch('operating_hours', '');
+
+  const goNext = async (fields: string[]) => {
+    const ok = await trigger(fields);
+    if (ok) setStep(s => (s + 1) as 1 | 2 | 3 | 4);
+  };
 
   // Owner search — lets the form reuse an existing, already-approved user as
   // the new org's owner instead of always creating a fresh login.
@@ -236,18 +259,18 @@ export default function OrgRegister() {
           <p className="text-gray-500 text-sm mt-1">Join the Core Health network as a verified healthcare organization</p>
 
           {/* Step indicator */}
-          <div className="flex items-center justify-center gap-3 mt-5">
-            {[1, 2].map(s => (
+          <div className="flex items-center justify-center gap-2 mt-5">
+            {[1, 2, 3, 4].map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                   step >= s ? 'bg-teal-600 text-white' : 'bg-gray-200 text-gray-500'
                 }`}>{s}</div>
-                {s < 2 && <div className={`w-16 h-0.5 transition-colors ${step > 1 ? 'bg-teal-600' : 'bg-gray-200'}`} />}
+                {s < 4 && <div className={`w-10 sm:w-14 h-0.5 transition-colors ${step > s ? 'bg-teal-600' : 'bg-gray-200'}`} />}
               </div>
             ))}
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            {step === 1 ? 'Step 1 — Choose organization type' : 'Step 2 — Organization & owner details'}
+            {`Step ${step} — ${step === 3 ? (STEP3_TITLE[selectedType] || STEP_LABELS[2]) : STEP_LABELS[step - 1]}`}
           </p>
         </div>
 
@@ -285,12 +308,12 @@ export default function OrgRegister() {
           </div>
         )}
 
-        {/* Step 2: Full form */}
-        {step === 2 && (
+        {/* Steps 2-4: Full form, one step shown at a time */}
+        {step >= 2 && (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {/* Back + type badge */}
             <div className="flex items-center justify-between mb-1">
-              <button type="button" onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+              <button type="button" onClick={() => setStep(s => (s === 2 ? 1 : s - 1) as 1 | 2 | 3 | 4)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
@@ -303,7 +326,8 @@ export default function OrgRegister() {
               )}
             </div>
 
-            {/* Organization details */}
+            {/* Step 2: Organization details */}
+            {step === 2 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Organization Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -338,8 +362,18 @@ export default function OrgRegister() {
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Role-specific profile fields */}
+            {step === 2 && (
+              <button type="button" onClick={() => goNext(['org_name', 'slug'])}
+                className="w-full py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors">
+                Continue
+              </button>
+            )}
+
+            {/* Step 3: Role-specific profile fields */}
+            {step === 3 && (
+            <>
             {(selectedType === 'hospital' || selectedType === 'clinic') && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Doctor / Director Profile</h3>
@@ -430,9 +464,9 @@ export default function OrgRegister() {
                       {LAB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Operating Hours</label>
-                    <input className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Mon–Sat 7:00 AM – 8:00 PM" {...register('operating_hours')} />
+                  <div className="sm:col-span-2">
+                    <input type="hidden" {...register('operating_hours')} />
+                    <OperatingHoursPicker value={operatingHours} onChange={v => setValue('operating_hours', v)} />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Address <span className="text-red-400">*</span></label>
@@ -447,7 +481,16 @@ export default function OrgRegister() {
               </div>
             )}
 
-            {/* Owner / Account */}
+            <button type="button" onClick={() => goNext(STEP3_FIELDS[selectedType] || [])}
+              className="w-full py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors">
+              Continue
+            </button>
+            </>
+            )}
+
+            {/* Step 4: Owner / Account */}
+            {step === 4 && (
+            <>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Owner Account</h3>
@@ -582,6 +625,8 @@ export default function OrgRegister() {
             <p className="text-center text-xs text-gray-400">
               By registering, you agree to Core Health's Terms of Service and Privacy Policy.
             </p>
+            </>
+            )}
           </form>
         )}
       </div>

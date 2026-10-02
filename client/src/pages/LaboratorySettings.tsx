@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { authApi, userApi } from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import OperatingHoursPicker from '../components/common/OperatingHoursPicker';
 
 export default function LaboratorySettings() {
   const { t } = useTranslation('laboratory');
@@ -14,7 +15,8 @@ export default function LaboratorySettings() {
   const { data: me, isLoading } = useQuery({ queryKey: ['me'], queryFn: authApi.me });
   const profile = (me?.profile as any) || {};
 
-  const { register, handleSubmit, reset } = useForm<any>();
+  const { register, handleSubmit, reset, watch, setValue } = useForm<any>();
+  const operatingHours = watch('operating_hours', '');
 
   useEffect(() => {
     if (!me) return;
@@ -86,9 +88,10 @@ export default function LaboratorySettings() {
               <label className="label">{t('settings.fields.accreditation')}</label>
               <input className="input" placeholder={t('settings.placeholders.accreditation')} {...register('accreditation')} />
             </div>
-            <div>
-              <label className="label">{t('settings.fields.operatingHours')}</label>
-              <input className="input" placeholder={t('settings.placeholders.operatingHours')} {...register('operating_hours')} />
+            <div className="sm:col-span-2">
+              <label className="label mb-1.5">{t('settings.fields.operatingHours')}</label>
+              <input type="hidden" {...register('operating_hours')} />
+              <OperatingHoursPicker value={operatingHours} onChange={v => setValue('operating_hours', v)} />
             </div>
             <div>
               <label className="label">{tc('fields.address')}</label>
