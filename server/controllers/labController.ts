@@ -1,35 +1,15 @@
 import path from 'path';
 import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
-import { pool, queryAs, RLSActor } from '../config/db';
+import { pool, queryAs, getTenantSchema, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
-import { extractVitalsFromText, extractTextFromPDF } from '../utils/labVitalsParser';
+import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
 import { saveVitalsFromLab } from './patientVitalsController';
 
 // lab_requests lives in the `clinical` schema behind row-level security —
 // every query against it must carry the acting user's identity. See
 // config/db.ts (queryAs) for why plain pool.query() isn't enough.
 const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
-
-/** Run OCR on an image file; skip PDFs (handled by pdfjs separately). */
-const runOCROnLabFile = async (filePath: string): Promise<string> => {
-  const ext = path.extname(filePath).toLowerCase();
-  if (!['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'].includes(ext)) return '';
-  try {
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker('eng', 1, { logger: () => {} });
-    const { data: { text } } = await worker.recognize(filePath);
-    await worker.terminate();
-    return text || '';
-  } catch { return ''; }
-};
-
-/** Extract text from any file: pdfjs for PDFs, OCR for images. */
-const extractReportText = async (filePath: string): Promise<string> => {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.pdf') return extractTextFromPDF(filePath);
-  return runOCROnLabFile(filePath);
-};
 
 const labName = async (labId: number): Promise<string> => {
   const { rows } = await pool.query(
@@ -43,11 +23,49 @@ const labName = async (labId: number): Promise<string> => {
 const userName = async (uid: number): Promise<string> =>
   (await pool.query('SELECT name FROM users WHERE id=$1', [uid])).rows[0]?.name || 'User';
 
+/**
+ * Pricing lives in each lab's own tenant schema (`"<schema>".invoices`), not
+ * in `clinical.lab_requests` — the lab request may belong to any of several
+ * laboratories, so rows are grouped by `laboratory_id` first and each
+ * distinct lab's schema is queried once. `invoices.lab_request_id` is a
+ * soft-reference by design (see corehealth_database.sql), so this is a plain
+ * join done in application code rather than SQL.
+ */
+const attachPrices = async (rows: any[]): Promise<any[]> => {
+  if (!rows.length) return rows;
+
+  const byLab = new Map<number, any[]>();
+  for (const r of rows) {
+    if (!byLab.has(r.laboratory_id)) byLab.set(r.laboratory_id, []);
+    byLab.get(r.laboratory_id)!.push(r);
+  }
+
+  await Promise.all(Array.from(byLab.entries()).map(async ([labId, labRows]) => {
+    const schema = await getTenantSchema(labId);
+    if (!schema) return;
+    const ids = labRows.map(r => r.id);
+    const { rows: invoices } = await pool.query<{ lab_request_id: number; amount: string; status: string }>(
+      `SELECT lab_request_id, amount, status FROM "${schema}".invoices WHERE lab_request_id = ANY($1)`,
+      [ids]
+    );
+    const byRequest = new Map<number, { amount: string; status: string }>(
+      invoices.map(i => [i.lab_request_id, i])
+    );
+    for (const r of labRows) {
+      const inv = byRequest.get(r.id);
+      r.price = inv ? Number(inv.amount) : null;
+      r.invoice_status = inv?.status || null;
+    }
+  }));
+
+  return rows;
+};
+
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const {
       patient_id, laboratory_id, consultation_id, test_description, notes,
-      report_type, scheduled_at,
+      report_type, scheduled_at, test_catalog_id,
     } = req.body;
     const isDoctor  = req.user.role === 'doctor';
     const isPatient = req.user.role === 'patient';
@@ -88,6 +106,26 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     `, [doctorId, patientId, laboratory_id, consultation_id || null, testDesc, notes || null,
         report_type || null, scheduled_at || null,
         req.file?.filename || null, req.file?.mimetype || null]);
+
+    // Catalog-backed bookings are priced immediately — the chosen test's
+    // price is copied into the lab's own tenant invoices table right away,
+    // so the patient sees a price without waiting on the lab. Free-text/
+    // "Other" bookings stay unpriced until the lab sets one later.
+    if (test_catalog_id) {
+      const schema = await getTenantSchema(laboratory_id);
+      if (schema) {
+        const { rows: cat } = await pool.query(
+          `SELECT price FROM "${schema}".test_catalog WHERE id=$1 AND is_active=true`,
+          [test_catalog_id]
+        );
+        if (cat[0]) {
+          await pool.query(
+            `INSERT INTO "${schema}".invoices (lab_request_id, patient_id, amount) VALUES ($1,$2,$3)`,
+            [request.id, patientId, cat[0].price]
+          );
+        }
+      }
+    }
 
     const lName  = await labName(laboratory_id);
     const ptName = await userName(patientId);
@@ -142,7 +180,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       ORDER BY lr.created_at DESC
     `, [id]);
 
-    res.json(rows);
+    res.json(await attachPrices(rows));
   } catch (err) { next(err); }
 };
 
@@ -172,7 +210,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
     `, [req.params.id, id]);
 
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
-    res.json(rows[0]);
+    res.json((await attachPrices(rows))[0]);
   } catch (err) { next(err); }
 };
 
@@ -231,6 +269,7 @@ const finalizeReport = (
 
       if (Object.keys(vitalsToSave).length > 0) {
         await saveVitalsFromLab(request.patient_id, vitalsToSave, request.id);
+        await queryAs({ id: labId, role: 'laboratory' }, `UPDATE lab_requests SET vitals_extracted=true WHERE id=$1`, [request.id]);
       }
 
       // Notify doctor and patient at the same time
@@ -351,6 +390,88 @@ const updateStatus = async (req: Request, res: Response, next: NextFunction): Pr
   } catch (err) { next(err); }
 };
 
+const reject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { message } = req.body as { message?: string };
+    if (!message || !message.trim()) { res.status(400).json({ message: 'A reason is required to reject a request.' }); return; }
+
+    const { rows: existing } = await queryAs(actor(req),
+      `SELECT * FROM lab_requests WHERE id=$1 AND laboratory_id=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!existing.length) { res.status(404).json({ message: 'Not found' }); return; }
+    if (existing[0].status !== 'pending') { res.status(409).json({ message: 'Only a pending request can be rejected.' }); return; }
+
+    const { rows: [request] } = await queryAs(actor(req),
+      `UPDATE lab_requests SET status='rejected', updated_at=NOW() WHERE id=$1 RETURNING *`,
+      [req.params.id]
+    );
+
+    await queryAs(actor(req), `
+      INSERT INTO lab_request_messages (lab_request_id, patient_id, doctor_id, laboratory_id, sender_id, sender_role, body)
+      VALUES ($1,$2,$3,$4,$5,'laboratory',$6)
+    `, [request.id, request.patient_id, request.doctor_id, req.user.id, req.user.id, message.trim()]);
+
+    const lName = await labName(req.user.id);
+    await sendNotification(
+      request.patient_id,
+      'lab_request_rejected',
+      'Lab Request Declined',
+      `${lName} declined your lab test request: "${message.trim()}"`,
+      { lab_request_id: request.id }
+    );
+    if (request.doctor_id) {
+      await sendNotification(
+        request.doctor_id,
+        'lab_request_rejected',
+        'Lab Request Declined',
+        `${lName} declined the lab test request you ordered: "${message.trim()}"`,
+        { lab_request_id: request.id }
+      );
+    }
+
+    res.json(request);
+  } catch (err) { next(err); }
+};
+
+const setPrice = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { amount, test_catalog_id } = req.body as { amount?: number | string; test_catalog_id?: number };
+
+    const { rows: existing } = await queryAs(actor(req),
+      `SELECT * FROM lab_requests WHERE id=$1 AND laboratory_id=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!existing.length) { res.status(404).json({ message: 'Not found' }); return; }
+
+    const schema = await getTenantSchema(req.user.id);
+    if (!schema) { res.status(400).json({ message: 'No laboratory organization is linked to this account.' }); return; }
+
+    let finalAmount = amount != null ? Number(amount) : null;
+    if (test_catalog_id) {
+      const { rows: cat } = await pool.query(`SELECT price FROM "${schema}".test_catalog WHERE id=$1`, [test_catalog_id]);
+      if (cat[0]) finalAmount = Number(cat[0].price);
+    }
+    if (finalAmount == null || isNaN(finalAmount) || finalAmount < 0) {
+      res.status(400).json({ message: 'A valid price is required.' }); return;
+    }
+
+    const { rows: existingInvoice } = await pool.query(
+      `SELECT id FROM "${schema}".invoices WHERE lab_request_id=$1`, [req.params.id]
+    );
+    if (existingInvoice.length) {
+      await pool.query(`UPDATE "${schema}".invoices SET amount=$1 WHERE id=$2`, [finalAmount, existingInvoice[0].id]);
+    } else {
+      await pool.query(
+        `INSERT INTO "${schema}".invoices (lab_request_id, patient_id, amount) VALUES ($1,$2,$3)`,
+        [req.params.id, existing[0].patient_id, finalAmount]
+      );
+    }
+
+    res.json({ price: finalAmount });
+  } catch (err) { next(err); }
+};
+
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await queryAs(actor(req),
@@ -369,4 +490,4 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
-export { create, getAll, getOne, uploadReport, createDirect, updateStatus, remove };
+export { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove };

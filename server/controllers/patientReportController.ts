@@ -2,6 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { queryAs, RLSActor } from '../config/db';
+import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
+import { saveVitalsFromPatientUpload } from './patientVitalsController';
 
 // patient_reports / data_access_requests live in the `clinical` schema
 // behind row-level security — every query against them must carry the
@@ -31,7 +33,27 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       req.file.filename, req.file.mimetype, req.file.originalname,
     ]);
 
+    // ── Respond right away — don't block the upload on OCR/PDF extraction ──
     res.status(201).json(report);
+
+    // ── Background: extract vitals from a self-uploaded lab report ─────────
+    if (report_type === 'lab_report') {
+      const patientId = req.user.id;
+      const filePath   = path.join(__dirname, '../uploads/patient-reports', req.file.filename);
+      setImmediate(async () => {
+        try {
+          const reportText = await extractReportText(filePath);
+          if (reportText.trim().length > 20) {
+            const extracted = extractVitalsFromText(reportText);
+            if (Object.keys(extracted).length > 0) {
+              await saveVitalsFromPatientUpload(patientId, extracted as Record<string, number | undefined>, report.id);
+            }
+          }
+        } catch (bgErr) {
+          console.error('[patientReport background]', (bgErr as Error).message);
+        }
+      });
+    }
   } catch (err) { next(err); }
 };
 

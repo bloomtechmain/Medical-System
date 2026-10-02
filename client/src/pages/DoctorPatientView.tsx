@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Lock, CheckCircle2, Clock, XCircle, FlaskConical,
   ClipboardList, FolderOpen, Phone, Pill, Calendar, UserRound,
@@ -11,12 +12,17 @@ import {
 import { accessRequestApi, patientReportApi } from '../services/api';
 
 const ACCESS_TYPES = [
-  { key: 'lab_reports',      label: 'Lab Reports',               desc: 'Hospital & clinic laboratory test results',          Icon: FlaskConical,  grad: 'from-blue-500 to-indigo-600',   light: 'bg-blue-50',   accent: 'text-blue-600'   },
-  { key: 'medical_history',  label: 'Medication Workflow',        desc: 'Consultation records, diagnoses & full prescriptions', Icon: ClipboardList, grad: 'from-teal-500 to-emerald-600',  light: 'bg-teal-50',   accent: 'text-teal-600'   },
-  { key: 'personal_reports', label: 'Personal Health Reports',   desc: 'Patient-uploaded medical documents & reports',        Icon: FolderOpen,    grad: 'from-violet-500 to-purple-600', light: 'bg-violet-50', accent: 'text-violet-600' },
-  { key: 'contact_info',     label: 'Personal Details',          desc: 'Personal contact, address & insurance details',       Icon: Phone,         grad: 'from-rose-500 to-pink-600',     light: 'bg-rose-50',   accent: 'text-rose-600'   },
-  { key: 'vitals',           label: 'Patient Vitals',             desc: 'Blood work, CBC, metabolic & vital sign readings',    Icon: Activity,      grad: 'from-orange-500 to-amber-500',  light: 'bg-orange-50', accent: 'text-orange-600' },
+  { key: 'lab_reports',      labelKey: 'patientView.accessTypes.labReports',           Icon: FlaskConical,  grad: 'from-blue-500 to-indigo-600',   light: 'bg-blue-50',   accent: 'text-blue-600'   },
+  { key: 'medical_history',  labelKey: 'patientView.accessTypes.medicationWorkflow',   Icon: ClipboardList, grad: 'from-teal-500 to-emerald-600',  light: 'bg-teal-50',   accent: 'text-teal-600'   },
+  { key: 'personal_reports', labelKey: 'patientView.accessTypes.personalReports',      Icon: FolderOpen,    grad: 'from-violet-500 to-purple-600', light: 'bg-violet-50', accent: 'text-violet-600' },
+  { key: 'contact_info',     labelKey: 'patientView.accessTypes.personalDetails',      Icon: Phone,         grad: 'from-rose-500 to-pink-600',     light: 'bg-rose-50',   accent: 'text-rose-600'   },
+  { key: 'vitals',           labelKey: 'patientView.accessTypes.vitals',               Icon: Activity,      grad: 'from-orange-500 to-amber-500',  light: 'bg-orange-50', accent: 'text-orange-600' },
 ];
+
+const FULL_ACCESS_TYPE_CONF = {
+  key: 'all', labelKey: 'patientView.accessTypes.fullRecord',
+  Icon: Shield, grad: 'from-primary-600 to-primary-800', light: 'bg-primary-50', accent: 'text-primary-600',
+};
 
 const fmtDate = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -41,6 +47,8 @@ interface RequestAccessModalProps {
 }
 
 function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: RequestAccessModalProps) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   const [reason, setReason] = useState('');
   const [error,  setError]  = useState('');
 
@@ -51,7 +59,7 @@ function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: Request
       reason:      reason.trim() || null,
     }),
     onSuccess: () => { onSuccess(); onClose(); },
-    onError:   (err: any) => setError(err.message || 'Failed to send request'),
+    onError:   (err: any) => setError(err.message || t('patientView.requestModal.errorDefault')),
   });
 
   const { Icon } = typeConf;
@@ -73,8 +81,8 @@ function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: Request
                 <Icon size={20} strokeWidth={1.8} />
               </div>
               <div>
-                <p className="font-bold text-base leading-tight">Request Access</p>
-                <p className="text-white/75 text-xs mt-0.5">{typeConf.label}</p>
+                <p className="font-bold text-base leading-tight">{t('patientView.accessSection.requestAccess')}</p>
+                <p className="text-white/75 text-xs mt-0.5">{t(`${typeConf.labelKey}.label`)}</p>
               </div>
             </div>
             <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors">
@@ -85,9 +93,9 @@ function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: Request
 
         <div className="px-6 py-5 space-y-4">
           <p className="text-sm text-gray-600 leading-relaxed">
-            You are requesting access to the patient's{' '}
-            <strong className={typeConf.accent}>{typeConf.label}</strong>.{' '}
-            The patient will be notified and must approve before you can view this data.
+            {t('patientView.requestModal.descriptionPre')}{' '}
+            <strong className={typeConf.accent}>{t(`${typeConf.labelKey}.label`)}</strong>.{' '}
+            {t('patientView.requestModal.descriptionPost')}
           </p>
 
           {error && (
@@ -98,12 +106,12 @@ function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: Request
 
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Reason for request{' '}
-              <span className="text-gray-300 font-normal normal-case">(optional)</span>
+              {t('patientView.requestModal.reasonLabel')}{' '}
+              <span className="text-gray-300 font-normal normal-case">{t('patientView.requestModal.optional')}</span>
             </label>
             <textarea
               rows={3}
-              placeholder="e.g. Required for diagnosis and treatment planning…"
+              placeholder={t('patientView.requestModal.reasonPlaceholder') as string}
               value={reason}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReason(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-colors"
@@ -113,7 +121,7 @@ function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: Request
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
               className="flex-1 py-3 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50 transition-colors">
-              Cancel
+              {tc('actions.cancel')}
             </button>
             <button
               onClick={() => mutation.mutate()}
@@ -124,7 +132,7 @@ function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: Request
                 ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 : <Send size={14} strokeWidth={2.5} />
               }
-              {mutation.isPending ? 'Sending…' : 'Send Request'}
+              {mutation.isPending ? t('patientView.requestModal.sending') : t('patientView.requestModal.sendRequest')}
             </button>
           </div>
         </div>
@@ -136,11 +144,12 @@ function RequestAccessModal({ typeConf, patientId, onClose, onSuccess }: Request
 interface AccessSectionProps {
   typeConf: any;
   accessStatus: any;
-  onRequestAccess: (typeConf: any) => void;
   children: React.ReactNode;
 }
 
-function AccessSection({ typeConf, accessStatus, onRequestAccess, children }: AccessSectionProps) {
+function AccessSection({ typeConf, accessStatus, children }: AccessSectionProps) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   const [expanded, setExpanded] = useState(false);
   const status     = accessStatus?.status || null;
   const isPending  = status === 'pending';
@@ -159,40 +168,26 @@ function AccessSection({ typeConf, accessStatus, onRequestAccess, children }: Ac
             <Icon size={18} strokeWidth={1.8} className="text-white" />
           </div>
           <div>
-            <p className="font-bold text-gray-900 text-sm">{typeConf.label}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{typeConf.desc}</p>
+            <p className="font-bold text-gray-900 text-sm">{t(`${typeConf.labelKey}.label`)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{t(`${typeConf.labelKey}.desc`)}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0 ml-3">
           {isAccepted && (
             <span className="flex items-center gap-1 text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">
-              <CheckCircle2 size={11} strokeWidth={2.5} /> Granted
+              <CheckCircle2 size={11} strokeWidth={2.5} /> {t('patientView.accessSection.granted')}
             </span>
           )}
           {isPending && (
             <span className="flex items-center gap-1 text-xs font-bold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full">
-              <Clock size={11} strokeWidth={2.5} /> Pending
+              <Clock size={11} strokeWidth={2.5} /> {tc('status.pending')}
             </span>
           )}
           {isDeclined && (
             <span className="flex items-center gap-1 text-xs font-bold bg-red-100 text-red-600 px-2.5 py-1 rounded-full">
-              <XCircle size={11} strokeWidth={2.5} /> Declined
+              <XCircle size={11} strokeWidth={2.5} /> {tc('status.declined')}
             </span>
-          )}
-
-          {(!status || isDeclined) && (
-            <button
-              onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRequestAccess(typeConf); }}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-opacity hover:opacity-90 shadow-sm ${
-                isDeclined
-                  ? `${typeConf.light} ${typeConf.accent} border border-current/20`
-                  : `bg-gradient-to-br ${typeConf.grad} text-white`
-              }`}
-            >
-              <Lock size={11} strokeWidth={2.5} />
-              {isDeclined ? 'Re-request' : 'Request Access'}
-            </button>
           )}
 
           {isAccepted && (
@@ -218,13 +213,13 @@ function AccessSection({ typeConf, accessStatus, onRequestAccess, children }: Ac
             <p className={`text-sm font-semibold ${
               isPending ? 'text-amber-700' : isDeclined ? 'text-red-600' : 'text-gray-500'
             }`}>
-              {isPending  ? 'Request sent — waiting for patient approval'
-               : isDeclined ? 'Patient declined this request'
-               : 'Access required to view this data'}
+              {isPending  ? t('patientView.accessSection.waitingApproval')
+               : isDeclined ? t('patientView.accessSection.patientDeclined')
+               : t('patientView.accessSection.accessRequired')}
             </p>
             {isPending && (
               <p className="text-xs text-amber-500 mt-1">
-                Requested on {fmtDate(accessStatus?.created_at)}
+                {t('patientView.accessSection.requestedOn', { date: fmtDate(accessStatus?.created_at) })}
               </p>
             )}
           </div>
@@ -241,6 +236,8 @@ function AccessSection({ typeConf, accessStatus, onRequestAccess, children }: Ac
 }
 
 function LabReportsData({ reports, patientId }: { reports: any[] | null | undefined; patientId: number }) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   const [openingId, setOpeningId] = useState<number | null>(null);
   const [errorId,   setErrorId]   = useState<number | null>(null);
 
@@ -250,8 +247,14 @@ function LabReportsData({ reports, patientId }: { reports: any[] | null | undefi
     completed:   'bg-emerald-100 text-emerald-700',
   };
 
+  const STATUS_LABEL: Record<string, string> = {
+    pending:     tc('status.pending'),
+    in_progress: tc('status.inProgress'),
+    completed:   tc('status.completed'),
+  };
+
   if (!reports?.length) {
-    return <p className="text-sm text-gray-400 text-center py-4">No lab reports found.</p>;
+    return <p className="text-sm text-gray-400 text-center py-4">{t('patientView.labReportsTab.empty')}</p>;
   }
 
   const handleViewPDF = async (r: any) => {
@@ -277,7 +280,7 @@ function LabReportsData({ reports, patientId }: { reports: any[] | null | undefi
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900">{r.lab_name || 'Laboratory'}</p>
+                  <p className="text-sm font-bold text-gray-900">{r.lab_name || t('patientView.labReportsTab.labFallback')}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{r.test_description}</p>
                   {r.report_notes && (
                     <p className="text-xs text-gray-400 mt-1 italic">{r.report_notes}</p>
@@ -286,7 +289,7 @@ function LabReportsData({ reports, patientId }: { reports: any[] | null | undefi
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_CLS[r.status] || STATUS_CLS.pending}`}>
-                    {r.status?.replace('_', ' ')}
+                    {STATUS_LABEL[r.status] || r.status?.replace('_', ' ')}
                   </span>
                   {r.status === 'completed' && r.report_file && (
                     <button
@@ -298,13 +301,13 @@ function LabReportsData({ reports, patientId }: { reports: any[] | null | undefi
                         ? <Loader2 size={11} className="animate-spin" />
                         : <Eye size={11} strokeWidth={2.5} />
                       }
-                      {openingId === r.id ? 'Opening…' : 'View PDF'}
+                      {openingId === r.id ? t('patientView.opening') : t('patientView.labReportsTab.viewPdf')}
                     </button>
                   )}
                 </div>
               </div>
               {errorId === r.id && (
-                <p className="text-[11px] text-red-500 mt-1">Failed to open file. Please try again.</p>
+                <p className="text-[11px] text-red-500 mt-1">{t('patientView.fileOpenError')}</p>
               )}
             </div>
           </div>
@@ -323,10 +326,18 @@ function LabReportsData({ reports, patientId }: { reports: any[] | null | undefi
 }
 
 function MedicalHistoryData({ consultations }: { consultations: any[] | null | undefined }) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
+  const CONSULT_STATUS_LABEL: Record<string, string> = {
+    active:     tc('status.active'),
+    dispensed:  t('patientView.medicalHistoryTab.statusDispensed'),
+    completed:  tc('status.completed'),
+  };
+
   if (!consultations?.length) {
-    return <p className="text-sm text-gray-400 text-center py-4">No consultation history found.</p>;
+    return <p className="text-sm text-gray-400 text-center py-4">{t('patientView.medicalHistoryTab.empty')}</p>;
   }
 
   return (
@@ -340,12 +351,12 @@ function MedicalHistoryData({ consultations }: { consultations: any[] | null | u
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900">{c.diagnosis || c.sick_description || 'Medical Visit'}</p>
+                <p className="text-sm font-bold text-gray-900">{c.diagnosis || c.sick_description || t('patientView.medicalHistoryTab.visitFallback')}</p>
                 <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                   <Calendar size={10} strokeWidth={2} /> {fmtDate(c.visit_date)}
                   {c.doctor_name && (
                     <span className="flex items-center gap-1">
-                      <Stethoscope size={10} strokeWidth={2} /> Dr. {c.doctor_name}
+                      <Stethoscope size={10} strokeWidth={2} /> {t('patientView.doctorPrefix')} {c.doctor_name}
                     </span>
                   )}
                 </p>
@@ -355,7 +366,7 @@ function MedicalHistoryData({ consultations }: { consultations: any[] | null | u
                   c.status === 'active'     ? 'bg-amber-100 text-amber-700'    :
                   c.status === 'completed'  ? 'bg-emerald-100 text-emerald-700' :
                                               'bg-blue-100 text-blue-700'
-                }`}>{c.status}</span>
+                }`}>{CONSULT_STATUS_LABEL[c.status] || c.status}</span>
                 {expandedId === c.id
                   ? <ChevronUp  size={14} strokeWidth={2} className="text-gray-400" />
                   : <ChevronDown size={14} strokeWidth={2} className="text-gray-400" />
@@ -368,25 +379,25 @@ function MedicalHistoryData({ consultations }: { consultations: any[] | null | u
             <div className="px-4 pb-4 pt-1 space-y-3 border-t border-gray-100">
               {c.sick_description && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Symptoms</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('patientView.medicalHistoryTab.symptoms')}</p>
                   <p className="text-xs text-gray-600">{c.sick_description}</p>
                 </div>
               )}
               {c.diagnosis && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Diagnosis</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('patientView.medicalHistoryTab.diagnosis')}</p>
                   <p className="text-xs text-gray-700 font-medium">{c.diagnosis}</p>
                 </div>
               )}
               {c.treatment_description && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Treatment Plan</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('patientView.medicalHistoryTab.treatmentPlan')}</p>
                   <p className="text-xs text-gray-600">{c.treatment_description}</p>
                 </div>
               )}
               {c.lab_tests_requested && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Lab Tests Requested</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('patientView.medicalHistoryTab.labTestsRequested')}</p>
                   <p className="text-xs text-gray-600">{c.lab_tests_requested}</p>
                 </div>
               )}
@@ -395,7 +406,7 @@ function MedicalHistoryData({ consultations }: { consultations: any[] | null | u
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
                     <Pill size={10} strokeWidth={2.5} className="text-teal-500" />
-                    Prescribed Medications ({c.medicines.length})
+                    {t('patientView.medicalHistoryTab.prescribedMedications', { count: c.medicines.length })}
                   </p>
                   <div className="space-y-2">
                     {c.medicines.map((m: any, i: number) => (
@@ -406,7 +417,7 @@ function MedicalHistoryData({ consultations }: { consultations: any[] | null | u
                           </div>
                           <p className="text-sm font-bold text-gray-900">{m.medicine_name}</p>
                           {m.source === 'ocr' && (
-                            <span className="text-[9px] font-bold bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full ml-auto">OCR</span>
+                            <span className="text-[9px] font-bold bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full ml-auto">{t('patientView.medicalHistoryTab.ocrBadge')}</span>
                           )}
                         </div>
                         <div className="flex flex-wrap gap-1.5 mt-1.5 pl-8">
@@ -424,7 +435,7 @@ function MedicalHistoryData({ consultations }: { consultations: any[] | null | u
               )}
 
               {c.medicines?.length === 0 && (
-                <p className="text-xs text-gray-400 italic">No medicines prescribed for this visit.</p>
+                <p className="text-xs text-gray-400 italic">{t('patientView.medicalHistoryTab.noMedicinesPrescribed')}</p>
               )}
             </div>
           )}
@@ -435,16 +446,18 @@ function MedicalHistoryData({ consultations }: { consultations: any[] | null | u
 }
 
 function ContactInfoData({ patient }: { patient: any }) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   const rows = [
-    { label: 'Phone',            value: patient.phone,                   Icon: Phone     },
-    { label: 'Address',          value: patient.address,                 Icon: MapPin    },
-    { label: 'Emergency Contact',value: patient.emergency_contact_name,  Icon: UserRound },
-    { label: 'Emergency Phone',  value: patient.emergency_contact_phone, Icon: Phone     },
-    { label: 'Insurance',        value: patient.insurance_provider,      Icon: Shield    },
-    { label: 'Policy No.',       value: patient.insurance_policy_number, Icon: Shield    },
+    { label: tc('fields.phone'),                                  value: patient.phone,                   Icon: Phone     },
+    { label: tc('fields.address'),                                value: patient.address,                 Icon: MapPin    },
+    { label: t('patientView.contactInfoTab.emergencyContact'),    value: patient.emergency_contact_name,  Icon: UserRound },
+    { label: t('patientView.contactInfoTab.emergencyPhone'),      value: patient.emergency_contact_phone, Icon: Phone     },
+    { label: t('patientView.contactInfoTab.insurance'),           value: patient.insurance_provider,      Icon: Shield    },
+    { label: t('patientView.contactInfoTab.policyNumber'),        value: patient.insurance_policy_number, Icon: Shield    },
   ];
   const filled = rows.filter(r => r.value);
-  if (!filled.length) return <p className="text-sm text-gray-400 text-center py-4">No contact details on file.</p>;
+  if (!filled.length) return <p className="text-sm text-gray-400 text-center py-4">{t('patientView.contactInfoTab.empty')}</p>;
   return (
     <div className="space-y-2.5">
       {filled.map(({ label, value, Icon: I }) => (
@@ -463,20 +476,22 @@ function ContactInfoData({ patient }: { patient: any }) {
 }
 
 function PersonalReportsData({ reports }: { reports: any[] | null | undefined }) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   const [openingId, setOpeningId] = useState<number | null>(null);
   const [errorId,   setErrorId]   = useState<number | null>(null);
 
   if (!reports?.length) {
-    return <p className="text-sm text-gray-400 text-center py-4">No personal reports uploaded.</p>;
+    return <p className="text-sm text-gray-400 text-center py-4">{t('patientView.personalReportsTab.empty')}</p>;
   }
 
   const TYPE_LABEL: Record<string, string> = {
-    lab_report:        'Lab Report',
-    prescription:      'Prescription',
-    imaging:           'Imaging',
-    discharge_summary: 'Discharge Summary',
-    vaccination:       'Vaccination',
-    other:             'Other',
+    lab_report:        t('patientView.personalReportsTab.types.labReport'),
+    prescription:      t('patientView.personalReportsTab.types.prescription'),
+    imaging:           t('patientView.personalReportsTab.types.imaging'),
+    discharge_summary: t('patientView.personalReportsTab.types.dischargeSummary'),
+    vaccination:       t('patientView.personalReportsTab.types.vaccination'),
+    other:             t('patientView.personalReportsTab.types.other'),
   };
 
   const handleView = async (r: any) => {
@@ -505,7 +520,7 @@ function PersonalReportsData({ reports }: { reports: any[] | null | undefined })
                 {TYPE_LABEL[r.report_type] || r.report_type}
                 {r.issued_date && <> · {fmtDate(r.issued_date)}</>}
                 {r.laboratory_name && <> · {r.laboratory_name}</>}
-                {r.doctor_name && <> · Dr. {r.doctor_name}</>}
+                {r.doctor_name && <> · {t('patientView.doctorPrefix')} {r.doctor_name}</>}
               </p>
               {r.description && (
                 <p className="text-[11px] text-gray-400 italic mt-0.5 truncate">{r.description}</p>
@@ -521,12 +536,12 @@ function PersonalReportsData({ reports }: { reports: any[] | null | undefined })
                   ? <Loader2 size={11} className="animate-spin" />
                   : <Eye size={11} strokeWidth={2.5} />
                 }
-                {openingId === r.id ? 'Opening…' : 'View'}
+                {openingId === r.id ? t('patientView.opening') : tc('actions.view')}
               </button>
             )}
           </div>
           {errorId === r.id && (
-            <p className="text-[11px] text-red-500 px-3.5 pb-2">Failed to open file. Please try again.</p>
+            <p className="text-[11px] text-red-500 px-3.5 pb-2">{t('patientView.fileOpenError')}</p>
           )}
         </div>
       ))}
@@ -536,53 +551,53 @@ function PersonalReportsData({ reports }: { reports: any[] | null | undefined })
 
 const VITALS_GROUPS = [
   {
-    label: 'Basic Vitals',
+    labelKey: 'patientView.vitalsTab.groups.basicVitals.label',
     color: 'rose',
     Icon: Heart,
     fields: [
-      { key: 'bp_systolic',       label: 'Systolic BP',    unit: 'mmHg' },
-      { key: 'bp_diastolic',      label: 'Diastolic BP',   unit: 'mmHg' },
-      { key: 'heart_rate',        label: 'Heart Rate',     unit: 'bpm'  },
-      { key: 'temperature',       label: 'Temperature',    unit: '°C'   },
-      { key: 'oxygen_saturation', label: 'SpO₂',           unit: '%'    },
+      { key: 'bp_systolic',       labelKey: 'patientView.vitalsTab.groups.basicVitals.fields.bpSystolic',       unit: 'mmHg' },
+      { key: 'bp_diastolic',      labelKey: 'patientView.vitalsTab.groups.basicVitals.fields.bpDiastolic',      unit: 'mmHg' },
+      { key: 'heart_rate',        labelKey: 'patientView.vitalsTab.groups.basicVitals.fields.heartRate',        unit: 'bpm'  },
+      { key: 'temperature',       labelKey: 'patientView.vitalsTab.groups.basicVitals.fields.temperature',      unit: '°C'   },
+      { key: 'oxygen_saturation', labelKey: 'patientView.vitalsTab.groups.basicVitals.fields.oxygenSaturation', unit: '%'    },
     ],
   },
   {
-    label: 'Metabolic Panel',
+    labelKey: 'patientView.vitalsTab.groups.metabolicPanel.label',
     color: 'amber',
     Icon: Droplets,
     fields: [
-      { key: 'blood_glucose', label: 'Blood Glucose', unit: 'mg/dL' },
-      { key: 'hba1c',         label: 'HbA1c',         unit: '%'     },
-      { key: 'creatinine',    label: 'Creatinine',    unit: 'mg/dL' },
+      { key: 'blood_glucose', labelKey: 'patientView.vitalsTab.groups.metabolicPanel.fields.bloodGlucose', unit: 'mg/dL' },
+      { key: 'hba1c',         labelKey: 'patientView.vitalsTab.groups.metabolicPanel.fields.hba1c',        unit: '%'     },
+      { key: 'creatinine',    labelKey: 'patientView.vitalsTab.groups.metabolicPanel.fields.creatinine',   unit: 'mg/dL' },
     ],
   },
   {
-    label: 'Lipid Panel',
+    labelKey: 'patientView.vitalsTab.groups.lipidPanel.label',
     color: 'purple',
     Icon: Activity,
     fields: [
-      { key: 'cholesterol',   label: 'Total Cholesterol', unit: 'mg/dL' },
-      { key: 'hdl',           label: 'HDL',               unit: 'mg/dL' },
-      { key: 'ldl',           label: 'LDL',               unit: 'mg/dL' },
-      { key: 'triglycerides', label: 'Triglycerides',      unit: 'mg/dL' },
+      { key: 'cholesterol',   labelKey: 'patientView.vitalsTab.groups.lipidPanel.fields.cholesterol',   unit: 'mg/dL' },
+      { key: 'hdl',           labelKey: 'patientView.vitalsTab.groups.lipidPanel.fields.hdl',           unit: 'mg/dL' },
+      { key: 'ldl',           labelKey: 'patientView.vitalsTab.groups.lipidPanel.fields.ldl',           unit: 'mg/dL' },
+      { key: 'triglycerides', labelKey: 'patientView.vitalsTab.groups.lipidPanel.fields.triglycerides', unit: 'mg/dL' },
     ],
   },
   {
-    label: 'CBC Panel',
+    labelKey: 'patientView.vitalsTab.groups.cbcPanel.label',
     color: 'blue',
     Icon: TestTube2,
     fields: [
-      { key: 'hemoglobin',  label: 'Hemoglobin',  unit: 'g/dL' },
-      { key: 'wbc',         label: 'WBC',         unit: 'K/μL' },
-      { key: 'rbc',         label: 'RBC',         unit: 'M/μL' },
-      { key: 'platelets',   label: 'Platelets',   unit: 'K/μL' },
-      { key: 'hematocrit',  label: 'Hematocrit',  unit: '%'    },
-      { key: 'mcv',         label: 'MCV',         unit: 'fL'   },
-      { key: 'mch',         label: 'MCH',         unit: 'pg'   },
-      { key: 'mchc',        label: 'MCHC',        unit: 'g/dL' },
-      { key: 'rdw',         label: 'RDW',         unit: '%'    },
-      { key: 'mpv',         label: 'MPV',         unit: 'fL'   },
+      { key: 'hemoglobin',  labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.hemoglobin',  unit: 'g/dL' },
+      { key: 'wbc',         labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.wbc',         unit: 'K/μL' },
+      { key: 'rbc',         labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.rbc',         unit: 'M/μL' },
+      { key: 'platelets',   labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.platelets',   unit: 'K/μL' },
+      { key: 'hematocrit',  labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.hematocrit',  unit: '%'    },
+      { key: 'mcv',         labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.mcv',         unit: 'fL'   },
+      { key: 'mch',         labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.mch',         unit: 'pg'   },
+      { key: 'mchc',        labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.mchc',        unit: 'g/dL' },
+      { key: 'rdw',         labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.rdw',         unit: '%'    },
+      { key: 'mpv',         labelKey: 'patientView.vitalsTab.groups.cbcPanel.fields.mpv',         unit: 'fL'   },
     ],
   },
 ] as const;
@@ -595,11 +610,13 @@ const COLOR_MAP: Record<string, { bg: string; text: string; border: string; grou
 };
 
 function VitalsRecord({ vitals }: { vitals: any }) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-          Recorded {fmtDate(vitals.recorded_at)}
+          {t('patientView.vitalsTab.recordedOn', { date: fmtDate(vitals.recorded_at) })}
         </p>
         {vitals.source && (
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -607,7 +624,7 @@ function VitalsRecord({ vitals }: { vitals: any }) {
               ? 'bg-blue-100 text-blue-700'
               : 'bg-gray-100 text-gray-500'
           }`}>
-            {vitals.source === 'lab_report' ? 'From Lab Report' : 'Manual Entry'}
+            {vitals.source === 'lab_report' ? t('patientView.vitalsTab.fromLabReport') : t('patientView.vitalsTab.manualEntry')}
           </span>
         )}
       </div>
@@ -618,19 +635,19 @@ function VitalsRecord({ vitals }: { vitals: any }) {
         const clr = COLOR_MAP[group.color];
         const { Icon: GIcon } = group;
         return (
-          <div key={group.label} className={`rounded-2xl border ${clr.border} ${clr.groupBg} p-3`}>
+          <div key={group.labelKey} className={`rounded-2xl border ${clr.border} ${clr.groupBg} p-3`}>
             <div className="flex items-center gap-2 mb-2">
               <div className={`w-6 h-6 ${clr.bg} rounded-lg flex items-center justify-center`}>
                 <GIcon size={12} strokeWidth={2} className={clr.text} />
               </div>
-              <p className={`text-[11px] font-bold ${clr.text} uppercase tracking-wider`}>{group.label}</p>
+              <p className={`text-[11px] font-bold ${clr.text} uppercase tracking-wider`}>{t(group.labelKey)}</p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {group.fields.map(f => {
                 if (vitals[f.key] == null) return null;
                 return (
                   <div key={f.key} className="bg-white rounded-xl px-2.5 py-2 border border-white/80">
-                    <p className="text-[10px] text-gray-400 leading-none">{f.label}</p>
+                    <p className="text-[10px] text-gray-400 leading-none">{t(f.labelKey)}</p>
                     <p className="text-sm font-bold text-gray-900 mt-0.5">
                       {vitals[f.key]}
                       <span className="text-[10px] font-normal text-gray-400 ml-1">{f.unit}</span>
@@ -645,7 +662,7 @@ function VitalsRecord({ vitals }: { vitals: any }) {
 
       {vitals.notes && (
         <div className="bg-gray-50 rounded-xl px-3.5 py-2.5 border border-gray-100">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Notes</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{tc('fields.notes')}</p>
           <p className="text-xs text-gray-600">{vitals.notes}</p>
         </div>
       )}
@@ -654,10 +671,11 @@ function VitalsRecord({ vitals }: { vitals: any }) {
 }
 
 function VitalsData({ vitalsHistory }: { vitalsHistory: any[] | null | undefined }) {
+  const { t } = useTranslation('doctorPatients');
   const [expandedIdx, setExpandedIdx] = useState<number | null>(0);
 
   if (!vitalsHistory?.length) {
-    return <p className="text-sm text-gray-400 text-center py-4">No vitals recorded yet.</p>;
+    return <p className="text-sm text-gray-400 text-center py-4">{t('patientView.vitalsTab.empty')}</p>;
   }
 
   if (vitalsHistory.length === 1) {
@@ -667,7 +685,7 @@ function VitalsData({ vitalsHistory }: { vitalsHistory: any[] | null | undefined
   return (
     <div className="space-y-2">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-        {vitalsHistory.length} recorded entries — most recent first
+        {t('patientView.vitalsTab.entriesCount', { count: vitalsHistory.length })}
       </p>
       {vitalsHistory.map((v: any, idx: number) => (
         <div key={v.id} className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
@@ -678,7 +696,7 @@ function VitalsData({ vitalsHistory }: { vitalsHistory: any[] | null | undefined
           >
             <div className="flex items-center gap-2">
               {idx === 0 && (
-                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Latest</span>
+                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{t('patientView.vitalsTab.latest')}</span>
               )}
               <span className="text-sm font-semibold text-gray-700">{fmtDate(v.recorded_at)}</span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
@@ -686,7 +704,7 @@ function VitalsData({ vitalsHistory }: { vitalsHistory: any[] | null | undefined
                   ? 'bg-blue-100 text-blue-600'
                   : 'bg-gray-200 text-gray-500'
               }`}>
-                {v.source === 'lab_report' ? 'Lab' : 'Manual'}
+                {v.source === 'lab_report' ? t('patientView.vitalsTab.lab') : t('patientView.vitalsTab.manual')}
               </span>
             </div>
             {expandedIdx === idx
@@ -706,6 +724,7 @@ function VitalsData({ vitalsHistory }: { vitalsHistory: any[] | null | undefined
 }
 
 export default function DoctorPatientView() {
+  const { t } = useTranslation('doctorPatients');
   const { patientId } = useParams<{ patientId: string }>();
   const navigate      = useNavigate();
   const qc            = useQueryClient();
@@ -727,16 +746,16 @@ export default function DoctorPatientView() {
   if (isLoading) return (
     <div className="flex items-center justify-center py-32 text-gray-400">
       <span className="w-5 h-5 border-2 border-gray-200 border-t-primary-500 rounded-full animate-spin mr-3" />
-      Loading patient profile…
+      {t('patientView.loadingProfile')}
     </div>
   );
 
   if (isError || !data) return (
     <div className="text-center py-24">
       <p className="text-4xl mb-3">❌</p>
-      <p className="font-bold text-gray-600">Patient not found</p>
+      <p className="font-bold text-gray-600">{t('patientView.notFound')}</p>
       <button onClick={() => navigate(-1)} className="mt-4 text-sm text-primary-600 hover:underline">
-        ← Go back
+        {t('patientView.goBack')}
       </button>
     </div>
   );
@@ -746,6 +765,15 @@ export default function DoctorPatientView() {
   const allergies  = patient.allergies?.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean) || [];
   const conditions = patient.chronic_conditions?.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean) || [];
   const pid        = parseInt(patientId!, 10);
+
+  const allAccess       = access.all;
+  const hasAllAccess    = allAccess?.status === 'accepted';
+  const allAccessStatus = allAccess?.status || null;
+  // A section unlocks if full access was granted, or if it was individually
+  // granted under the old per-category flow (kept for backward compatibility
+  // with requests sent before the single "full access" request existed).
+  const sectionAccess = (key: string) =>
+    hasAllAccess ? { status: 'accepted' } : (access[key]?.status === 'accepted' ? access[key] : allAccess);
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
@@ -765,7 +793,7 @@ export default function DoctorPatientView() {
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors"
       >
-        <ArrowLeft size={16} strokeWidth={2} /> Back to Dashboard
+        <ArrowLeft size={16} strokeWidth={2} /> {t('patientView.backToDashboard')}
       </button>
 
       {/* Patient header card */}
@@ -783,7 +811,7 @@ export default function DoctorPatientView() {
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 {age && (
                   <span className="bg-white/15 text-white text-xs font-bold px-2.5 py-1 rounded-full border border-white/20">
-                    {age} yrs
+                    {t('patientView.ageYears', { age })}
                   </span>
                 )}
                 {patient.gender && (
@@ -798,7 +826,7 @@ export default function DoctorPatientView() {
                 )}
                 {patient.date_of_birth && (
                   <span className="bg-white/15 text-white text-xs font-bold px-2.5 py-1 rounded-full border border-white/20">
-                    DOB: {fmtDate(patient.date_of_birth)}
+                    {t('patientView.dob', { date: fmtDate(patient.date_of_birth) })}
                   </span>
                 )}
               </div>
@@ -811,7 +839,7 @@ export default function DoctorPatientView() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle size={13} strokeWidth={2.5} className="text-red-500" />
-                <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Known Allergies</p>
+                <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{t('patientView.knownAllergies')}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {allergies.map((a: string) => (
@@ -824,7 +852,7 @@ export default function DoctorPatientView() {
           )}
           {conditions.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-2">Chronic Conditions</p>
+              <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-2">{t('patientView.chronicConditions')}</p>
               <div className="flex flex-wrap gap-2">
                 {conditions.map((c: string) => (
                   <span key={c} className="bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold px-3 py-1 rounded-full">
@@ -835,7 +863,7 @@ export default function DoctorPatientView() {
             </div>
           )}
           {allergies.length === 0 && conditions.length === 0 && (
-            <p className="text-xs text-gray-400 text-center py-2">No allergies or chronic conditions recorded.</p>
+            <p className="text-xs text-gray-400 text-center py-2">{t('patientView.noAllergiesOrConditions')}</p>
           )}
         </div>
       </div>
@@ -848,8 +876,8 @@ export default function DoctorPatientView() {
               <Pill size={15} strokeWidth={2} className="text-amber-600" />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900">Active Medications</p>
-              <p className="text-[10px] text-gray-400">{active_meds.length} medicine{active_meds.length !== 1 ? 's' : ''} currently prescribed</p>
+              <p className="text-sm font-bold text-gray-900">{t('patientView.activeMedications')}</p>
+              <p className="text-[10px] text-gray-400">{t('patientView.medicinesPrescribedCount', { count: active_meds.length })}</p>
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -871,19 +899,63 @@ export default function DoctorPatientView() {
         </div>
       )}
 
+      {/* Full-access request banner */}
+      <div className="ios-tile p-5">
+        {hasAllAccess ? (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
+              <CheckCircle2 size={18} strokeWidth={2} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">{t('patientView.fullAccess.grantedTitle')}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{t('patientView.fullAccess.grantedDesc')}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${FULL_ACCESS_TYPE_CONF.grad} flex items-center justify-center shrink-0 shadow-sm`}>
+                <Shield size={18} strokeWidth={1.8} className="text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">{t('patientView.fullAccess.title')}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {allAccessStatus === 'pending'
+                    ? t('patientView.fullAccess.pendingDesc', { date: fmtDate(allAccess?.created_at) })
+                    : allAccessStatus === 'declined'
+                      ? t('patientView.fullAccess.declinedDesc')
+                      : t('patientView.fullAccess.noneDesc')}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveModal(FULL_ACCESS_TYPE_CONF)}
+              disabled={allAccessStatus === 'pending'}
+              className={`shrink-0 flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl text-white bg-gradient-to-br ${FULL_ACCESS_TYPE_CONF.grad} disabled:opacity-50 shadow-sm hover:opacity-90 transition-opacity`}
+            >
+              <Lock size={11} strokeWidth={2.5} />
+              {allAccessStatus === 'pending'
+                ? t('patientView.fullAccess.pendingButton')
+                : allAccessStatus === 'declined'
+                  ? t('patientView.fullAccess.reRequestButton')
+                  : t('patientView.fullAccess.requestButton')}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Protected sections */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Shield size={14} strokeWidth={2} className="text-gray-400" />
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Protected Patient Data</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('patientView.protectedPatientData')}</p>
         </div>
 
         {ACCESS_TYPES.map((typeConf: any) => (
           <AccessSection
             key={typeConf.key}
             typeConf={typeConf}
-            accessStatus={access[typeConf.key]}
-            onRequestAccess={setActiveModal}
+            accessStatus={sectionAccess(typeConf.key)}
           >
             {typeConf.key === 'lab_reports'      && <LabReportsData      reports={accessData.lab_reports}        patientId={pid}                   />}
             {typeConf.key === 'medical_history'  && <MedicalHistoryData  consultations={accessData.consultations}                                  />}
@@ -901,7 +973,7 @@ export default function DoctorPatientView() {
           onClose={() => setActiveModal(null)}
           onSuccess={() => {
             qc.invalidateQueries({ queryKey: ['patient-view', patientId] });
-            showToast('Access request sent! Patient will be notified.');
+            showToast(t('patientView.toastAccessRequestSent'));
           }}
         />
       )}

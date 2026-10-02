@@ -1,12 +1,14 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
-import { accessRequestApi, labViewRequestApi } from '../../services/api';
+import { accessRequestApi, labViewRequestApi, appointmentApi } from '../../services/api';
 import { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Stethoscope, Activity,
   FolderOpen, Users, Pill, Truck, ShoppingCart, Receipt, BarChart2,
   ClipboardList, Microscope, LogOut, Settings, UserSearch, ShieldCheck, Building2,
+  CalendarClock, CalendarPlus,
 } from 'lucide-react';
 
 // ── 4-dot logo mark ───────────────────────────────────────────────────────────
@@ -23,70 +25,73 @@ function LogoMark() {
 
 interface NavItem {
   to: string;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
   exact?: boolean;
   badge?: string;
 }
 
-// ── Nav definitions ───────────────────────────────────────────────────────────
+// ── Nav definitions — labelKey resolves against the `common` i18n namespace ───
 const NAV: Record<string, NavItem[]> = {
   admin: [
-    { to: '/admin',                label: 'Dashboard',     icon: LayoutDashboard, exact: true },
-    { to: '/admin/organizations',  label: 'Organizations', icon: Building2 },
-    { to: '/admin/users',          label: 'Users',         icon: Users },
-    { to: '/admin/medicines',      label: 'Medicines',     icon: Pill },
-    { to: '/admin/suppliers',      label: 'Suppliers',     icon: Truck },
-    { to: '/admin/orders',         label: 'Orders',        icon: ShoppingCart },
-    { to: '/admin/sales',          label: 'Sales',         icon: Receipt },
-    { to: '/admin/inventory',      label: 'Inventory',     icon: BarChart2 },
+    { to: '/admin',                labelKey: 'nav.dashboard',     icon: LayoutDashboard, exact: true },
+    { to: '/admin/organizations',  labelKey: 'nav.organizations', icon: Building2 },
+    { to: '/admin/users',          labelKey: 'nav.users',         icon: Users },
+    { to: '/admin/medicines',      labelKey: 'nav.medicines',     icon: Pill },
+    { to: '/admin/suppliers',      labelKey: 'nav.suppliers',     icon: Truck },
+    { to: '/admin/inventory',      labelKey: 'nav.inventory',     icon: BarChart2 },
   ],
   hospital: [
-    { to: '/hospital',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
-    { to: '/hospital/consultations', label: 'Consultations',   icon: Stethoscope },
-    { to: '/hospital/lab-requests',  label: 'Lab Reports',     icon: Microscope },
-    { to: '/hospital/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/hospital',               labelKey: 'nav.dashboard',      icon: LayoutDashboard, exact: true },
+    { to: '/hospital/consultations', labelKey: 'nav.consultations',  icon: Stethoscope },
+    { to: '/hospital/lab-requests',  labelKey: 'nav.labReports',     icon: Microscope },
+    { to: '/hospital/requests',      labelKey: 'nav.accessRequests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/hospital/appointments',  labelKey: 'nav.appointments',   icon: CalendarClock, badge: 'apptRequests' },
   ],
   clinic: [
-    { to: '/clinic',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
-    { to: '/clinic/consultations', label: 'Consultations',   icon: Stethoscope },
-    { to: '/clinic/lab-requests',  label: 'Lab Reports',     icon: Microscope },
-    { to: '/clinic/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/clinic',               labelKey: 'nav.dashboard',      icon: LayoutDashboard, exact: true },
+    { to: '/clinic/consultations', labelKey: 'nav.consultations',  icon: Stethoscope },
+    { to: '/clinic/lab-requests',  labelKey: 'nav.labReports',     icon: Microscope },
+    { to: '/clinic/requests',      labelKey: 'nav.accessRequests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/clinic/appointments',  labelKey: 'nav.appointments',   icon: CalendarClock, badge: 'apptRequests' },
   ],
   pharmacist: [
-    { to: '/pharmacist',               label: 'Dashboard',     icon: LayoutDashboard, exact: true },
-    { to: '/pharmacist/consultations', label: 'Prescriptions', icon: ClipboardList },
-    { to: '/pharmacist/medicines',     label: 'Medicines',     icon: Pill },
-    { to: '/pharmacist/suppliers',     label: 'Suppliers',     icon: Truck },
-    { to: '/pharmacist/orders',        label: 'Orders',        icon: ShoppingCart },
-    { to: '/pharmacist/sales',         label: 'Sales',         icon: Receipt },
-    { to: '/pharmacist/inventory',     label: 'Inventory',     icon: BarChart2 },
+    { to: '/pharmacist',               labelKey: 'nav.dashboard',     icon: LayoutDashboard, exact: true },
+    { to: '/pharmacist/consultations', labelKey: 'nav.prescriptions', icon: ClipboardList },
+    { to: '/pharmacist/medicines',     labelKey: 'nav.medicines',     icon: Pill },
+    { to: '/pharmacist/suppliers',     labelKey: 'nav.suppliers',     icon: Truck },
+    { to: '/pharmacist/orders',        labelKey: 'nav.orders',        icon: ShoppingCart },
+    { to: '/pharmacist/sales',         labelKey: 'nav.sales',         icon: Receipt },
+    { to: '/pharmacist/inventory',     labelKey: 'nav.inventory',     icon: BarChart2 },
   ],
   doctor: [
-    { to: '/doctor',               label: 'Dashboard',       icon: LayoutDashboard, exact: true },
-    { to: '/doctor/consultations', label: 'Consultations',   icon: Stethoscope },
-    { to: '/doctor/lab-requests',  label: 'Lab Reports',     icon: Microscope },
-    { to: '/doctor/patients',      label: 'Patients',        icon: UserSearch,  badge: 'patients'  },
-    { to: '/doctor/requests',      label: 'Access Requests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/doctor',               labelKey: 'nav.dashboard',      icon: LayoutDashboard, exact: true },
+    { to: '/doctor/consultations', labelKey: 'nav.consultations',  icon: Stethoscope },
+    { to: '/doctor/lab-requests',  labelKey: 'nav.labReports',     icon: Microscope },
+    { to: '/doctor/patients',      labelKey: 'nav.patients',       icon: UserSearch,  badge: 'patients'  },
+    { to: '/doctor/requests',      labelKey: 'nav.accessRequests', icon: ShieldCheck, badge: 'drRequests' },
+    { to: '/doctor/appointments',  labelKey: 'nav.appointments',   icon: CalendarClock, badge: 'apptRequests' },
   ],
   patient: [
-    { to: '/patient',               label: 'Patient Information', icon: LayoutDashboard, exact: true },
-    { to: '/patient/consultations', label: 'Consultations',   icon: Stethoscope },
-    { to: '/patient/medical-flow',  label: 'Medical Flow',    icon: Activity },
-    { to: '/patient/lab-tests',     label: 'Lab Tests',       icon: Microscope },
-    { to: '/patient/my-reports',    label: 'My Reports',      icon: FolderOpen },
-    { to: '/patient/requests',      label: 'Doctor Requests', icon: ShieldCheck, badge: 'ptRequests' },
+    { to: '/patient',               labelKey: 'nav.patientInformation', icon: LayoutDashboard, exact: true },
+    { to: '/patient/consultations', labelKey: 'nav.consultations',      icon: Stethoscope },
+    { to: '/patient/medical-flow',  labelKey: 'nav.medicalFlow',        icon: Activity },
+    { to: '/patient/lab-tests',     labelKey: 'nav.labTests',           icon: Microscope },
+    { to: '/patient/my-reports',    labelKey: 'nav.myReports',          icon: FolderOpen },
+    { to: '/patient/requests',      labelKey: 'nav.doctorRequests',     icon: ShieldCheck, badge: 'ptRequests' },
+    { to: '/patient/book-doctor',   labelKey: 'nav.bookDoctor',         icon: CalendarPlus },
   ],
   laboratory: [
-    { to: '/laboratory',         label: 'Dashboard',   icon: LayoutDashboard, exact: true },
-    { to: '/laboratory/reports', label: 'Lab Reports', icon: ClipboardList },
+    { to: '/laboratory',         labelKey: 'nav.dashboard',  icon: LayoutDashboard, exact: true },
+    { to: '/laboratory/reports', labelKey: 'nav.labReports', icon: ClipboardList },
+    { to: '/laboratory/catalog', labelKey: 'nav.catalog',    icon: Receipt },
   ],
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin Panel', pharmacist: 'Pharmacist',
-  doctor: 'Doctor Portal', patient: 'Patient Portal', laboratory: 'Laboratory',
-  hospital: 'Hospital Portal', clinic: 'Clinic Portal',
+const ROLE_LABEL_KEYS: Record<string, string> = {
+  admin: 'roleLabels.adminPanel', pharmacist: 'roleLabels.pharmacist',
+  doctor: 'roleLabels.doctorPortal', patient: 'roleLabels.patientPortal', laboratory: 'roleLabels.laboratory',
+  hospital: 'roleLabels.hospitalPortal', clinic: 'roleLabels.clinicPortal',
 };
 
 const ROLE_DOTS: Record<string, string> = {
@@ -102,6 +107,7 @@ const ORG_NAV_KEY: Record<string, string> = {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 export default function Sidebar() {
+  const { t } = useTranslation('common');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const orgType = user?.organization?.org_type;
@@ -122,12 +128,21 @@ export default function Sidebar() {
     enabled:  !!user && (user.role === 'patient' || user.role === 'doctor'),
   });
 
+  // Fetch appointment booking requests for the doctor's pending-request badge
+  const { data: appointments = [] } = useQuery({
+    queryKey: ['appointments'],
+    queryFn:  appointmentApi.getAll,
+    enabled:  !!user && user.role === 'doctor',
+  });
+
   const accessPending    = (accessRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
   // Patient: lab view requests waiting for their response
   const labViewPending   = (labViewRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
+  const apptPending      = (appointments as Array<{ status: string }>).filter(r => r.status === 'pending').length;
   const getBadge = (badgeKey: string): number => {
     if (badgeKey === 'ptRequests') return accessPending + labViewPending;
     if (badgeKey === 'drRequests') return accessPending;
+    if (badgeKey === 'apptRequests') return apptPending;
     return 0;
   };
 
@@ -172,7 +187,7 @@ export default function Sidebar() {
             {user?.organization ? (
               <>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap leading-tight">
-                  {ROLE_LABELS[navKey] || ''}
+                  {ROLE_LABEL_KEYS[navKey] ? t(ROLE_LABEL_KEYS[navKey]) : ''}
                 </p>
                 <p className="text-[10px] text-slate-500 whitespace-nowrap truncate max-w-[148px]">
                   {user.organization.name}
@@ -180,7 +195,7 @@ export default function Sidebar() {
               </>
             ) : (
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
-                {ROLE_LABELS[navKey] || ''}
+                {ROLE_LABEL_KEYS[navKey] ? t(ROLE_LABEL_KEYS[navKey]) : ''}
               </span>
             )}
           </div>
@@ -215,7 +230,7 @@ export default function Sidebar() {
 
               {/* Label + badge count — fade in on hover */}
               <span className="flex-1 flex items-center justify-between whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 pr-2">
-                <span className="text-sm font-medium">{item.label}</span>
+                <span className="text-sm font-medium">{t(item.labelKey)}</span>
                 {badgeCount > 0 && (
                   <span className="text-[10px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                     {badgeCount}
@@ -231,12 +246,15 @@ export default function Sidebar() {
       <div className="flex flex-col gap-0.5 pb-4 px-3 border-t border-white/5 pt-3 shrink-0 overflow-hidden">
 
         {/* Settings */}
-        <button className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-white/[0.08] hover:text-slate-200 transition-all duration-150 overflow-hidden">
+        <button
+          onClick={() => user?.role === 'patient' && navigate('/patient/settings')}
+          className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-white/[0.08] hover:text-slate-200 transition-all duration-150 overflow-hidden"
+        >
           <span className="w-11 h-11 flex items-center justify-center shrink-0">
             <Settings size={19} strokeWidth={1.8} />
           </span>
           <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 pr-2">
-            Settings
+            {t('nav.settings')}
           </span>
         </button>
 
@@ -252,7 +270,7 @@ export default function Sidebar() {
           <div className="flex-1 min-w-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 overflow-hidden">
             <p className="text-xs font-semibold text-white truncate whitespace-nowrap leading-tight">{user?.name}</p>
             <p className="text-[11px] text-slate-500 capitalize whitespace-nowrap">
-              {user?.organization ? `${user.organization.org_type} owner` : user?.role}
+              {user?.organization ? `${user.organization.org_type} ${t('roleLabels.owner')}` : user?.role}
             </p>
           </div>
         </div>
@@ -266,7 +284,7 @@ export default function Sidebar() {
             <LogOut size={19} strokeWidth={1.8} />
           </span>
           <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 pr-2">
-            Sign out
+            {t('nav.signOut')}
           </span>
         </button>
       </div>

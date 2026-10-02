@@ -1,0 +1,165 @@
+{
+  "pdf": {
+    "notProvided": "Not provided",
+    "title": "Patient Health Report",
+    "generatedLabel": "Generated: {{date}}  {{time}}",
+    "patientRole": "Patient",
+    "idLine": "Core Health ID: #{{id}}",
+    "sections": {
+      "personal": "Personal Information",
+      "health": "Health Information",
+      "emergency": "Emergency Contact",
+      "history": "Disease & Treatment History"
+    },
+    "fields": {
+      "fullName": "Full Name",
+      "email": "Email",
+      "phone": "Phone",
+      "dob": "Date of Birth",
+      "gender": "Gender",
+      "address": "Address",
+      "bloodType": "Blood Type",
+      "allergies": "Allergies",
+      "chronicConditions": "Chronic Conditions",
+      "contactName": "Contact Name",
+      "contactPhone": "Contact Phone"
+    },
+    "visitFallback": "Visit",
+    "treatmentLine": "Treatment: {{text}}",
+    "footerConfidential": "Confidential Medical Record",
+    "footerAuthorized": "For authorized use only"
+  },
+  "welcomeBanner": {
+    "welcomeBack": "Welcome back,",
+    "patientFallback": "Patient",
+    "ageBadge": "{{age}} yrs",
+    "activeTreatments": "{{count}} active treatments",
+    "generating": "Generating…",
+    "healthReportButton": "Health Report"
+  },
+  "quickActions": {
+    "vitals": "Vitals",
+    "bookDoctor": "Book a Doctor",
+    "consultations": "Consultations",
+    "labTests": "Lab Tests",
+    "myReports": "My Reports"
+  },
+  "personalDetails": {
+    "title": "Personal Details",
+    "editLink": "Edit in Settings",
+    "empty": "No personal details on file yet.",
+    "allergiesLabel": "Allergies",
+    "conditionsLabel": "Chronic Conditions",
+    "fields": {
+      "phone": "Phone",
+      "dob": "Date of Birth",
+      "gender": "Gender",
+      "bloodType": "Blood Type",
+      "address": "Address",
+      "insurance": "Insurance",
+      "emergencyContact": "Emergency Contact"
+    }
+  },
+  "quickStats": {
+    "doctorVisits": "Doctor Visits",
+    "activeTreatments": "Active Treatments",
+    "labTests": "Lab Tests",
+    "doctorsSeen": "Doctors Seen"
+  },
+  "vitalsSummary": {
+    "title": "Vitals Overview",
+    "noVitals": "No vitals recorded yet",
+    "recordedOn": "Last recorded {{date}}",
+    "fieldsRecorded": "{{count}} values recorded",
+    "viewFullButton": "View Full Vitals"
+  },
+  "calendar": {
+    "title": "My Schedule"
+  },
+  "vitalsOverview": {
+    "vitalsDef": {
+      "wbc": "White Blood Cells",
+      "rbc": "Red Blood Cells",
+      "hemoglobin": "Hemoglobin",
+      "hematocrit": "Hematocrit",
+      "mcv": "MCV (Red Cell Size)",
+      "mch": "MCH (Hemoglobin per Cell)",
+      "mchc": "MCHC (Hemoglobin Concentration)",
+      "rdw": "RDW (Red Cell Size Variation)",
+      "platelets": "Platelet Count",
+      "mpv": "MPV (Platelet Size)",
+      "bloodGlucose": "Blood Glucose (Blood Sugar)",
+      "hba1c": "HbA1c (Avg. Blood Sugar, 3 Months)",
+      "creatinine": "Creatinine (Kidney Function)",
+      "cholesterol": "Total Cholesterol",
+      "hdl": "HDL Cholesterol (Good)",
+      "ldl": "LDL Cholesterol (Bad)",
+      "triglycerides": "Triglycerides (Blood Fat)",
+      "bpSystolic": "Blood Pressure (Systolic)",
+      "bpDiastolic": "Blood Pressure (Diastolic)",
+      "heartRate": "Heart Rate",
+      "temperature": "Temperature",
+      "oxygenSaturation": "O₂ Saturation"
+    },
+    "groups": {
+      "cbc": "Complete Blood Count",
+      "metabolic": "Metabolic Panel",
+      "lipid": "Lipid Panel",
+      "vitals": "Basic Vitals"
+    },
+    "source": {
+      "labReport": "Lab report",
+      "yourUpload": "Your upload",
+      "manualEntry": "Manual entry"
+    },
+    "vitalCard": {
+      "viewHistory": "View {{label}} history",
+      "sinceLast": "since last ({{value}})",
+      "noChange": "no change",
+      "clickForHistory": "Click for history →"
+    },
+    "historyModal": {
+      "titleSuffix": "{{label}} History",
+      "readingsCount": "{{count}} readings recorded",
+      "noReadings": "No readings recorded yet for {{label}}.",
+      "loadingHistory": "Loading history…",
+      "normalRange": "Normal range ({{min}}–{{max}} {{unit}})"
+    },
+    "editModal": {
+      "title": "Update Vitals",
+      "subtitle": "Enter your latest test results",
+      "notesLabel": "Notes (optional)",
+      "notesPlaceholder": "e.g., Fasting blood test, morning reading...",
+      "footerNote": "Fields left blank won't be updated",
+      "saveButton": "Save Vitals"
+    },
+    "header": {
+      "title": "Vitals Overview",
+      "recordedSummary": "{{count}} vitals recorded · Last updated {{date}}",
+      "noVitals": "No vitals recorded yet",
+      "updateVitals": "Update Vitals"
+    },
+    "badges": {
+      "normal": "{{count}} Normal",
+      "high": "{{count}} High",
+      "low": "{{count}} Low",
+      "critical": "{{count}} Critical",
+      "fromLabReport": "{{count}} from lab report",
+      "fromUploads": "{{count}} from your uploads",
+      "abnormal": "{{count}} Abnormal"
+    },
+    "emptyState": {
+      "description": "Manually enter your lab results, or they'll update automatically when a lab uploads a report — or when you upload one yourself.",
+      "enterVitalsButton": "Enter Vitals"
+    },
+    "groupHeader": {
+      "valuesRecorded": "{{filled}} of {{total}} values recorded"
+    }
+  },
+  "setupPrompt": {
+    "title": "Welcome to Core Health!",
+    "message": "Complete your profile — phone, date of birth, blood type, emergency contact and more — so doctors and labs have what they need to care for you.",
+    "completeButton": "Complete Setup",
+    "laterButton": "Later"
+  }
+}

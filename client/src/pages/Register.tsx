@@ -32,22 +32,6 @@ const ROLES: RoleOption[] = [
     color: 'border-primary-500 bg-primary-50',
     badge: 'bg-primary-100 text-primary-700',
   },
-  {
-    id: 'pharmacist',
-    label: 'Pharmacist',
-    icon: '💊',
-    desc: 'Register to manage pharmacy inventory, orders, and patient dispensing.',
-    color: 'border-purple-500 bg-purple-50',
-    badge: 'bg-purple-100 text-purple-700',
-  },
-  {
-    id: 'laboratory',
-    label: 'Laboratory',
-    icon: '🔬',
-    desc: 'Register your diagnostic lab to connect with doctors and patients on Core Health.',
-    color: 'border-cyan-500 bg-cyan-50',
-    badge: 'bg-cyan-100 text-cyan-700',
-  },
 ];
 
 const SPECIALIZATIONS = [
@@ -56,37 +40,6 @@ const SPECIALIZATIONS = [
   'Pediatrics', 'Psychiatry', 'Pulmonology', 'Radiology',
   'Surgery', 'Urology', 'Gynecology', 'Ophthalmology',
 ];
-
-const PHARMA_SPECIALIZATIONS = [
-  'Clinical Pharmacy', 'Hospital Pharmacy', 'Retail Pharmacy',
-  'Compounding Pharmacy', 'Oncology Pharmacy', 'Pediatric Pharmacy',
-  'Geriatric Pharmacy', 'Community Pharmacy',
-];
-
-const LAB_TYPES = [
-  'Clinical Laboratory', 'Diagnostic Laboratory', 'Pathology Laboratory',
-  'Radiology Center', 'Microbiology Laboratory', 'Hematology Laboratory',
-  'Biochemistry Laboratory', 'Molecular Diagnostics', 'Immunology Laboratory',
-  'Genetic Testing Laboratory', 'Multi-Specialty Diagnostic Center',
-];
-
-const LAB_SERVICES = [
-  'Complete Blood Count (CBC)', 'Liver Function Tests (LFT)', 'Kidney Function Tests (KFT)',
-  'Lipid Profile', 'Blood Sugar / HbA1c', 'Thyroid Function Tests',
-  'Hormone Tests', 'Urine Analysis', 'Stool Analysis',
-  'Microbiology & Culture', 'Pathology / Biopsy', 'Histopathology',
-  'X-Ray', 'Ultrasound', 'Echocardiogram',
-  'MRI Scan', 'CT Scan', 'ECG / EEG',
-  'COVID-19 PCR / Antigen', 'Genetic / DNA Testing',
-];
-
-const ACCREDITATIONS = [
-  'ISO 15189', 'ISO 9001', 'CAP (College of American Pathologists)',
-  'NABL (National Accreditation Board)', 'JCI Accreditation',
-  'Local Ministry of Health', 'Other',
-];
-
-const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 export default function Register() {
   const [step, setStep] = useState(1);
@@ -109,17 +62,10 @@ export default function Register() {
         if (v !== '' && v !== undefined) profile[k] = v;
       });
 
-      // Join checkbox arrays into comma-separated strings
-      ['services_offered', 'lab_type', 'accreditation'].forEach(key => {
-        if (Array.isArray(profile[key])) {
-          profile[key] = (profile[key] as string[]).join(', ');
-        }
-      });
-
       const res = await authApi.register({ name, email, password, role: selectedRole, profile }) as unknown as { user: User; token: string };
       login(res.user, res.token);
       toast.success('Account created successfully!');
-      const routes: Record<string, string> = { doctor: '/doctor', pharmacist: '/pharmacist', patient: '/patient', laboratory: '/laboratory' };
+      const routes: Record<string, string> = { doctor: '/doctor', patient: '/patient' };
       navigate(routes[selectedRole] || '/');
     } catch (err: any) {
       toast.error(err.message || 'Registration failed');
@@ -153,7 +99,11 @@ export default function Register() {
             ))}
           </div>
           <p className="text-sm text-gray-500 mt-2">
-            {step === 1 ? 'Choose your account type' : `Complete your ${selectedRole} profile`}
+            {step === 1
+              ? 'Choose your account type'
+              : selectedRole === 'patient'
+                ? 'Create your account'
+                : `Complete your ${selectedRole} profile`}
           </p>
         </div>
 
@@ -162,48 +112,29 @@ export default function Register() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
             <h2 className="text-xl font-bold text-gray-900 mb-2">How will you use Core Health?</h2>
             <p className="text-gray-500 text-sm mb-6">Select the option that best describes you.</p>
-            <div className="grid gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {ROLES.map((r) => (
                 <button
                   key={r.id}
                   type="button"
-                  onClick={() => setSelectedRole(r.id)}
-                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                    selectedRole === r.id ? r.color + ' shadow-sm' : 'border-gray-200 hover:border-gray-300 bg-white'
-                  }`}
+                  onClick={() => { setSelectedRole(r.id); setStep(2); }}
+                  className={`group relative text-left p-6 rounded-2xl border-2 bg-white transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${r.color}`}
                 >
-                  <div className="flex items-center gap-4">
-                    <span className="text-3xl">{r.icon}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-gray-900">{r.label}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.badge}`}>
-                          Register as {r.label}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500">{r.desc}</p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      selectedRole === r.id ? 'border-primary-600 bg-primary-600' : 'border-gray-300'
-                    }`}>
-                      {selectedRole === r.id && (
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
+                  <svg className="absolute top-5 right-5 w-5 h-5 text-gray-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">
+                    {r.icon}
                   </div>
+                  <p className="font-bold text-gray-900 text-lg mb-1.5">{r.label}</p>
+                  <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium mb-2.5 ${r.badge}`}>
+                    Register as {r.label}
+                  </span>
+                  <p className="text-sm text-gray-500 leading-relaxed">{r.desc}</p>
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => selectedRole && setStep(2)}
-              disabled={!selectedRole}
-              className="btn-primary w-full mt-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Continue
-            </button>
-            <p className="text-center text-sm text-gray-500 mt-4">
+            <p className="text-center text-sm text-gray-500 mt-6">
               Already have an account?{' '}
               <Link to="/login" className="text-primary-600 font-medium hover:text-primary-700">Sign in</Link>
             </p>
@@ -263,66 +194,10 @@ export default function Register() {
                 </div>
               </div>
 
-              {/* Patient-specific fields */}
               {selectedRole === 'patient' && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Personal Health Information</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Phone Number <span className="text-red-400">*</span></label>
-                      <input className="input" placeholder="+94 77 123 4567" {...register('phone', { required: 'Phone is required' })} />
-                      {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone.message as string}</p>}
-                    </div>
-                    <div>
-                      <label className="label">Date of Birth</label>
-                      <input type="date" className="input" {...register('date_of_birth')} />
-                    </div>
-                    <div>
-                      <label className="label">Gender</label>
-                      <select className="input" {...register('gender')}>
-                        <option value="">Select gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other / Prefer not to say</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label">Blood Type</label>
-                      <select className="input" {...register('blood_type')}>
-                        <option value="">Unknown / Not sure</option>
-                        {BLOOD_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">Home Address</label>
-                      <input className="input" placeholder="No. 12, Main Street, Colombo 03" {...register('address')} />
-                    </div>
-                    <div>
-                      <label className="label">Emergency Contact Name</label>
-                      <input className="input" placeholder="Parent / Spouse name" {...register('emergency_contact_name')} />
-                    </div>
-                    <div>
-                      <label className="label">Emergency Contact Phone</label>
-                      <input className="input" placeholder="+94 77 987 6543" {...register('emergency_contact_phone')} />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">Known Allergies</label>
-                      <input className="input" placeholder="e.g., Penicillin, Aspirin, Latex (or None)" {...register('allergies')} />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">Chronic Conditions</label>
-                      <input className="input" placeholder="e.g., Diabetes, Hypertension, Asthma (or None)" {...register('chronic_conditions')} />
-                    </div>
-                    <div>
-                      <label className="label">Insurance Provider <span className="text-gray-400 font-normal">(optional)</span></label>
-                      <input className="input" placeholder="e.g., Ceylinco, AIA, Union Assurance" {...register('insurance_provider')} />
-                    </div>
-                    <div>
-                      <label className="label">Policy Number <span className="text-gray-400 font-normal">(optional)</span></label>
-                      <input className="input" placeholder="e.g., POL-123456" {...register('insurance_policy_number')} />
-                    </div>
-                  </div>
-                </div>
+                <p className="text-xs text-gray-400 -mt-2">
+                  You can add your health details, blood type, emergency contact and more later from Settings.
+                </p>
               )}
 
               {/* Doctor-specific fields */}
@@ -368,139 +243,6 @@ export default function Register() {
                       <label className="label">Bio / About <span className="text-gray-400 font-normal">(optional)</span></label>
                       <textarea rows={3} className="input resize-none" placeholder="Brief description of your practice and expertise..."
                         {...register('bio')} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Pharmacist-specific fields */}
-              {selectedRole === 'pharmacist' && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Pharmacy Information</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Phone Number <span className="text-red-400">*</span></label>
-                      <input className="input" placeholder="+94 77 123 4567" {...register('phone', { required: 'Phone is required' })} />
-                      {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone.message as string}</p>}
-                    </div>
-                    <div>
-                      <label className="label">Pharmacy License No. <span className="text-red-400">*</span></label>
-                      <input className="input" placeholder="NMRA-PH-12345" {...register('license_number', { required: 'License number is required' })} />
-                      {errors.license_number && <p className="text-xs text-red-500 mt-1">{errors.license_number.message as string}</p>}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">Pharmacy Name <span className="text-red-400">*</span></label>
-                      <input className="input" placeholder="e.g., City Pharmacy, Colombo" {...register('pharmacy_name', { required: 'Pharmacy name is required' })} />
-                      {errors.pharmacy_name && <p className="text-xs text-red-500 mt-1">{errors.pharmacy_name.message as string}</p>}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">Pharmacy Address</label>
-                      <input className="input" placeholder="Full address of the pharmacy" {...register('pharmacy_address')} />
-                    </div>
-                    <div>
-                      <label className="label">Years of Experience</label>
-                      <input type="number" min="0" max="60" className="input" placeholder="e.g., 5" {...register('years_experience')} />
-                    </div>
-                    <div>
-                      <label className="label">Specialization Area</label>
-                      <select className="input" {...register('specialization_area')}>
-                        <option value="">Select area</option>
-                        {PHARMA_SPECIALIZATIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Laboratory-specific fields */}
-              {selectedRole === 'laboratory' && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Laboratory Information</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className="label">Laboratory Name <span className="text-red-400">*</span></label>
-                      <input className="input" placeholder="e.g., City Diagnostics, Colombo Labs" {...register('lab_name', { required: 'Lab name is required' })} />
-                      {errors.lab_name && <p className="text-xs text-red-500 mt-1">{errors.lab_name.message as string}</p>}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">
-                        Laboratory Type <span className="text-red-400">*</span>
-                        <span className="ml-2 text-gray-400 font-normal text-xs">(select all that apply)</span>
-                      </label>
-                      <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {LAB_TYPES.map(t => (
-                          <label key={t} className="flex items-center gap-2 cursor-pointer group">
-                            <input
-                              type="checkbox"
-                              value={t}
-                              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
-                              {...register('lab_type', { required: 'Select at least one lab type' })}
-                            />
-                            <span className="text-xs text-gray-700 group-hover:text-gray-900">{t}</span>
-                          </label>
-                        ))}
-                      </div>
-                      {errors.lab_type && <p className="text-xs text-red-500 mt-1">{errors.lab_type.message as string}</p>}
-                    </div>
-                    <div>
-                      <label className="label">Phone Number <span className="text-red-400">*</span></label>
-                      <input className="input" placeholder="+94 11 234 5678" {...register('phone', { required: 'Phone is required' })} />
-                      {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone.message as string}</p>}
-                    </div>
-                    <div>
-                      <label className="label">Registration / License No. <span className="text-red-400">*</span></label>
-                      <input className="input" placeholder="e.g., MOH-LAB-2024-001" {...register('license_number', { required: 'License number is required' })} />
-                      {errors.license_number && <p className="text-xs text-red-500 mt-1">{errors.license_number.message as string}</p>}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">
-                        Accreditation
-                        <span className="ml-2 text-gray-400 font-normal text-xs">(select all that apply)</span>
-                      </label>
-                      <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {ACCREDITATIONS.map(a => (
-                          <label key={a} className="flex items-center gap-2 cursor-pointer group">
-                            <input
-                              type="checkbox"
-                              value={a}
-                              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
-                              {...register('accreditation')}
-                            />
-                            <span className="text-xs text-gray-700 group-hover:text-gray-900">{a}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="label">Operating Hours</label>
-                      <input className="input" placeholder="e.g., Mon–Sat 7:00 AM – 8:00 PM" {...register('operating_hours')} />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">Laboratory Address <span className="text-red-400">*</span></label>
-                      <input className="input" placeholder="Full address of the laboratory" {...register('address', { required: 'Address is required' })} />
-                      {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address.message as string}</p>}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="label">Website <span className="text-gray-400 font-normal">(optional)</span></label>
-                      <input className="input" placeholder="https://www.yourlaboratory.lk" {...register('website')} />
-                    </div>
-
-                    {/* Services offered — checkbox grid */}
-                    <div className="sm:col-span-2">
-                      <label className="label">Services Offered <span className="text-gray-400 font-normal">(select all that apply)</span></label>
-                      <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {LAB_SERVICES.map(service => (
-                          <label key={service} className="flex items-center gap-2 cursor-pointer group">
-                            <input
-                              type="checkbox"
-                              value={service}
-                              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
-                              {...register('services_offered')}
-                            />
-                            <span className="text-xs text-gray-700 group-hover:text-gray-900">{service}</span>
-                          </label>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </div>

@@ -1,0 +1,268 @@
+{
+  "shared": {
+    "doctorPrefix": "වෛද්‍ය {{name}}"
+  },
+  "dashboard": {
+    "welcome": "සාදරයෙන් පිළිගනිමු,",
+    "defaultName": "රසායනාගාරය",
+    "defaultLabType": "රෝග විනිශ්චය රසායනාගාරය",
+    "portalTagline": "Core Health Portal",
+    "stats": {
+      "labName": "රසායනාගාර නම",
+      "labTypes": "රසායනාගාර වර්ග",
+      "license": "බලපත්‍රය",
+      "accreditations": "අනුමැතීන්",
+      "typesCount": "වර්ග {{count}}",
+      "certificationsCount": "සහතික {{count}}"
+    },
+    "overdue": {
+      "title": "පැය {{hours}}කට වඩා පොරොත්තුවෙන් සිටින ඉල්ලීම් {{count}}ක්",
+      "moreSuffix": "තවත් {{count}}ක්",
+      "waitingSuffix": "— ආරම්භ කිරීමට රැඳී සිටී.",
+      "review": "සමාලෝචනය කරන්න"
+    },
+    "actions": {
+      "newReport": "නව වාර්තාව",
+      "viewAllReports": "සියලු වාර්තා බලන්න"
+    },
+    "recentActivity": {
+      "title": "මෑත ක්‍රියාකාරකම්",
+      "empty": "තවම රසායනාගාර ඉල්ලීම් නැත."
+    },
+    "profile": {
+      "title": "රසායනාගාර පැතිකඩ",
+      "editButton": "පැතිකඩ සංස්කරණය කරන්න",
+      "notProvided": "සපයා නැත",
+      "labTypesHeading": "🧪 රසායනාගාර වර්ග",
+      "accreditationsHeading": "⭐ අනුමැතීන්",
+      "fields": {
+        "labName": "රසායනාගාර නම",
+        "licenseNo": "බලපත්‍ර අංකය",
+        "operatingHours": "ක්‍රියාත්මක වේලාවන්",
+        "website": "වෙබ් අඩවිය",
+        "memberSince": "සාමාජිකත්වය ලද දිනය"
+      }
+    },
+    "services": {
+      "title": "සපයනු ලබන සේවා",
+      "empty": "තවම සේවා ලැයිස්තුගත කර නැත."
+    },
+    "infoTip": {
+      "title": "Core Health — රසායනාගාර පෝට්ලය",
+      "body": "පරීක්ෂණ ඉල්ලීම් කළමනාකරණය, ප්‍රතිඵල උඩුගත කිරීම් සහ වෛද්‍ය යොමු කිරීම් සඳහා විශේෂාංග ඊළඟ යාවත්කාලීන කිරීමේදී ලැබෙනු ඇත. ඔබේ පැතිකඩ දැන් Core Health ජාලයේ වෛද්‍යවරුන්ට සහ රෝගීන්ට දෘශ්‍යමාන වේ."
+    },
+    "editModal": {
+      "title": "රසායනාගාර පැතිකඩ සංස්කරණය කරන්න",
+      "toastSuccess": "පැතිකඩ යාවත්කාලීන කරන ලදී",
+      "toastError": "පැතිකඩ යාවත්කාලීන කිරීම අසාර්ථක විය",
+      "saveChanges": "වෙනස්කම් සුරකින්න",
+      "servicesHint": "කොමා මගින් වෙන් කරන්න, උදා: සම්පූර්ණ රුධිර ගණනය, එක්ස්-රේ, අල්ට්‍රාසවුන්ඩ්, ලිපිඩ් පැතිකඩ",
+      "fields": {
+        "labName": "රසායනාගාර නම",
+        "labType": "රසායනාගාර වර්ගය",
+        "licenseNumber": "බලපත්‍ර අංකය",
+        "accreditation": "අනුමැතිය",
+        "operatingHours": "ක්‍රියාත්මක වේලාවන්",
+        "servicesOffered": "සපයනු ලබන සේවා"
+      }
+    }
+  },
+  "reports": {
+    "page": {
+      "title": "රසායනාගාර වාර්තා",
+      "subtitle": "පරීක්ෂණ ඉල්ලීම් සකසන්න, ප්‍රතිඵල ඇතුළත් කරන්න, සහ වාර්තා උඩුගත කරන්න",
+      "newReportButton": "නව වාර්තාව",
+      "exportCsv": "CSV අපනයනය කරන්න",
+      "searchPlaceholder": "රෝගියාගේ හෝ වෛද්‍යවරයාගේ නම අනුව සොයන්න…",
+      "filterAll": "සියල්ල",
+      "stats": {
+        "total": "මුළු ඉල්ලීම්"
+      },
+      "emptyMatching": "ගැලපෙන ඉල්ලීම් නැත",
+      "emptyMatchingHint": "වෙනත් නමක් උත්සාහ කරන්න.",
+      "emptyNone": "තවම ඉල්ලීම් පවරා නැත",
+      "emptyNoneHint": "වෛද්‍යවරු රසායනාගාර පරීක්ෂණ ඉල්ලීම් මෙහි එවනු ඇත.",
+      "sampleLabel": "නියැදිය",
+      "startProcessing": "සැකසීම ආරම්භ කරන්න",
+      "uploadReport": "වාර්තාව උඩුගත කරන්න",
+      "viewReport": "වාර්තාව බලන්න",
+      "rejectButton": "ප්‍රතික්ෂේප කරන්න",
+      "detailsButton": "විස්තර සහ පණිවිඩ",
+      "priceLabel": "රු. {{amount}}",
+      "noPriceLabel": "මිලක් සකසා නැත"
+    },
+    "csv": {
+      "patient": "රෝගියා",
+      "doctor": "වෛද්‍යවරයා",
+      "reportType": "වාර්තා වර්ගය",
+      "sampleId": "නියැදි අංකය",
+      "sampleCollected": "නියැදිය එකතු කළ දිනය",
+      "requested": "ඉල්ලූ දිනය",
+      "tests": "පරීක්ෂණ"
+    },
+    "errors": {
+      "reportFileRequired": "කරුණාකර වාර්තා ගොනුවක් තෝරන්න"
+    },
+    "fields": {
+      "sampleIdLabel": "නියැදි අංකය",
+      "sampleIdPlaceholder": "උදා: SMP-2026-0043",
+      "optional": "(විකල්ප)",
+      "reportFileLabel": "වාර්තා ගොනුව",
+      "reportFileHint": "— PDF, JPG, PNG, TIFF · උපරිම 20 MB",
+      "clickToSelect": "වාර්තා ගොනුව තේරීමට ක්ලික් කරන්න",
+      "fileTypesList": "PDF · JPG · PNG · WebP · TIFF · BMP",
+      "reportNotesLabel": "වාර්තා සටහන් / සොයාගැනීම්",
+      "reportNotesPlaceholder": "ප්‍රධාන සොයාගැනීම්, අසාමාන්‍ය අගයන්, නිර්දේශ සාරාංශ කරන්න..."
+    },
+    "bloodFields": {
+      "wbc": "WBC (සුදු රුධිරාණු)",
+      "rbc": "RBC (රතු රුධිරාණු)",
+      "hemoglobin": "හීමොග්ලොබින් (Hgb)",
+      "hematocrit": "හීමැටොක්‍රිට් (Hct)",
+      "mcv": "MCV (සාමාන්‍ය සෛල පරිමාව)",
+      "mch": "MCH (සාමාන්‍ය සෛල හීමොග්ලොබින් ප්‍රමාණය)",
+      "mchc": "MCHC (සාමාන්‍ය සෛල හීමොග්ලොබින් සාන්ද්‍රණය)",
+      "rdw": "RDW (රතු රුධිරාණු විශාලත්ව විචලතාව)",
+      "platelets": "ප්ලේට්ලට් ගණන",
+      "mpv": "MPV (සාමාන්‍ය ප්ලේට්ලට් පරිමාව)",
+      "bloodGlucose": "රුධිර ග්ලූකෝස් (නිරාහාරව)",
+      "hba1c": "HbA1c (සාමාන්‍ය රුධිර සීනි මට්ටම)",
+      "creatinine": "ක්‍රියැටිනින්",
+      "cholesterol": "මුළු කොලෙස්ටරෝල්",
+      "hdl": "HDL කොලෙස්ටරෝල් (හොඳ කොලෙස්ටරෝල්)",
+      "ldl": "LDL කොලෙස්ටරෝල් (නරක කොලෙස්ටරෝල්)",
+      "triglycerides": "ට්‍රයිග්ලිසරයිඩ්"
+    },
+    "bloodPanel": {
+      "title": "පරීක්ෂණ ප්‍රතිඵල ඇතුළත් කරන්න",
+      "recommended": "නිර්දේශිතයි",
+      "valuesEntered": "අගයන් {{count}}ක් ඇතුළත් කර ඇත",
+      "hint": "අගයන් සෘජුවම ඇතුළත් කිරීමෙන් රෝගියාගේ ජීවන සලකුණු ක්ෂණිකව හා නිවැරදිව යාවත්කාලීන වේ — OCR අවශ්‍ය නොවේ.",
+      "cbcHeading": "🩸 සම්පූර්ණ රුධිර ගණනය (CBC)",
+      "metabolicHeading": "⚗️ පරිවෘත්තීය පැනලය",
+      "lipidHeading": "💧 ලිපිඩ පැනලය",
+      "filledCount": "{{count}}ක් පුරවා ඇත",
+      "checkboxLabel": "සංඛ්‍යාත්මක රුධිර පරීක්ෂණ අගයන් ඇතුළත් කරන්න",
+      "checkboxHint": "රුධිර පැනල සඳහා පමණක් අදාළයි — එක්ස්-රේ, ස්කෑන් ආදිය සඳහා මඟ හරින්න.",
+      "summaryCount": "රුධිර අගයන් {{count}}ක්",
+      "summarySuffix": "රෝගියාගේ ජීවන සලකුණු වෙත ස්වයංක්‍රීයව සුරැකෙනු ඇත."
+    },
+    "searchDropdown": {
+      "noResults": "\"{{query}}\" සඳහා ප්‍රතිඵල නැත"
+    },
+    "sendModal": {
+      "title": "රසායනාගාර වාර්තාව එවන්න",
+      "subtitle": "රෝගියෙකු සහ වෛද්‍යවරයෙකු තෝරන්න — දෙදෙනාටම එකවර දැනුම් දෙනු ලැබේ",
+      "successToast": "වාර්තාව {{patientName}} සහ වෛද්‍ය {{doctorName}} වෙත එකවර එවන ලදී!",
+      "sendingLabel": "දෙදෙනාටම එවමින්...",
+      "submitLabel": "රෝගියාට සහ වෛද්‍යවරයාට එවන්න",
+      "errors": {
+        "patient": "කරුණාකර රෝගියෙකු තෝරන්න",
+        "doctor": "කරුණාකර වෛද්‍යවරයෙකු තෝරන්න",
+        "reportType": "කරුණාකර වාර්තා වර්ගයක් තෝරන්න",
+        "testDescription": "පරීක්ෂණ විස්තරය අවශ්‍යයි",
+        "generic": "වාර්තාව එවීම අසාර්ථක විය"
+      },
+      "fields": {
+        "patientLabel": "රෝගියා *",
+        "patientPlaceholder": "නම හෝ විද්‍යුත් තැපෑල අනුව සොයන්න…",
+        "doctorLabel": "වෛද්‍යවරයා *",
+        "doctorPlaceholder": "නම හෝ විශේෂඥතාව අනුව සොයන්න…",
+        "reportTypeLabel": "වාර්තා වර්ගය",
+        "selectServicePlaceholder": "ඔබ සපයන සේවාවක් තෝරන්න…",
+        "reportTypeFreeformPlaceholder": "උදා: එක්ස්-රේ, සම්පූර්ණ රුධිර ගණනය…",
+        "noServicesHint": "ඔබේ රසායනාගාර පැතිකඩේ තවම සේවා වින්‍යාස කර නැත — මීළඟ වතාවේ ලැයිස්තුවකින් තෝරා ගැනීමට ඒවා එහි එකතු කරන්න.",
+        "testsSummaryLabel": "පරීක්ෂණ / සොයාගැනීම් සාරාංශය",
+        "testsSummaryPlaceholder": "උදා: සම්පූර්ණ රුධිර ගණනය, අක්මා ක්‍රියාකාරී පරීක්ෂණ, රුධිර ග්ලූකෝස්… හෝ පපුවේ එක්ස්-රේ — PA දර්ශනය",
+        "notesForDoctorLabel": "වෛද්‍යවරයා සඳහා සටහන්",
+        "notesForDoctorPlaceholder": "වෛද්‍යවරයා දැනගත යුතු ඕනෑම දෙයක්…"
+      }
+    },
+    "uploadModal": {
+      "title": "රසායනාගාර වාර්තාව උඩුගත කරන්න",
+      "patientLabel": "රෝගියා:",
+      "doctorLabel": "වෛද්‍යවරයා:",
+      "notifyBoth": "උඩුගත කිරීමේදී දෙදෙනාටම එකවර දැනුම් දෙනු ලැබේ",
+      "notifyPatientOnly": "උඩුගත කිරීමේදී රෝගියාට දැනුම් දෙනු ලැබේ",
+      "testsRequestedHeading": "ඉල්ලූ පරීක්ෂණ",
+      "notesLabel": "සටහන්:",
+      "uploadingLabel": "උඩුගත කරමින් ජීවන සලකුණු සුරකිමින්...",
+      "uploadAndSave": "වාර්තාව උඩුගත කර ජීවන සලකුණු {{count}}ක් සුරකින්න",
+      "uploadAndNotify": "වාර්තාව උඩුගත කර දැනුම් දෙන්න",
+      "toastBase": "වාර්තාව උඩුගත කරන ලදී",
+      "toastVitalsSuffix": " — ජීවන සලකුණු {{count}}ක් සුරකින ලදී",
+      "toastNotifiedSuffix": " · වෛද්‍යවරයාට සහ රෝගියාට දැනුම් දෙන ලදී!",
+      "toastError": "උඩුගත කිරීම අසාර්ථක විය"
+    },
+    "viewModal": {
+      "title": "වාර්තාව — {{patientName}}",
+      "fields": {
+        "patient": "රෝගියා",
+        "doctor": "වෛද්‍යවරයා",
+        "reportType": "වාර්තා වර්ගය",
+        "requested": "ඉල්ලූ දිනය",
+        "email": "විද්‍යුත් තැපෑල"
+      },
+      "testsHeading": "🧪 පරීක්ෂණ",
+      "sampleInfoHeading": "🧪 නියැදි තොරතුරු",
+      "sampleIdLabel": "අංකය:",
+      "collectedLabel": "එකතු කළ දිනය:",
+      "reportNotesHeading": "📝 වාර්තා සටහන්",
+      "openReport": "උඩුගත කළ වාර්තාව විවෘත කරන්න",
+      "priceHeading": "මිල",
+      "pricePlaceholder": "උදා. 850.00",
+      "priceSaved": "මිල සුරකින ලදී",
+      "priceSaveFailed": "මිල සුරැකීම අසාර්ථක විය"
+    },
+    "sampleModal": {
+      "title": "සැකසීම ආරම්භ කරන්න",
+      "patientLabel": "රෝගියා:",
+      "collectedAtLabel": "නියැදිය එකතු කළ වේලාව",
+      "startingLabel": "ආරම්භ කරමින්...",
+      "submitLabel": "සැකසීම ආරම්භ කරන්න",
+      "toastSuccess": "සැකසීම ආරම්භ කරන ලදී",
+      "toastError": "සැකසීම ආරම්භ කිරීම අසාර්ථක විය"
+    },
+    "rejectModal": {
+      "title": "ඉල්ලීම ප්‍රතික්ෂේප කරන්න",
+      "reasonLabel": "ප්‍රතික්ෂේප කිරීමට හේතුව (රෝගියාට පෙන්වනු ලැබේ)",
+      "reasonPlaceholder": "උදා. අපි දැනට මෙම පරීක්ෂණය ලබා නොදෙමු, කරුණාකර වෙනත් රසායනාගාරයක් උත්සාහ කරන්න…",
+      "submitLabel": "ඉල්ලීම ප්‍රතික්ෂේප කරන්න",
+      "toastSuccess": "ඉල්ලීම ප්‍රතික්ෂේප කරන ලදී — රෝගියාට දැනුම් දී ඇත",
+      "toastError": "ඉල්ලීම ප්‍රතික්ෂේප කිරීම අසාර්ථක විය"
+    },
+    "catalog": {
+      "pageTitle": "පරීක්ෂණ නාමාවලිය",
+      "pageDescription": "ඔබ ලබා දෙන පරීක්ෂණ සහ ඒවායේ මිල — රෝගීන් ඔබ සමඟ වෙන් කරන විට මේවා දකිනු ඇත.",
+      "addButton": "පරීක්ෂණයක් එකතු කරන්න",
+      "searchPlaceholder": "නම හෝ කේතය අනුව සොයන්න…",
+      "inactive": "අක්‍රියයි",
+      "activateButton": "සක්‍රිය කරන්න",
+      "deactivateButton": "අක්‍රිය කරන්න",
+      "columns": {
+        "code": "කේතය",
+        "testName": "පරීක්ෂණයේ නම",
+        "turnaround": "කාලය",
+        "hoursValue": "පැය {{count}}"
+      },
+      "modal": {
+        "addTitle": "පරීක්ෂණයක් එකතු කරන්න",
+        "editTitle": "පරීක්ෂණය සංස්කරණය කරන්න",
+        "testCode": "පරීක්ෂණ කේතය",
+        "testCodePlaceholder": "උදා. FBC",
+        "testName": "පරීක්ෂණයේ නම",
+        "testNamePlaceholder": "උදා. සම්පූර්ණ රුධිර ගණන",
+        "price": "මිල (රු.)",
+        "turnaroundHours": "කාලය (පැය)",
+        "optional": "(අත්‍යවශ්‍ය නොවේ)",
+        "description": "විස්තරය"
+      },
+      "toast": {
+        "added": "පරීක්ෂණය නාමාවලියට එකතු කරන ලදී",
+        "updated": "පරීක්ෂණය යාවත්කාලීන කරන ලදී",
+        "saveFailed": "සුරැකීම අසාර්ථක විය",
+        "statusUpdated": "තත්ත්වය යාවත්කාලීන කරන ලදී"
+      }
+    }
+  }
+}

@@ -1,0 +1,247 @@
+{
+  "dashboard": {
+    "toast": {
+      "statusUpdated": "User status updated",
+      "statusUpdateFailed": "Failed to update user status"
+    },
+    "viewAsActivity": {
+      "title": "Recent View As Activity",
+      "entry": "{{admin}} viewed as {{target}} ({{role}})"
+    },
+    "stats": {
+      "totalUsers": "Total Users",
+      "patients": "Patients",
+      "doctors": "Doctors",
+      "pharmacists": "Pharmacists",
+      "laboratories": "Laboratories",
+      "admins": "Admins",
+      "activeUsers": "Active Users",
+      "newThisWeek": "New This Week"
+    },
+    "orgStats": {
+      "hospitals": "Hospitals",
+      "pharmacies": "Pharmacies",
+      "laboratories": "Laboratories",
+      "clinics": "Clinics",
+      "totalOrgs": "Total Orgs"
+    },
+    "quickLinks": {
+      "organizations": "Organizations",
+      "users": "Users",
+      "medicines": "Medicines",
+      "suppliers": "Suppliers",
+      "orders": "Orders",
+      "sales": "Sales",
+      "inventory": "Inventory"
+    },
+    "title": "System Dashboard",
+    "subtitle": "Core Health — multi-tenant system overview",
+    "systemAdministrator": "System Administrator",
+    "pendingApproval_one": "{{count}} organization pending approval",
+    "pendingApproval_other": "{{count}} organizations pending approval",
+    "reviewApprovals": "Review and approve self-registered organizations",
+    "review": "Review",
+    "userOverview": "User Overview",
+    "tenantOrganizations": "Tenant Organizations",
+    "manage": "Manage",
+    "systemActivity": "System Activity",
+    "activity": {
+      "consultations": "Consultations",
+      "active": "Active",
+      "completed": "Completed",
+      "labRequests": "Lab Requests",
+      "pending": "Pending",
+      "appointments": "Appointments",
+      "upcoming": "Upcoming",
+      "pharmacySales": "Pharmacy Sales",
+      "revenue": "Revenue",
+      "thisMonth": "This Month"
+    },
+    "pharmacyInventoryHealth": "Pharmacy Inventory Health",
+    "inventoryHealth": {
+      "totalMedicines": "Total Medicines",
+      "lowStock": "Low Stock",
+      "expired": "Expired"
+    },
+    "quickNavigation": "Quick Navigation",
+    "recentRegistrations": "Recent Registrations",
+    "noUsersYet": "No users yet.",
+    "table": {
+      "role": "Role",
+      "joined": "Joined",
+      "action": "Action",
+      "inactive": "Inactive",
+      "deactivate": "Deactivate",
+      "activate": "Activate"
+    },
+    "roles": {
+      "patient": "Patient",
+      "doctor": "Doctor",
+      "pharmacist": "Pharmacist",
+      "laboratory": "Laboratory",
+      "admin": "Admin"
+    }
+  },
+  "users": {
+    "fields": {
+      "specialization": "Specialization",
+      "licenseNumber": "License Number",
+      "hospitalClinic": "Hospital / Clinic",
+      "consultationFee": "Consultation Fee (LKR)",
+      "yearsExperience": "Years of Experience",
+      "medicalSchool": "Medical School",
+      "bioNotes": "Bio / Notes",
+      "pharmacyName": "Pharmacy Name",
+      "pharmacyAddress": "Pharmacy Address",
+      "specializationArea": "Specialization Area",
+      "dateOfBirth": "Date of Birth",
+      "selectGender": "Select gender",
+      "bloodType": "Blood Type",
+      "select": "Select",
+      "allergies": "Allergies",
+      "chronicConditions": "Chronic Conditions",
+      "laboratoryName": "Laboratory Name",
+      "labType": "Lab Type",
+      "accreditation": "Accreditation",
+      "servicesOffered": "Services Offered",
+      "operatingHours": "Operating Hours",
+      "fullName": "Full Name",
+      "password": "Password",
+      "minCharacters": "Min. 6 characters",
+      "role": "Role",
+      "newPassword": "New Password",
+      "leaveBlankToKeep": "(leave blank to keep)",
+      "leaveBlankToKeepCurrent": "Leave blank to keep current"
+    },
+    "roles": {
+      "patient": "Patient",
+      "doctor": "Doctor",
+      "pharmacist": "Pharmacist",
+      "laboratory": "Laboratory",
+      "admin": "Admin"
+    },
+    "rolesPlural": {
+      "patient": "Patients",
+      "doctor": "Doctors",
+      "pharmacist": "Pharmacists",
+      "laboratory": "Laboratories",
+      "admin": "Admins"
+    },
+    "toast": {
+      "createSuccess": "User created successfully",
+      "createFailed": "Failed to create user",
+      "updateSuccess": "User updated",
+      "updateFailed": "Failed to update user",
+      "statusUpdateFailed": "Failed to update status",
+      "removeSuccess": "User removed",
+      "removeFailed": "Failed to remove user",
+      "viewAsFailed": "Failed to start View As session"
+    },
+    "pageTitle": "User Management",
+    "pageSubtitle": "Create, edit, and manage all system users",
+    "addUser": "Add User",
+    "searchPlaceholder": "Search by name or email...",
+    "allRoles": "All Roles",
+    "loadingUsers": "Loading users...",
+    "noUsersFound": "No users found.",
+    "table": {
+      "user": "User",
+      "role": "Role",
+      "joined": "Joined",
+      "actions": "Actions"
+    },
+    "inactive": "Inactive",
+    "editUser": "Edit User",
+    "viewAs": "View As (impersonate this user)",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "deleteUser": "Delete user",
+    "showingCount": "Showing {{count}} of {{total}} users",
+    "addNewUser": "Add New User",
+    "creating": "Creating...",
+    "createUser": "Create User",
+    "editUserTitle": "Edit — {{name}}",
+    "saving": "Saving...",
+    "saveChanges": "Save Changes",
+    "removeUser": "Remove User",
+    "removeUserConfirm": "Are you sure you want to remove \"{{name}}\"? This action cannot be undone.",
+    "profileHeading": "{{role}} Profile"
+  },
+  "organizations": {
+    "types": {
+      "hospital": "Hospital",
+      "pharmacy": "Pharmacy",
+      "laboratory": "Laboratory",
+      "clinic": "Clinic"
+    },
+    "toast": {
+      "provisionSuccess": "Organization provisioned successfully",
+      "provisionFailed": "Failed to provision organization",
+      "memberAdded": "Member added",
+      "addMemberFailed": "Failed to add member",
+      "approved": "Organization approved",
+      "deactivated": "Organization deactivated",
+      "activated": "Organization activated",
+      "updateFailed": "Failed to update organization",
+      "memberRemoved": "Member removed",
+      "removeMemberFailed": "Failed to remove member"
+    },
+    "provisionModal": {
+      "title": "Provision Organization",
+      "subtitle": "Creates a new tenant schema in the database",
+      "orgNameLabel": "Organization Name",
+      "nameRequired": "Name is required",
+      "orgNamePlaceholder": "e.g. City General Hospital",
+      "slugLabel": "Slug (schema prefix)",
+      "slugRequired": "Slug is required",
+      "slugPattern": "Lowercase letters, numbers, underscores only",
+      "slugHelper": "Schema will be: tenant_[slug]_[type]",
+      "orgTypeLabel": "Organization Type",
+      "ownerUserLabel": "Owner User (optional)",
+      "noneOption": "— None —",
+      "provisioning": "Provisioning…",
+      "provision": "Provision"
+    },
+    "addMemberModal": {
+      "title": "Add Member to {{name}}",
+      "userLabel": "User",
+      "userRequired": "Select a user",
+      "selectUserOption": "— Select user —",
+      "memberRoleLabel": "Member Role",
+      "adding": "Adding…",
+      "addMember": "Add Member"
+    },
+    "memberRoles": {
+      "owner": "Owner",
+      "doctor": "Doctor",
+      "pharmacist": "Pharmacist",
+      "laboratory": "Laboratory",
+      "staff": "Staff"
+    },
+    "pendingApprovalBadge": "PENDING APPROVAL",
+    "inactiveBadge": "INACTIVE",
+    "schemaLabel": "schema: {{schema}}",
+    "membersCount_one": "{{count}} member",
+    "membersCount_other": "{{count}} members",
+    "ownerLabel": "Owner:",
+    "approveOrgTitle": "Approve organization",
+    "approve": "Approve",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "members": "Members",
+    "loadingMembers": "Loading members…",
+    "noMembersYet": "No members yet.",
+    "userFallbackName": "User #{{id}}",
+    "pageTitle": "Organizations",
+    "pageSubtitle": "Manage tenant organizations and their members",
+    "newOrganization": "New Organization",
+    "filters": {
+      "all": "All",
+      "pending": "Pending",
+      "hospitals": "Hospitals",
+      "pharmacies": "Pharmacies",
+      "laboratories": "Laboratories",
+      "clinics": "Clinics"
+    }
+  }
+}

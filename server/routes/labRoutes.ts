@@ -3,7 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import { protect, authorize } from '../middleware/auth';
-import { create, getAll, getOne, uploadReport, createDirect, updateStatus, remove } from '../controllers/labController';
+import { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove } from '../controllers/labController';
+import { getAll as getMessages, create as createMessage } from '../controllers/labRequestMessagesController';
 import { Request } from 'express';
 
 const router = Router();
@@ -57,6 +58,11 @@ router.post('/',   protect, authorize('doctor', 'patient'), uploadReferral.singl
 router.post('/direct', protect, authorize('laboratory'), upload.single('report'), createDirect);
 router.patch('/:id/report',  protect, authorize('laboratory'), upload.single('report'), uploadReport);
 router.patch('/:id/status',  protect, authorize('laboratory'), updateStatus);
+router.patch('/:id/reject',  protect, authorize('laboratory'), reject);
+router.patch('/:id/price',   protect, authorize('laboratory'), setPrice);
 router.delete('/:id',        protect, authorize('doctor'),     remove);
+
+router.get('/:id/messages',  protect, authorize('doctor', 'patient', 'laboratory'), getMessages);
+router.post('/:id/messages', protect, authorize('doctor', 'patient', 'laboratory'), createMessage);
 
 export default router;

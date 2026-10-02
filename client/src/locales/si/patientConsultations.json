@@ -1,0 +1,279 @@
+{
+  "page": {
+    "title": "මගේ වෛද්‍ය හමුවීම්",
+    "subtitle": "අලුත්ම හමුවීම මුලින්ම — විස්තර දැකීමට ඕනෑම හමුවීමක් ක්ලික් කරන්න",
+    "recordVisit": "හමුවීම වාර්තා කරන්න",
+    "loading": "වෛද්‍ය හමුවීම් පූරණය වේ…",
+    "stats": {
+      "totalVisits": "මුළු හමුවීම්",
+      "treatingDoctors": "ප්‍රතිකාර කරන වෛද්‍යවරු",
+      "activeTreatments": "ක්‍රියාත්මක ප්‍රතිකාර",
+      "labTestsPending": "රැඳී ඇති රසායනාගාර පරීක්ෂණ"
+    },
+    "pendingLabsBanner": {
+      "count": "රසායනාගාර පරීක්ෂණ {{count}}",
+      "text": "ඔබේ වෛද්‍යවරයා විසින් ඉල්ලා ඇත — හමුවීම විවෘත කර ඒවා යැවීමට රසායනාගාරයක් තෝරන්න."
+    },
+    "emptyState": {
+      "title": "තවම වෛද්‍ය හමුවීම් නොමැත",
+      "subtitle": "ඔබේ පෞද්ගලික හමුවීම වාර්තා කිරීමට \"හමුවීම වාර්තා කරන්න\" ක්ලික් කරන්න, නැතහොත් ඔබේ වෛද්‍යවරයා එකක් එකතු කරන තෙක් රැඳී සිටින්න"
+    },
+    "readOnlyNotice": {
+      "prefix": "ඔබේ වෛද්‍යවරයා විසින් එකතු කළ වෛද්‍ය හමුවීම්",
+      "readOnly": "කියවීමට පමණි",
+      "suffix": "ඔබ විසින්ම වාර්තා කළ හමුවීම් පමණක් සංස්කරණය කළ හැක."
+    },
+    "toast": {
+      "updated": "වෛද්‍ය හමුවීම යාවත්කාලීන කරන ලදී!",
+      "updateFailed": "යාවත්කාලීන කිරීම අසාර්ථක විය",
+      "visitRecorded": "හමුවීම සාර්ථකව වාර්තා කරන ලදී!",
+      "labSent": "රසායනාගාර ඉල්ලීම යවන ලදී! රසායනාගාරයට දැනුම් දී ඇත.",
+      "pharmacySent": "බෙහෙත් වට්ටෝරුව යොමු කරන ලදී! ෆාමසියට දැනුම් දී ඇත."
+    },
+    "doctorCard": {
+      "selfRecorded": "ස්වයං-වාර්තා කළ",
+      "doctorPrefix": "වෛද්‍ය {{name}}",
+      "verified": "සත්‍යාපිතයි",
+      "visits": "හමුවීම්"
+    },
+    "doctorFilter": {
+      "all": "සියලුම වෛද්‍යවරු ({{count}})"
+    },
+    "commit": {
+      "medicalVisit": "වෛද්‍ය හමුවීම",
+      "labPending": "රසායනාගාරය රැඳී ඇත",
+      "labDone": "රසායනාගාරය සම්පූර්ණයි",
+      "status": {
+        "active": "ක්‍රියාත්මකයි",
+        "preparing": "සූදානම් කරමින්",
+        "dispensed": "සූදානම්",
+        "delivered": "භාර දුන්නා",
+        "completed": "විසඳුණි"
+      }
+    },
+    "wf": {
+      "visit": "හමුවීම",
+      "symptoms": "රෝග ලක්ෂණ",
+      "diagnosis": "රෝග විනිශ්චය",
+      "treatmentPlan": "ප්‍රතිකාර සැලැස්ම",
+      "medicinesPrescribed": "නියම කළ බෙහෙත් ({{count}})",
+      "prescription": "බෙහෙත් වට්ටෝරුව",
+      "pharmacy": "ෆාමසිය",
+      "pharmacyDispensed": "ෆාමසිය මගින් නිකුත් කරන ලදී ✅",
+      "pharmacyNamed": "ෆාමසිය: {{name}}",
+      "pharmacyPreparingHeading": "{{name}} සූදානම් කරමින්",
+      "pharmacyReadyHeading": "{{name}} හි සූදානම්",
+      "pharmacyDeliveredHeading": "{{name}} විසින් භාර දෙන ලදී",
+      "pharmacyAssignedFallback": "පවරා ඇත",
+      "assignedPharmacyFallback": "පවරන ලද ෆාමසිය",
+      "labTestsRequested": "ඉල්ලූ රසායනාගාර පරීක්ෂණ",
+      "sentTo": "යවන ලද්දේ: {{name}}",
+      "laboratoryFallback": "රසායනාගාරය",
+      "labReportReady": "රසායනාගාර වාර්තාව සූදානම් ✅",
+      "body": {
+        "date": "දිනය:",
+        "location": "ස්ථානය:",
+        "pharmacy": "ෆාමසිය:"
+      },
+      "noPharmacyText": "කිසිදු ෆාමසියක් පවරා නොමැත. බෙහෙත් ලබා ගැනීමට ඔබේ බෙහෙත් වට්ටෝරුව ෆාමසියකට යොමු කරන්න.",
+      "forwardToPharmacyBtn": "ෆාමසියට යොමු කරන්න",
+      "noPharmacyAssigned": "කිසිදු ෆාමසියක් පවරා නොමැත.",
+      "medicinesDispensed": "✓ බෙහෙත් නිකුත් කර ඇත",
+      "awaitingDispensing": "ෆාමසිස්ට්වරයා බලාපොරොත්තුවෙන්",
+      "stagePreparing": "සූදානම් කරමින්",
+      "stageReady": "ලබා ගැනීමට සූදානම්",
+      "stageDelivered": "✓ භාර දී ඇත",
+      "sendToLaboratoryBtn": "රසායනාගාරයට යවන්න",
+      "orderedByDoctor": "ඉල්ලූයේ වෛද්‍ය {{name}}",
+      "labNotesSummary": "රසායනාගාර සටහන් / ප්‍රතිඵල සාරාංශය",
+      "downloadReport": "වාර්තාව බාගන්න"
+    }
+  },
+  "doctorSearch": {
+    "loading": "වෛද්‍යවරුන් සොයමින්…",
+    "namePrefix": "වෛද්‍ය {{name}}"
+  },
+  "labSearch": {
+    "placeholder": "සියලුම රසායනාගාර බැලීමට තට්ටු කරන්න, නැතහොත් සෙවීමට ටයිප් කරන්න…",
+    "loading": "රසායනාගාර පූරණය වේ…",
+    "noResults": "රසායනාගාර හමු නොවුණි"
+  },
+  "pharmacySearch": {
+    "placeholder": "සියලුම ෆාමසි බැලීමට තට්ටු කරන්න, නැතහොත් සෙවීමට ටයිප් කරන්න…",
+    "loading": "ෆාමසි පූරණය වේ…",
+    "noResults": "ෆාමසි හමු නොවුණි"
+  },
+  "sendToLabModal": {
+    "title": "රසායනාගාරයට යවන්න",
+    "subtitle": "ඔබේ පරීක්ෂණ සැකසීමට රසායනාගාරයක් තෝරන්න",
+    "testsRequested": "ඉල්ලූ පරීක්ෂණ",
+    "selectLaboratory": "රසායනාගාරය තෝරන්න",
+    "errorSelect": "කරුණාකර රසායනාගාරයක් තෝරන්න",
+    "errorGeneric": "ඉල්ලීම යැවීම අසාර්ථක විය",
+    "sendBtn": "රසායනාගාරයට යවන්න"
+  },
+  "sendToPharmacyModal": {
+    "title": "ෆාමසියට යොමු කරන්න",
+    "subtitle": "ඔබේ බෙහෙත් වට්ටෝරුව නිකුත් කිරීමට ෆාමසියක් තෝරන්න",
+    "prescribedMedicines": "නියම කළ බෙහෙත්",
+    "selectPharmacy": "ෆාමසිය තෝරන්න",
+    "errorSelect": "කරුණාකර ෆාමසියක් තෝරන්න",
+    "errorGeneric": "බෙහෙත් වට්ටෝරුව යොමු කිරීම අසාර්ථක විය",
+    "forwardBtn": "බෙහෙත් වට්ටෝරුව යොමු කරන්න"
+  },
+  "selfRecordModal": {
+    "title": "මගේ හමුවීම වාර්තා කරන්න",
+    "subtitle": "වෛද්‍ය හමුවීමක් හෝ ස්වයං-නිරීක්ෂණයක් සටහන් කරන්න",
+    "errors": {
+      "visitDateRequired": "හමුවීමේ දිනය අවශ්‍යයි",
+      "symptomsRequired": "රෝග ලක්ෂණ අවශ්‍යයි",
+      "saveFailed": "සුරැකීම අසාර්ථක විය"
+    },
+    "fields": {
+      "visitDate": "හමුවීමේ දිනය *",
+      "doctorName": "වෛද්‍යවරයාගේ නම",
+      "doctorNamePlaceholder": "වෛද්‍ය පෙරේරා",
+      "hospitalClinic": "රෝහල / සායනය",
+      "hospitalClinicPlaceholder": "උදා., නවලෝක රෝහල",
+      "symptoms": "රෝග ලක්ෂණ *",
+      "symptomsPlaceholder": "ඔබට තිබූ රෝග ලක්ෂණ මොනවාද?",
+      "diagnosis": "රෝග විනිශ්චය",
+      "diagnosisPlaceholder": "වෛද්‍යවරයා විසින් හඳුනාගත් රෝගය කුමක්ද?",
+      "treatmentPlan": "ප්‍රතිකාර සැලැස්ම",
+      "treatmentPlanPlaceholder": "නියම කළ බෙහෙත් ආදිය."
+    },
+    "prescription": {
+      "label": "බෙහෙත් වට්ටෝරුව",
+      "optional": "(අත්‍යවශ්‍ය නොවේ)",
+      "uploadBtn": "බෙහෙත් වට්ටෝරු පින්තූරය උඩුගත කරන්න"
+    },
+    "medicines": {
+      "label": "බෙහෙත්",
+      "none": "බෙහෙත් එකතු කර නොමැත",
+      "medicine": "බෙහෙත *",
+      "dosage": "මාත්‍රාව",
+      "frequency": "වාර ගණන",
+      "duration": "කාලසීමාව"
+    },
+    "saveBtn": "හමුවීම සුරකින්න"
+  },
+  "editModal": {
+    "title": "වෛද්‍ය හමුවීම සංස්කරණය කරන්න",
+    "fields": {
+      "visitDate": "හමුවීමේ දිනය *",
+      "doctorName": "වෛද්‍යවරයාගේ නම",
+      "hospitalClinic": "රෝහල / සායනය",
+      "symptoms": "රෝග ලක්ෂණ",
+      "symptomsPlaceholder": "රෝග ලක්ෂණ විස්තර කරන්න…",
+      "diagnosis": "රෝග විනිශ්චය",
+      "diagnosisPlaceholder": "වෛද්‍ය රෝග විනිශ්චය…",
+      "treatmentPlan": "ප්‍රතිකාර සැලැස්ම",
+      "treatmentPlanPlaceholder": "ප්‍රතිකාර සැලැස්ම…"
+    },
+    "medicines": {
+      "label": "බෙහෙත්",
+      "medicine": "බෙහෙත *",
+      "dosage": "මාත්‍රාව",
+      "frequency": "වාර ගණන",
+      "duration": "කාලසීමාව"
+    },
+    "saveBtn": "වෙනස්කම් සුරකින්න"
+  },
+  "medicalFlow": {
+    "header": {
+      "title": "වෛද්‍ය ගමන් මග",
+      "subtitle": "ඔබේ සම්පූර්ණ සෞඛ්‍ය ගමන — සෑම හමුවීමක්ම, බෙහෙත් වට්ටෝරුවක්ම සහ රසායනාගාර ප්‍රතිඵලයක්ම කාලානුක්‍රමිකව.",
+      "eventsCount": "සිදුවීම් {{count}}",
+      "stats": {
+        "visits": "හමුවීම්",
+        "labTests": "රසායනාගාර පරීක්ෂණ",
+        "medicines": "බෙහෙත්"
+      }
+    },
+    "search": {
+      "placeholder": "වෛද්‍යවරු, බෙහෙත්, තත්ත්ව සොයන්න…",
+      "showingEvents": "සිදුවීම් {{count}} පෙන්වමින්",
+      "matching": "\"{{search}}\" ට ගැලපේ"
+    },
+    "filters": {
+      "all": "සියල්ල ({{count}})",
+      "visits": "හමුවීම් ({{count}})",
+      "medicines": "බෙහෙත් ({{count}})",
+      "lab": "රසායනාගාර පරීක්ෂණ ({{count}})"
+    },
+    "sort": {
+      "oldestFirst": "පැරණිතම මුලින්",
+      "newestFirst": "අලුත්ම මුලින්"
+    },
+    "empty": {
+      "title": "වෛද්‍ය සිදුවීම් හමු නොවුණි",
+      "searchMessage": "\"{{search}}\" ට ගැලපෙන සිදුවීම් නොමැත. වෙනත් සෙවුම් පදයක් උත්සාහ කරන්න.",
+      "defaultMessage": "සිදුවීම් වාර්තා වන විට ඔබේ වෛද්‍ය කාල රේඛාව මෙහි දිස්වනු ඇත."
+    },
+    "dateGroup": {
+      "eventsCount": "සිදුවීම් {{count}}"
+    },
+    "legend": {
+      "title": "සිදුවීම් හැඳුනුම්පත"
+    },
+    "events": {
+      "sick": "අසනීප වාර්තා කරන ලදී",
+      "doctorVisit": "වෛද්‍ය හමුවීම",
+      "diagnosis": "රෝග විනිශ්චය",
+      "prescriptionPreparing": "ෆාමසිය සූදානම් කරමින්",
+      "prescriptionDispensed": "ලබා ගැනීමට සූදානම්",
+      "prescriptionDelivered": "බෙහෙත් භාර දී ඇත",
+      "treatmentCompleted": "ප්‍රතිකාරය සම්පූර්ණයි",
+      "labRequested": "රසායනාගාර පරීක්ෂණයක් ඉල්ලා ඇත",
+      "labInProgress": "රසායනාගාර පරීක්ෂණය සිදුවෙමින්",
+      "labReportReady": "රසායනාගාර වාර්තාව සූදානම්"
+    },
+    "statusRow": {
+      "active": "ප්‍රතිකාරය ක්‍රියාත්මකයි",
+      "dispensed": "බෙහෙත් වට්ටෝරුව ලබා දී ඇත",
+      "completed": "ප්‍රතිකාරය සම්පූර්ණයි"
+    },
+    "card": {
+      "fallback": {
+        "medicalConsultation": "වෛද්‍ය හමුවීම",
+        "prescriptionDispensed": "බෙහෙත් වට්ටෝරුව නිකුත් කරන ලදී",
+        "treatment": "ප්‍රතිකාරය",
+        "laboratoryTest": "රසායනාගාර පරීක්ෂණය"
+      },
+      "moreMedicines": "තවත් {{count}}",
+      "resolvedSuffix": "විසඳුණි",
+      "doctorPrefix": "වෛද්‍ය {{name}}"
+    },
+    "detail": {
+      "visitedOn": "{{date}} දින හමුවූයේ",
+      "symptomsReported": "රෝග ලක්ෂණ",
+      "diagnosis": "රෝග විනිශ්චය",
+      "treatmentPlan": "ප්‍රතිකාර සැලැස්ම",
+      "medicinesPrescribed": "නියම කළ බෙහෙත්",
+      "prescriptionDispensedTitle": "ෆාමසිස්ට් විසින් බෙහෙත් වට්ටෝරුව නිකුත් කරන ලදී",
+      "forLabel": "සඳහා: {{text}}",
+      "consultationFallback": "වෛද්‍ය හමුවීම",
+      "prescribedByDoctor": "නියම කළේ වෛද්‍ය {{name}}",
+      "medicinesDispensed": "නිකුත් කළ බෙහෙත්",
+      "treatmentCompletedTitle": "ප්‍රතිකාරය සාර්ථකව සම්පූර්ණ කරන ලදී",
+      "conditionLabel": "තත්ත්වය: {{text}}",
+      "treatingDoctor": "ප්‍රතිකාර කළ වෛද්‍යවරයා: වෛද්‍ය {{name}}",
+      "laboratoryFallback": "රසායනාගාරය",
+      "requestedByDoctor": "ඉල්ලූයේ වෛද්‍ය {{name}}",
+      "requestedOn": "{{date}} දින ඉල්ලූ",
+      "testDescription": "පරීක්ෂණ විස්තරය",
+      "testDescriptionFallback": "සඳහන් කර නොමැත",
+      "notes": "සටහන්",
+      "labStatus": {
+        "completed": "සම්පූර්ණයි",
+        "inProgress": "සිදුවෙමින්",
+        "pending": "රැඳී ඇත"
+      },
+      "labProcessingTitle": "රසායනාගාරය ඔබේ පරීක්ෂණය සකසමින් සිටී",
+      "orderedByDoctor": "ඉල්ලූයේ වෛද්‍ය {{name}}",
+      "labNotesSummary": "රසායනාගාර සටහන් / ප්‍රතිඵල සාරාංශය",
+      "downloadReport": "වාර්තාව බාගන්න",
+      "reportNotAttached": "වාර්තා ගොනුව තවම අමුණා නොමැත"
+    }
+  }
+}

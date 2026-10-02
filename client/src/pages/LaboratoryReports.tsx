@@ -2,53 +2,49 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { labApi, userApi, authApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
-import { FlaskConical, Upload, Eye, X, ChevronDown, ChevronUp, Search, Send, Plus, Stethoscope, Download, Beaker } from 'lucide-react';
+import { FlaskConical, Upload, Eye, X, ChevronDown, ChevronUp, Search, Send, Plus, Stethoscope, Download, Beaker, XCircle, MessageCircle, Banknote } from 'lucide-react';
 import { SERVER_ORIGIN } from '../env';
+import ChatPanel from '../components/common/ChatPanel';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
-const STATUS_STYLE: Record<string, { badge: string; label: string }> = {
-  pending:     { badge: 'bg-yellow-100 text-yellow-700', label: 'Pending'     },
-  in_progress: { badge: 'bg-blue-100   text-blue-700',   label: 'In Progress' },
-  completed:   { badge: 'bg-green-100  text-green-700',  label: 'Completed'   },
-};
-
 // ── Blood test field definitions ─────────────────────────────────────────────
 interface BloodField {
-  key: string; label: string; unit: string; min: number; max: number; step: string;
+  key: string; labelKey: string; unit: string; min: number; max: number; step: string;
 }
 const CBC_FIELDS: BloodField[] = [
-  { key: 'wbc',        label: 'WBC (White Blood Cells)', unit: '10³/µL', min: 4.5,  max: 11.0, step: '0.01' },
-  { key: 'rbc',        label: 'RBC (Red Blood Cells)',   unit: '10⁶/µL', min: 4.5,  max: 6.0,  step: '0.01' },
-  { key: 'hemoglobin', label: 'Hemoglobin (Hgb)',        unit: 'g/dL',   min: 12.0, max: 18.0, step: '0.1'  },
-  { key: 'hematocrit', label: 'Hematocrit (Hct)',        unit: '%',      min: 37.0, max: 52.0, step: '0.1'  },
-  { key: 'mcv',        label: 'MCV',                     unit: 'fL',     min: 80.0, max: 99.0, step: '0.1'  },
-  { key: 'mch',        label: 'MCH',                     unit: 'pg',     min: 27.0, max: 34.5, step: '0.1'  },
-  { key: 'mchc',       label: 'MCHC',                    unit: 'g/dL',   min: 32.0, max: 36.5, step: '0.1'  },
-  { key: 'rdw',        label: 'RDW',                     unit: '%',      min: 11.0, max: 15.0, step: '0.1'  },
-  { key: 'platelets',  label: 'Platelet Count',          unit: '10³/µL', min: 150,  max: 450,  step: '1'    },
-  { key: 'mpv',        label: 'MPV',                     unit: 'fL',     min: 7.4,  max: 12.0, step: '0.1'  },
+  { key: 'wbc',        labelKey: 'reports.bloodFields.wbc',        unit: '10³/µL', min: 4.5,  max: 11.0, step: '0.01' },
+  { key: 'rbc',        labelKey: 'reports.bloodFields.rbc',        unit: '10⁶/µL', min: 4.5,  max: 6.0,  step: '0.01' },
+  { key: 'hemoglobin', labelKey: 'reports.bloodFields.hemoglobin', unit: 'g/dL',   min: 12.0, max: 18.0, step: '0.1'  },
+  { key: 'hematocrit', labelKey: 'reports.bloodFields.hematocrit', unit: '%',      min: 37.0, max: 52.0, step: '0.1'  },
+  { key: 'mcv',        labelKey: 'reports.bloodFields.mcv',        unit: 'fL',     min: 80.0, max: 99.0, step: '0.1'  },
+  { key: 'mch',        labelKey: 'reports.bloodFields.mch',        unit: 'pg',     min: 27.0, max: 34.5, step: '0.1'  },
+  { key: 'mchc',       labelKey: 'reports.bloodFields.mchc',       unit: 'g/dL',   min: 32.0, max: 36.5, step: '0.1'  },
+  { key: 'rdw',        labelKey: 'reports.bloodFields.rdw',        unit: '%',      min: 11.0, max: 15.0, step: '0.1'  },
+  { key: 'platelets',  labelKey: 'reports.bloodFields.platelets',  unit: '10³/µL', min: 150,  max: 450,  step: '1'    },
+  { key: 'mpv',        labelKey: 'reports.bloodFields.mpv',        unit: 'fL',     min: 7.4,  max: 12.0, step: '0.1'  },
 ];
 const METABOLIC_FIELDS: BloodField[] = [
-  { key: 'blood_glucose', label: 'Blood Glucose (Fasting)', unit: 'mg/dL', min: 70,  max: 100,  step: '0.1' },
-  { key: 'hba1c',         label: 'HbA1c',                   unit: '%',     min: 4.0, max: 5.6,  step: '0.1' },
-  { key: 'creatinine',    label: 'Creatinine',               unit: 'mg/dL', min: 0.7, max: 1.2,  step: '0.01'},
+  { key: 'blood_glucose', labelKey: 'reports.bloodFields.bloodGlucose', unit: 'mg/dL', min: 70,  max: 100,  step: '0.1' },
+  { key: 'hba1c',         labelKey: 'reports.bloodFields.hba1c',        unit: '%',     min: 4.0, max: 5.6,  step: '0.1' },
+  { key: 'creatinine',    labelKey: 'reports.bloodFields.creatinine',   unit: 'mg/dL', min: 0.7, max: 1.2,  step: '0.01'},
 ];
 const LIPID_FIELDS: BloodField[] = [
-  { key: 'cholesterol',   label: 'Total Cholesterol', unit: 'mg/dL', min: 125, max: 200, step: '1' },
-  { key: 'hdl',           label: 'HDL Cholesterol',   unit: 'mg/dL', min: 40,  max: 60,  step: '1' },
-  { key: 'ldl',           label: 'LDL Cholesterol',   unit: 'mg/dL', min: 0,   max: 100, step: '1' },
-  { key: 'triglycerides', label: 'Triglycerides',     unit: 'mg/dL', min: 0,   max: 150, step: '1' },
+  { key: 'cholesterol',   labelKey: 'reports.bloodFields.cholesterol',   unit: 'mg/dL', min: 125, max: 200, step: '1' },
+  { key: 'hdl',           labelKey: 'reports.bloodFields.hdl',           unit: 'mg/dL', min: 40,  max: 60,  step: '1' },
+  { key: 'ldl',           labelKey: 'reports.bloodFields.ldl',           unit: 'mg/dL', min: 0,   max: 100, step: '1' },
+  { key: 'triglycerides', labelKey: 'reports.bloodFields.triglycerides', unit: 'mg/dL', min: 0,   max: 150, step: '1' },
 ];
 
-function statusBadge(value: string, min: number, max: number): { label: string; color: string } {
+function statusBadge(value: string, min: number, max: number): { statusKey: 'low' | 'high' | 'normal' | ''; color: string } {
   const v = parseFloat(value);
-  if (isNaN(v)) return { label: '', color: '' };
-  if (v < min) return { label: 'Low',    color: 'text-blue-600 bg-blue-50' };
-  if (v > max) return { label: 'High',   color: 'text-amber-600 bg-amber-50' };
-  return           { label: 'Normal', color: 'text-teal-600 bg-teal-50' };
+  if (isNaN(v)) return { statusKey: '', color: '' };
+  if (v < min) return { statusKey: 'low',    color: 'text-blue-600 bg-blue-50' };
+  if (v > max) return { statusKey: 'high',   color: 'text-amber-600 bg-amber-50' };
+  return           { statusKey: 'normal', color: 'text-teal-600 bg-teal-50' };
 }
 
 function BloodValueField({ field, value, onChange }: {
@@ -56,11 +52,13 @@ function BloodValueField({ field, value, onChange }: {
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
   const badge = value ? statusBadge(value, field.min, field.max) : null;
   return (
     <div>
       <label className="block text-[11px] font-bold text-gray-600 mb-1">
-        {field.label}
+        {t(field.labelKey)}
         <span className="text-gray-400 font-normal ml-1">({field.unit})</span>
       </label>
       <div className="flex items-center gap-2">
@@ -73,13 +71,13 @@ function BloodValueField({ field, value, onChange }: {
           onChange={e => onChange(e.target.value)}
           className="input text-sm py-2 flex-1"
         />
-        {badge && badge.label && (
+        {badge && badge.statusKey && (
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badge.color}`}>
-            {badge.label}
+            {tc(`status.${badge.statusKey}`)}
           </span>
         )}
       </div>
-      <p className="text-[9px] text-gray-400 mt-0.5">Normal: {field.min} – {field.max}</p>
+      <p className="text-[9px] text-gray-400 mt-0.5">{tc('status.normal')}: {field.min} – {field.max}</p>
     </div>
   );
 }
@@ -109,6 +107,7 @@ function BloodValuesSection({ values, setVal }: {
   values: Record<string, string>;
   setVal: (key: string, v: string) => void;
 }) {
+  const { t } = useTranslation('laboratory');
   const [showCBC,       setShowCBC]       = useState(true);
   const [showMetabolic, setShowMetabolic] = useState(false);
   const [showLipid,     setShowLipid]     = useState(false);
@@ -119,19 +118,19 @@ function BloodValuesSection({ values, setVal }: {
       <div className="bg-gradient-to-r from-teal-500 to-cyan-600 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FlaskConical size={15} className="text-white" strokeWidth={2} />
-          <p className="text-sm font-bold text-white">Enter Test Results</p>
+          <p className="text-sm font-bold text-white">{t('reports.bloodPanel.title')}</p>
           <span className="text-[10px] bg-white/25 text-white px-2 py-0.5 rounded-full font-semibold">
-            Recommended
+            {t('reports.bloodPanel.recommended')}
           </span>
         </div>
         {filledCount > 0 && (
           <span className="text-[10px] bg-white text-teal-700 font-bold px-2 py-0.5 rounded-full">
-            {filledCount} value{filledCount !== 1 ? 's' : ''} entered
+            {t('reports.bloodPanel.valuesEntered', { count: filledCount })}
           </span>
         )}
       </div>
       <p className="text-[11px] text-gray-500 px-4 py-2 bg-teal-50 border-b border-teal-100">
-        Directly entering values ensures the patient's vitals update instantly and accurately — no OCR needed.
+        {t('reports.bloodPanel.hint')}
       </p>
 
       <div className="divide-y divide-gray-100">
@@ -141,10 +140,10 @@ function BloodValuesSection({ values, setVal }: {
           <button type="button" onClick={() => setShowCBC(!showCBC)}
             className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
             <span className="flex items-center gap-2 text-sm font-bold text-gray-700">
-              🩸 Complete Blood Count (CBC)
+              {t('reports.bloodPanel.cbcHeading')}
               {CBC_FIELDS.filter(f => values[f.key]).length > 0 && (
                 <span className="text-[10px] bg-teal-100 text-teal-700 font-bold px-1.5 py-0.5 rounded-full">
-                  {CBC_FIELDS.filter(f => values[f.key]).length} filled
+                  {t('reports.bloodPanel.filledCount', { count: CBC_FIELDS.filter(f => values[f.key]).length })}
                 </span>
               )}
             </span>
@@ -164,10 +163,10 @@ function BloodValuesSection({ values, setVal }: {
           <button type="button" onClick={() => setShowMetabolic(!showMetabolic)}
             className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
             <span className="flex items-center gap-2 text-sm font-bold text-gray-700">
-              ⚗️ Metabolic Panel
+              {t('reports.bloodPanel.metabolicHeading')}
               {METABOLIC_FIELDS.filter(f => values[f.key]).length > 0 && (
                 <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded-full">
-                  {METABOLIC_FIELDS.filter(f => values[f.key]).length} filled
+                  {t('reports.bloodPanel.filledCount', { count: METABOLIC_FIELDS.filter(f => values[f.key]).length })}
                 </span>
               )}
             </span>
@@ -187,10 +186,10 @@ function BloodValuesSection({ values, setVal }: {
           <button type="button" onClick={() => setShowLipid(!showLipid)}
             className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
             <span className="flex items-center gap-2 text-sm font-bold text-gray-700">
-              💧 Lipid Panel
+              {t('reports.bloodPanel.lipidHeading')}
               {LIPID_FIELDS.filter(f => values[f.key]).length > 0 && (
                 <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-full">
-                  {LIPID_FIELDS.filter(f => values[f.key]).length} filled
+                  {t('reports.bloodPanel.filledCount', { count: LIPID_FIELDS.filter(f => values[f.key]).length })}
                 </span>
               )}
             </span>
@@ -228,6 +227,7 @@ function useDebounce(v: string, ms = 350) {
 }
 
 function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSelect, renderItem, renderSelected }: SearchDropdownProps) {
+  const { t } = useTranslation('laboratory');
   const [q, setQ]       = useState('');
   const dq              = useDebounce(q);
   const [open, setOpen] = useState(false);
@@ -269,7 +269,7 @@ function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSel
           {open && dq.length >= 1 && (
             <ul className="absolute z-40 mt-1 w-full bg-white rounded-2xl shadow-xl border border-gray-100 max-h-52 overflow-y-auto">
               {(results as any[]).length === 0 && !isFetching
-                ? <li className="px-4 py-3 text-sm text-gray-400">No results for "{dq}"</li>
+                ? <li className="px-4 py-3 text-sm text-gray-400">{t('reports.searchDropdown.noResults', { query: dq })}</li>
                 : (results as any[]).map((item: any) => (
                   <li key={item.id}
                     onClick={() => { onSelect(item); setOpen(false); setQ(''); }}
@@ -289,6 +289,8 @@ function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSel
 interface SendReportModalProps { onClose: () => void; onSent: () => void; }
 
 function SendReportModal({ onClose, onSent }: SendReportModalProps) {
+  const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
   const [patient,    setPatient]    = useState<any>(null);
   const [doctor,     setDoctor]     = useState<any>(null);
   const [reportType, setReportType] = useState('');
@@ -325,11 +327,11 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!patient)          return setError('Please select a patient');
-    if (!doctor)           return setError('Please select a doctor');
-    if (!reportType)       return setError('Please select a report type');
-    if (!testDesc.trim())  return setError('Test description is required');
-    if (!file)             return setError('Please select a report file');
+    if (!patient)          return setError(t('reports.sendModal.errors.patient'));
+    if (!doctor)           return setError(t('reports.sendModal.errors.doctor'));
+    if (!reportType)       return setError(t('reports.sendModal.errors.reportType'));
+    if (!testDesc.trim())  return setError(t('reports.sendModal.errors.testDescription'));
+    if (!file)             return setError(t('reports.errors.reportFileRequired'));
     setError('');
     setSending(true);
     try {
@@ -355,10 +357,10 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
       if (Object.keys(vitalsPayload).length > 0) fd.append('vitals_data', JSON.stringify(vitalsPayload));
 
       await labApi.createDirect(fd);
-      toast.success(`Report sent to ${patient.name} and Dr. ${doctor.name} at the same time!`);
+      toast.success(t('reports.sendModal.successToast', { patientName: patient.name, doctorName: doctor.name }));
       onSent(); onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to send report');
+      setError(err.message || t('reports.sendModal.errors.generic'));
     } finally { setSending(false); }
   };
 
@@ -372,8 +374,8 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
               <Send size={16} className="text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold text-white">Send Lab Report</p>
-              <p className="text-xs text-white/70">Pick a patient and doctor — both are notified together</p>
+              <p className="text-sm font-bold text-white">{t('reports.sendModal.title')}</p>
+              <p className="text-xs text-white/70">{t('reports.sendModal.subtitle')}</p>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white">
@@ -390,8 +392,8 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SearchDropdown
-              label="Patient *"
-              placeholder="Search by name or email…"
+              label={t('reports.sendModal.fields.patientLabel')}
+              placeholder={t('reports.sendModal.fields.patientPlaceholder')}
               fetchFn={userApi.searchPatients}
               queryKey="lab-direct-search-patients"
               selected={patient}
@@ -414,8 +416,8 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
             />
 
             <SearchDropdown
-              label="Doctor *"
-              placeholder="Search by name or specialization…"
+              label={t('reports.sendModal.fields.doctorLabel')}
+              placeholder={t('reports.sendModal.fields.doctorPlaceholder')}
               fetchFn={userApi.searchDoctors}
               queryKey="lab-direct-search-doctors"
               selected={doctor}
@@ -426,7 +428,7 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
                     <Stethoscope size={13} strokeWidth={2} className="text-violet-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">Dr. {d.name}</p>
+                    <p className="text-sm font-semibold text-gray-900">{t('shared.doctorPrefix', { name: d.name })}</p>
                     <p className="text-xs text-gray-400">{d.specialization || d.email}</p>
                   </div>
                 </div>
@@ -434,41 +436,41 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
               renderSelected={(d: any) => (
                 <div className="flex items-center gap-2">
                   <Stethoscope size={14} strokeWidth={2} className="text-teal-600" />
-                  <div><p className="text-sm font-semibold text-teal-700">Dr. {d.name}</p></div>
+                  <div><p className="text-sm font-semibold text-teal-700">{t('shared.doctorPrefix', { name: d.name })}</p></div>
                 </div>
               )}
             />
           </div>
 
           <div>
-            <label className="label">Report Type <span className="text-red-400">*</span></label>
+            <label className="label">{t('reports.sendModal.fields.reportTypeLabel')} <span className="text-red-400">*</span></label>
             {services.length > 0 ? (
               <select className="input text-sm" value={reportType}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => selectReportType(e.target.value)}>
-                <option value="">Select a service you offer…</option>
+                <option value="">{t('reports.sendModal.fields.selectServicePlaceholder')}</option>
                 {services.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             ) : (
               <>
-                <input type="text" className="input text-sm" placeholder="e.g. X-Ray, Full Blood Count…"
+                <input type="text" className="input text-sm" placeholder={t('reports.sendModal.fields.reportTypeFreeformPlaceholder')}
                   value={reportType} onChange={(e: React.ChangeEvent<HTMLInputElement>) => selectReportType(e.target.value)} />
                 <p className="text-[11px] text-gray-400 mt-1">
-                  No services configured on your lab profile yet — add them there to pick from a list next time.
+                  {t('reports.sendModal.fields.noServicesHint')}
                 </p>
               </>
             )}
           </div>
 
           <div>
-            <label className="label">Tests / Findings Summary <span className="text-red-400">*</span></label>
+            <label className="label">{t('reports.sendModal.fields.testsSummaryLabel')} <span className="text-red-400">*</span></label>
             <textarea rows={2} className="input resize-none text-sm"
-              placeholder="e.g. Full Blood Count, Liver Function Tests, Blood Glucose… or Chest X-Ray — PA view"
+              placeholder={t('reports.sendModal.fields.testsSummaryPlaceholder')}
               value={testDesc} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setTestDesc(e.target.value)} />
           </div>
 
           <div>
-            <label className="label">Sample ID <span className="text-gray-400 font-normal">(optional)</span></label>
-            <input type="text" className="input text-sm" placeholder="e.g. SMP-2026-0043"
+            <label className="label">{t('reports.fields.sampleIdLabel')} <span className="text-gray-400 font-normal">{t('reports.fields.optional')}</span></label>
+            <input type="text" className="input text-sm" placeholder={t('reports.fields.sampleIdPlaceholder')}
               value={sampleId} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSampleId(e.target.value)} />
           </div>
 
@@ -477,17 +479,17 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
               <input type="checkbox" checked={showBloodPanel}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setShowBloodPanel(e.target.checked)}
                 className="w-4 h-4 accent-teal-600" />
-              Enter numeric blood test values
+              {t('reports.bloodPanel.checkboxLabel')}
             </label>
-            <span className="text-[11px] text-gray-400">Only relevant for blood panels — skip for X-Ray, scans, etc.</span>
+            <span className="text-[11px] text-gray-400">{t('reports.bloodPanel.checkboxHint')}</span>
           </div>
 
           {showBloodPanel && <BloodValuesSection values={values} setVal={setVal} />}
 
           <div>
             <label className="label">
-              Report File <span className="text-red-400">*</span>
-              <span className="text-gray-400 font-normal ml-1">— PDF, JPG, PNG, TIFF · Max 20 MB</span>
+              {t('reports.fields.reportFileLabel')} <span className="text-red-400">*</span>
+              <span className="text-gray-400 font-normal ml-1">{t('reports.fields.reportFileHint')}</span>
             </label>
 
             {!file ? (
@@ -495,8 +497,8 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
                 className="w-full border-2 border-dashed border-gray-200 rounded-xl p-5 hover:border-teal-400 hover:bg-teal-50 transition-colors group">
                 <div className="flex flex-col items-center gap-2 text-gray-400 group-hover:text-teal-600">
                   <Upload size={24} strokeWidth={1.5} />
-                  <p className="text-sm font-medium">Click to select report file</p>
-                  <p className="text-xs">PDF · JPG · PNG · WebP · TIFF · BMP</p>
+                  <p className="text-sm font-medium">{t('reports.fields.clickToSelect')}</p>
+                  <p className="text-xs">{t('reports.fields.fileTypesList')}</p>
                 </div>
               </button>
             ) : (
@@ -510,7 +512,7 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
                   <button type="button"
                     onClick={() => { setFile(null); setPreview(null); if (fileRef.current) fileRef.current.value = ''; }}
                     className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 font-medium">
-                    Change
+                    {tc('actions.change')}
                   </button>
                 </div>
                 {preview && (
@@ -523,19 +525,19 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
 
           <div>
             <label className="label">
-              Report Notes / Findings <span className="text-gray-400 font-normal">(optional)</span>
+              {t('reports.fields.reportNotesLabel')} <span className="text-gray-400 font-normal">{t('reports.fields.optional')}</span>
             </label>
             <textarea rows={2} className="input resize-none text-sm"
-              placeholder="Summarize key findings, abnormal values, recommendations..."
+              placeholder={t('reports.fields.reportNotesPlaceholder')}
               value={reportNotes} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReportNotes(e.target.value)} />
           </div>
 
           <div>
             <label className="label">
-              Notes for Doctor <span className="text-gray-400 font-normal">(optional)</span>
+              {t('reports.sendModal.fields.notesForDoctorLabel')} <span className="text-gray-400 font-normal">{t('reports.fields.optional')}</span>
             </label>
             <textarea rows={2} className="input resize-none text-sm"
-              placeholder="Anything the doctor should know…"
+              placeholder={t('reports.sendModal.fields.notesForDoctorPlaceholder')}
               value={notes} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)} />
           </div>
 
@@ -543,7 +545,7 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
             <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-center gap-3">
               <FlaskConical size={18} className="text-teal-600 shrink-0" />
               <p className="text-sm text-teal-800 font-medium">
-                <span className="font-bold">{filledCount} blood value{filledCount !== 1 ? 's' : ''}</span> will be saved to the patient's vitals automatically.
+                <span className="font-bold">{t('reports.bloodPanel.summaryCount', { count: filledCount })}</span> {t('reports.bloodPanel.summarySuffix')}
               </p>
             </div>
           )}
@@ -554,16 +556,16 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
               {sending ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Sending to both...
+                  {t('reports.sendModal.sendingLabel')}
                 </>
               ) : (
                 <>
                   <Send size={15} strokeWidth={2} />
-                  Send to Patient &amp; Doctor
+                  {t('reports.sendModal.submitLabel')}
                 </>
               )}
             </button>
-            <button type="button" onClick={onClose} className="btn-secondary px-5">Cancel</button>
+            <button type="button" onClick={onClose} className="btn-secondary px-5">{tc('actions.cancel')}</button>
           </div>
         </form>
       </div>
@@ -575,6 +577,8 @@ function SendReportModal({ onClose, onSent }: SendReportModalProps) {
 interface UploadModalProps { req: any; onClose: () => void; onUploaded: () => void; }
 
 function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
+  const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
   const [file,      setFile]      = useState<File | null>(null);
   const [preview,   setPreview]   = useState<string | null>(null);
   const [notes,     setNotes]     = useState('');
@@ -595,7 +599,7 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) return toast.error('Please select a report file');
+    if (!file) return toast.error(t('reports.errors.reportFileRequired'));
     setUploading(true);
     try {
       const fd = new FormData();
@@ -617,10 +621,11 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
       }
 
       await labApi.uploadReport(r.id, fd);
-      toast.success(`Report uploaded${Object.keys(vitalsPayload).length > 0 ? ` — ${Object.keys(vitalsPayload).length} vitals saved` : ''} · Doctor and patient notified!`);
+      const vitalsCount = Object.keys(vitalsPayload).length;
+      toast.success(`${t('reports.uploadModal.toastBase')}${vitalsCount > 0 ? t('reports.uploadModal.toastVitalsSuffix', { count: vitalsCount }) : ''}${t('reports.uploadModal.toastNotifiedSuffix')}`);
       onUploaded(); onClose();
     } catch (err: any) {
-      toast.error(err.message || 'Upload failed');
+      toast.error(err.message || t('reports.uploadModal.toastError'));
     } finally { setUploading(false); }
   };
 
@@ -635,13 +640,13 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
               <Upload size={16} className="text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900">Upload Lab Report</p>
+              <p className="text-sm font-bold text-gray-900">{t('reports.uploadModal.title')}</p>
               <p className="text-xs text-gray-500">
-                Patient: <span className="font-semibold text-gray-700">{r.patient_name}</span>
-                {r.doctor_name && <> · Doctor: <span className="font-semibold text-gray-700">Dr. {r.doctor_name}</span></>}
+                {t('reports.uploadModal.patientLabel')} <span className="font-semibold text-gray-700">{r.patient_name}</span>
+                {r.doctor_name && <> · {t('reports.uploadModal.doctorLabel')} <span className="font-semibold text-gray-700">{t('shared.doctorPrefix', { name: r.doctor_name })}</span></>}
               </p>
               <p className="text-[11px] text-teal-600 font-medium mt-0.5">
-                {r.doctor_name ? 'Both will be notified together on upload' : 'Patient will be notified on upload'}
+                {r.doctor_name ? t('reports.uploadModal.notifyBoth') : t('reports.uploadModal.notifyPatientOnly')}
               </p>
             </div>
           </div>
@@ -654,9 +659,9 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
 
           {/* Tests info */}
           <div className="bg-cyan-50 border border-cyan-100 rounded-xl p-3.5">
-            <p className="text-[10px] font-bold text-cyan-600 uppercase tracking-wider mb-1">Tests Requested</p>
+            <p className="text-[10px] font-bold text-cyan-600 uppercase tracking-wider mb-1">{t('reports.uploadModal.testsRequestedHeading')}</p>
             <p className="text-sm text-gray-800 font-medium">{r.test_description}</p>
-            {r.notes && <p className="text-xs text-gray-500 mt-1">Notes: {r.notes}</p>}
+            {r.notes && <p className="text-xs text-gray-500 mt-1">{t('reports.uploadModal.notesLabel')} {r.notes}</p>}
           </div>
 
           <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-2.5">
@@ -664,9 +669,9 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
               <input type="checkbox" checked={showBloodPanel}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setShowBloodPanel(e.target.checked)}
                 className="w-4 h-4 accent-teal-600" />
-              Enter numeric blood test values
+              {t('reports.bloodPanel.checkboxLabel')}
             </label>
-            <span className="text-[11px] text-gray-400">Only relevant for blood panels — skip for X-Ray, scans, etc.</span>
+            <span className="text-[11px] text-gray-400">{t('reports.bloodPanel.checkboxHint')}</span>
           </div>
 
           {showBloodPanel && <BloodValuesSection values={values} setVal={setVal} />}
@@ -674,8 +679,8 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
           {/* File upload */}
           <div>
             <label className="label">
-              Report File <span className="text-red-400">*</span>
-              <span className="text-gray-400 font-normal ml-1">— PDF, JPG, PNG, TIFF · Max 20 MB</span>
+              {t('reports.fields.reportFileLabel')} <span className="text-red-400">*</span>
+              <span className="text-gray-400 font-normal ml-1">{t('reports.fields.reportFileHint')}</span>
             </label>
 
             {!file ? (
@@ -683,8 +688,8 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
                 className="w-full border-2 border-dashed border-gray-200 rounded-xl p-5 hover:border-teal-400 hover:bg-teal-50 transition-colors group">
                 <div className="flex flex-col items-center gap-2 text-gray-400 group-hover:text-teal-600">
                   <Upload size={24} strokeWidth={1.5} />
-                  <p className="text-sm font-medium">Click to select report file</p>
-                  <p className="text-xs">PDF · JPG · PNG · WebP · TIFF · BMP</p>
+                  <p className="text-sm font-medium">{t('reports.fields.clickToSelect')}</p>
+                  <p className="text-xs">{t('reports.fields.fileTypesList')}</p>
                 </div>
               </button>
             ) : (
@@ -698,7 +703,7 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
                   <button type="button"
                     onClick={() => { setFile(null); setPreview(null); if (fileRef.current) fileRef.current.value = ''; }}
                     className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 font-medium">
-                    Change
+                    {tc('actions.change')}
                   </button>
                 </div>
                 {preview && (
@@ -712,11 +717,11 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
           {/* Report notes */}
           <div>
             <label className="label">
-              Report Notes / Findings
-              <span className="text-gray-400 font-normal ml-1">(optional)</span>
+              {t('reports.fields.reportNotesLabel')}
+              <span className="text-gray-400 font-normal ml-1">{t('reports.fields.optional')}</span>
             </label>
             <textarea rows={2} className="input resize-none text-sm"
-              placeholder="Summarize key findings, abnormal values, recommendations..."
+              placeholder={t('reports.fields.reportNotesPlaceholder')}
               value={notes} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)} />
           </div>
 
@@ -725,7 +730,7 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
             <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-center gap-3">
               <FlaskConical size={18} className="text-teal-600 shrink-0" />
               <p className="text-sm text-teal-800 font-medium">
-                <span className="font-bold">{filledCount} blood value{filledCount !== 1 ? 's' : ''}</span> will be saved to the patient's vitals automatically.
+                <span className="font-bold">{t('reports.bloodPanel.summaryCount', { count: filledCount })}</span> {t('reports.bloodPanel.summarySuffix')}
               </p>
             </div>
           )}
@@ -737,16 +742,16 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
               {uploading ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Uploading & saving vitals...
+                  {t('reports.uploadModal.uploadingLabel')}
                 </>
               ) : (
                 <>
                   <Upload size={15} strokeWidth={2} />
-                  Upload Report {filledCount > 0 ? `& Save ${filledCount} Vitals` : '& Notify'}
+                  {filledCount > 0 ? t('reports.uploadModal.uploadAndSave', { count: filledCount }) : t('reports.uploadModal.uploadAndNotify')}
                 </>
               )}
             </button>
-            <button type="button" onClick={onClose} className="btn-secondary px-5">Cancel</button>
+            <button type="button" onClick={onClose} className="btn-secondary px-5">{tc('actions.cancel')}</button>
           </div>
         </form>
       </div>
@@ -758,7 +763,21 @@ function UploadModal({ req: r, onClose, onUploaded }: UploadModalProps) {
 interface ViewModalProps { req: any; onClose: () => void; }
 
 function ViewModal({ req: r, onClose }: ViewModalProps) {
+  const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
+  const qc = useQueryClient();
   const isPDF = r.report_mimetype?.includes('pdf');
+  const [priceInput, setPriceInput] = useState(r.price != null ? String(r.price) : '');
+
+  const priceMutation = useMutation({
+    mutationFn: () => labApi.setPrice(r.id, { amount: parseFloat(priceInput) }),
+    onSuccess: () => {
+      toast.success(t('reports.viewModal.priceSaved'));
+      qc.invalidateQueries({ queryKey: ['lab-assigned-requests'] });
+    },
+    onError: (err: any) => toast.error(err.message || t('reports.viewModal.priceSaveFailed')),
+  });
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 flex items-start justify-center p-4 pt-8">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
@@ -767,7 +786,7 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
             <div className="w-8 h-8 bg-cyan-100 rounded-xl flex items-center justify-center">
               <Eye size={14} className="text-cyan-700" />
             </div>
-            <h2 className="text-base font-bold text-gray-900">Report — {r.patient_name}</h2>
+            <h2 className="text-base font-bold text-gray-900">{t('reports.viewModal.title', { patientName: r.patient_name })}</h2>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500">
             <X size={15} />
@@ -776,11 +795,11 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
         <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Patient',     value: r.patient_name },
-              { label: 'Doctor',      value: r.doctor_name ? `Dr. ${r.doctor_name}` : '—' },
-              { label: 'Report Type', value: r.report_type || '—' },
-              { label: 'Requested',   value: formatDate(r.created_at) },
-              { label: 'Email',       value: r.patient_email || '—' },
+              { label: t('reports.viewModal.fields.patient'),     value: r.patient_name },
+              { label: t('reports.viewModal.fields.doctor'),      value: r.doctor_name ? t('shared.doctorPrefix', { name: r.doctor_name }) : '—' },
+              { label: t('reports.viewModal.fields.reportType'),  value: r.report_type || '—' },
+              { label: t('reports.viewModal.fields.requested'),   value: formatDate(r.created_at) },
+              { label: t('reports.viewModal.fields.email'),       value: r.patient_email || '—' },
             ].map(({ label, value }) => (
               <div key={label} className="bg-gray-50 rounded-lg p-3">
                 <p className="text-xs text-gray-400 font-medium">{label}</p>
@@ -789,21 +808,21 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
             ))}
           </div>
           <div className="bg-cyan-50 border border-cyan-100 rounded-xl p-3">
-            <p className="text-xs font-bold text-cyan-700 mb-1">🧪 Tests</p>
+            <p className="text-xs font-bold text-cyan-700 mb-1">{t('reports.viewModal.testsHeading')}</p>
             <p className="text-sm text-gray-800">{r.test_description}</p>
           </div>
           {(r.sample_id || r.sample_collected_at) && (
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-              <p className="text-xs font-bold text-amber-700 mb-1.5">🧪 Sample Info</p>
+              <p className="text-xs font-bold text-amber-700 mb-1.5">{t('reports.viewModal.sampleInfoHeading')}</p>
               <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
-                {r.sample_id           && <p><span className="text-gray-400">ID:</span> {r.sample_id}</p>}
-                {r.sample_collected_at && <p className="col-span-2"><span className="text-gray-400">Collected:</span> {formatDate(r.sample_collected_at)}</p>}
+                {r.sample_id           && <p><span className="text-gray-400">{t('reports.viewModal.sampleIdLabel')}</span> {r.sample_id}</p>}
+                {r.sample_collected_at && <p className="col-span-2"><span className="text-gray-400">{t('reports.viewModal.collectedLabel')}</span> {formatDate(r.sample_collected_at)}</p>}
               </div>
             </div>
           )}
           {r.report_notes && (
             <div className="bg-teal-50 border border-teal-100 rounded-xl p-3">
-              <p className="text-xs font-bold text-teal-700 mb-1">📝 Report Notes</p>
+              <p className="text-xs font-bold text-teal-700 mb-1">{t('reports.viewModal.reportNotesHeading')}</p>
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.report_notes}</p>
             </div>
           )}
@@ -812,7 +831,7 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
               className="flex items-center gap-3 p-3 bg-primary-50 border border-primary-200 rounded-xl hover:bg-primary-100 transition-colors">
               <span className="text-2xl">{isPDF ? '📄' : '🖼️'}</span>
               <div>
-                <p className="text-sm font-semibold text-primary-700">Open Uploaded Report</p>
+                <p className="text-sm font-semibold text-primary-700">{t('reports.viewModal.openReport')}</p>
                 <p className="text-xs text-gray-500">{r.report_mimetype}</p>
               </div>
             </a>
@@ -821,6 +840,30 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
             <img src={`${API_BASE}/uploads/lab-reports/${r.report_file}`} alt="Report"
               className="w-full max-h-56 object-contain rounded-xl border border-gray-200 bg-gray-50" />
           )}
+
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+            <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1.5">
+              <Banknote size={13} strokeWidth={2} /> {t('reports.viewModal.priceHeading')}
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min="0" step="0.01" value={priceInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPriceInput(e.target.value)}
+                placeholder={t('reports.viewModal.pricePlaceholder')}
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+              <button
+                type="button"
+                disabled={!priceInput || priceMutation.isPending}
+                onClick={() => priceMutation.mutate()}
+                className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 rounded-xl disabled:opacity-50 hover:bg-emerald-700 transition-colors"
+              >
+                {priceMutation.isPending ? tc('actions.saving') : tc('actions.save')}
+              </button>
+            </div>
+          </div>
+
+          <ChatPanel labRequestId={r.id} />
         </div>
       </div>
     </div>
@@ -831,6 +874,8 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
 interface SampleInfoModalProps { req: any; onClose: () => void; onStarted: () => void; }
 
 function SampleInfoModal({ req: r, onClose, onStarted }: SampleInfoModalProps) {
+  const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
   const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const [sampleId,   setSampleId]   = useState('');
   const [collectedAt,setCollectedAt]= useState(nowLocal);
@@ -840,8 +885,8 @@ function SampleInfoModal({ req: r, onClose, onStarted }: SampleInfoModalProps) {
       sample_id: sampleId.trim() || undefined,
       sample_collected_at: collectedAt ? new Date(collectedAt).toISOString() : undefined,
     }),
-    onSuccess: () => { toast.success('Processing started'); onStarted(); onClose(); },
-    onError: (err: any) => toast.error(err.message || 'Failed to start processing'),
+    onSuccess: () => { toast.success(t('reports.sampleModal.toastSuccess')); onStarted(); onClose(); },
+    onError: (err: any) => toast.error(err.message || t('reports.sampleModal.toastError')),
   });
 
   return (
@@ -849,8 +894,8 @@ function SampleInfoModal({ req: r, onClose, onStarted }: SampleInfoModalProps) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-500 to-cyan-600">
           <div>
-            <p className="text-sm font-bold text-white">Start Processing</p>
-            <p className="text-xs text-white/70">Patient: {r.patient_name}</p>
+            <p className="text-sm font-bold text-white">{t('reports.sampleModal.title')}</p>
+            <p className="text-xs text-white/70">{t('reports.sampleModal.patientLabel')} {r.patient_name}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white">
             <X size={15} />
@@ -858,21 +903,66 @@ function SampleInfoModal({ req: r, onClose, onStarted }: SampleInfoModalProps) {
         </div>
         <div className="p-5 space-y-4">
           <div>
-            <label className="label">Sample ID <span className="text-gray-400 font-normal">(optional)</span></label>
-            <input type="text" className="input text-sm" placeholder="e.g. SMP-2026-0043"
+            <label className="label">{t('reports.fields.sampleIdLabel')} <span className="text-gray-400 font-normal">{t('reports.fields.optional')}</span></label>
+            <input type="text" className="input text-sm" placeholder={t('reports.fields.sampleIdPlaceholder')}
               value={sampleId} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSampleId(e.target.value)} />
           </div>
           <div>
-            <label className="label">Sample Collected At</label>
+            <label className="label">{t('reports.sampleModal.collectedAtLabel')}</label>
             <input type="datetime-local" className="input text-sm"
               value={collectedAt} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCollectedAt(e.target.value)} />
           </div>
           <div className="flex gap-3 pt-1">
             <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
               className="btn-primary flex-1 py-2.5 disabled:opacity-60">
-              {mutation.isPending ? 'Starting...' : 'Start Processing'}
+              {mutation.isPending ? t('reports.sampleModal.startingLabel') : t('reports.sampleModal.submitLabel')}
             </button>
-            <button onClick={onClose} className="btn-secondary px-5">Cancel</button>
+            <button onClick={onClose} className="btn-secondary px-5">{tc('actions.cancel')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Reject Modal ───────────────────────────────────────────────────────────────
+interface RejectModalProps { req: any; onClose: () => void; onRejected: () => void; }
+
+function RejectModal({ req: r, onClose, onRejected }: RejectModalProps) {
+  const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
+  const [message, setMessage] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => labApi.reject(r.id, message),
+    onSuccess: () => { toast.success(t('reports.rejectModal.toastSuccess')); onRejected(); onClose(); },
+    onError: (err: any) => toast.error(err.message || t('reports.rejectModal.toastError')),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-red-500 to-rose-600">
+          <div>
+            <p className="text-sm font-bold text-white">{t('reports.rejectModal.title')}</p>
+            <p className="text-xs text-white/70">{t('reports.sampleModal.patientLabel')} {r.patient_name}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white">
+            <X size={15} />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="label">{t('reports.rejectModal.reasonLabel')}</label>
+            <textarea rows={3} className="input text-sm resize-none" placeholder={t('reports.rejectModal.reasonPlaceholder')}
+              value={message} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)} />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => mutation.mutate()} disabled={!message.trim() || mutation.isPending}
+              className="flex-1 py-2.5 text-sm font-bold text-white bg-red-600 rounded-2xl disabled:opacity-50 hover:bg-red-700 transition-colors">
+              {mutation.isPending ? tc('actions.saving') : t('reports.rejectModal.submitLabel')}
+            </button>
+            <button onClick={onClose} className="btn-secondary px-5">{tc('actions.cancel')}</button>
           </div>
         </div>
       </div>
@@ -881,13 +971,12 @@ function SampleInfoModal({ req: r, onClose, onStarted }: SampleInfoModalProps) {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-function exportReportsCSV(rows: any[]): void {
-  const headers = ['Patient', 'Doctor', 'Report Type', 'Status', 'Sample ID', 'Sample Collected', 'Requested', 'Tests'];
+function exportReportsCSV(rows: any[], headers: string[], doctorLabel: (name: string) => string): void {
   const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [
     headers.join(','),
     ...rows.map(r => [
-      r.patient_name, r.doctor_name ? `Dr. ${r.doctor_name}` : '', r.report_type || '', r.status,
+      r.patient_name, r.doctor_name ? doctorLabel(r.doctor_name) : '', r.report_type || '', r.status,
       r.sample_id || '',
       r.sample_collected_at ? formatDate(r.sample_collected_at) : '',
       formatDate(r.created_at), r.test_description,
@@ -903,15 +992,25 @@ function exportReportsCSV(rows: any[]): void {
 }
 
 export default function LaboratoryReports() {
+  const { t } = useTranslation('laboratory');
+  const { t: tc } = useTranslation('common');
   const [uploading, setUploading] = useState<any>(null);
   const [viewing,   setViewing]   = useState<any>(null);
   const [starting,  setStarting]  = useState<any>(null);
+  const [rejecting, setRejecting] = useState<any>(null);
   const [sending,   setSending]   = useState(false);
   const [filter,    setFilter]    = useState('all');
   const [search,    setSearch]    = useState('');
   const qc = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const STATUS_STYLE: Record<string, { badge: string; label: string }> = {
+    pending:     { badge: 'bg-yellow-100 text-yellow-700', label: tc('status.pending')     },
+    in_progress: { badge: 'bg-blue-100   text-blue-700',   label: tc('status.inProgress') },
+    completed:   { badge: 'bg-green-100  text-green-700',  label: tc('status.completed')   },
+    rejected:    { badge: 'bg-red-100    text-red-700',    label: tc('status.rejected')    },
+  };
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['lab-assigned-requests'],
@@ -947,20 +1046,24 @@ export default function LaboratoryReports() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Lab Reports</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Process test requests, enter results, and upload reports</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('reports.page.title')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('reports.page.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => setSending(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl shadow-sm hover:opacity-90 transition-opacity">
             <Plus size={15} strokeWidth={2.5} />
-            New Report
+            {t('reports.page.newReportButton')}
           </button>
-          <button onClick={() => exportReportsCSV(filtered as any[])}
+          <button onClick={() => exportReportsCSV(
+              filtered as any[],
+              [t('reports.csv.patient'), t('reports.csv.doctor'), t('reports.csv.reportType'), tc('fields.status'), t('reports.csv.sampleId'), t('reports.csv.sampleCollected'), t('reports.csv.requested'), t('reports.csv.tests')],
+              (name: string) => t('shared.doctorPrefix', { name }),
+            )}
             disabled={(filtered as any[]).length === 0}
             className="flex items-center gap-2 px-3.5 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50">
             <Download size={14} strokeWidth={2.5} />
-            Export CSV
+            {t('reports.page.exportCsv')}
           </button>
         </div>
       </div>
@@ -969,24 +1072,25 @@ export default function LaboratoryReports() {
         <div className="relative flex-1 min-w-[200px]">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-            placeholder="Search by patient or doctor name…"
+            placeholder={t('reports.page.searchPlaceholder')}
             className="input pl-9 text-sm py-1.5 w-full" />
         </div>
         <select value={filter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilter(e.target.value)}
           className="input text-sm py-1.5 w-36">
-          <option value="all">All</option>
-          <option value="pending">Pending</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
+          <option value="all">{t('reports.page.filterAll')}</option>
+          <option value="pending">{tc('status.pending')}</option>
+          <option value="in_progress">{tc('status.inProgress')}</option>
+          <option value="completed">{tc('status.completed')}</option>
+          <option value="rejected">{tc('status.rejected')}</option>
         </select>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Total Requests', value: (requests as any[]).length,                                                   icon: '📋', bg: 'bg-cyan-50   border-cyan-100'   },
-          { label: 'Pending',        value: (requests as any[]).filter((r: any) => r.status === 'pending').length,   icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
-          { label: 'Completed',      value: (requests as any[]).filter((r: any) => r.status === 'completed').length, icon: '✅', bg: 'bg-green-50  border-green-100'  },
+          { label: t('reports.page.stats.total'), value: (requests as any[]).length,                                                   icon: '📋', bg: 'bg-cyan-50   border-cyan-100'   },
+          { label: tc('status.pending'),          value: (requests as any[]).filter((r: any) => r.status === 'pending').length,   icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
+          { label: tc('status.completed'),        value: (requests as any[]).filter((r: any) => r.status === 'completed').length, icon: '✅', bg: 'bg-green-50  border-green-100'  },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
             <span className="text-2xl">{s.icon}</span>
@@ -1000,13 +1104,13 @@ export default function LaboratoryReports() {
       {isLoading ? (
         <div className="bg-white rounded-xl border p-12 text-center text-gray-400">
           <span className="w-6 h-6 border-2 border-gray-200 border-t-cyan-400 rounded-full animate-spin block mx-auto mb-2" />
-          Loading...
+          {tc('actions.loading')}
         </div>
       ) : (filtered as any[]).length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-gray-200 p-12 text-center">
           <span className="text-4xl block mb-3">🔬</span>
-          <p className="text-gray-600 font-medium">{search ? 'No matching requests' : 'No requests assigned yet'}</p>
-          <p className="text-sm text-gray-400 mt-1">{search ? 'Try a different name.' : 'Doctors will send lab test requests here.'}</p>
+          <p className="text-gray-600 font-medium">{search ? t('reports.page.emptyMatching') : t('reports.page.emptyNone')}</p>
+          <p className="text-sm text-gray-400 mt-1">{search ? t('reports.page.emptyMatchingHint') : t('reports.page.emptyNoneHint')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -1026,10 +1130,17 @@ export default function LaboratoryReports() {
                         {r.report_type && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-violet-100 text-violet-700">{r.report_type}</span>
                         )}
+                        {r.price != null ? (
+                          <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+                            <Banknote size={10} strokeWidth={2.5} /> {t('reports.page.priceLabel', { amount: r.price })}
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">{t('reports.page.noPriceLabel')}</span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        Dr. {r.doctor_name} · {formatDate(r.created_at)}
-                        {r.sample_id && <span className="ml-1.5 text-amber-600 font-medium">· Sample {r.sample_id}</span>}
+                        {t('shared.doctorPrefix', { name: r.doctor_name })} · {formatDate(r.created_at)}
+                        {r.sample_id && <span className="ml-1.5 text-amber-600 font-medium">· {t('reports.page.sampleLabel')} {r.sample_id}</span>}
                       </p>
                       <p className="text-sm text-gray-600 mt-1 line-clamp-1">{r.test_description}</p>
                     </div>
@@ -1046,6 +1157,10 @@ export default function LaboratoryReports() {
                           className="text-xs bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 justify-center">
                           <Upload size={11} /> Upload Report
                         </button>
+                        <button onClick={() => setRejecting(r)}
+                          className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 justify-center">
+                          <XCircle size={11} /> {t('reports.page.rejectButton')}
+                        </button>
                       </>
                     )}
                     {r.status === 'in_progress' && (
@@ -1058,6 +1173,12 @@ export default function LaboratoryReports() {
                       <button onClick={() => openView(r.id)}
                         className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 justify-center">
                         <Eye size={11} /> View Report
+                      </button>
+                    )}
+                    {r.status !== 'completed' && (
+                      <button onClick={() => openView(r.id)}
+                        className="text-xs bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 justify-center">
+                        <MessageCircle size={11} /> {t('reports.page.detailsButton')}
                       </button>
                     )}
                   </div>
@@ -1076,6 +1197,13 @@ export default function LaboratoryReports() {
         />
       )}
       {viewing && <ViewModal req={viewing} onClose={() => setViewing(null)} />}
+      {rejecting && (
+        <RejectModal
+          req={rejecting}
+          onClose={() => setRejecting(null)}
+          onRejected={() => qc.invalidateQueries({ queryKey: ['lab-assigned-requests'] })}
+        />
+      )}
       {sending && (
         <SendReportModal
           onClose={() => setSending(false)}

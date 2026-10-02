@@ -1,35 +1,54 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { consultationApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
-const STATUS_STYLE: Record<string, { badge: string; label: string }> = {
-  active:    { badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
-  dispensed: { badge: 'bg-green-100  text-green-700',  label: 'Dispensed' },
-  completed: { badge: 'bg-gray-100   text-gray-500',   label: 'Completed' },
+const STATUS_BADGE: Record<string, string> = {
+  active:    'bg-yellow-100  text-yellow-700',
+  preparing: 'bg-blue-100    text-blue-700',
+  dispensed: 'bg-violet-100  text-violet-700',
+  delivered: 'bg-green-100   text-green-700',
+  completed: 'bg-gray-100    text-gray-500',
+};
+
+const STATUS_KEY: Record<string, string> = {
+  active: 'pending',
+  preparing: 'preparing',
+  dispensed: 'ready',
+  delivered: 'delivered',
+  completed: 'completed',
+};
+
+// Pharmacy fulfilment pipeline: each status's single next step, button label, and color.
+const NEXT_ACTION: Record<string, { next: string; labelKey: string; cls: string }> = {
+  active:    { next: 'preparing', labelKey: 'consultations.action.startPreparing', cls: 'bg-blue-600 hover:bg-blue-700' },
+  preparing: { next: 'dispensed', labelKey: 'consultations.action.markReady',      cls: 'bg-violet-600 hover:bg-violet-700' },
+  dispensed: { next: 'delivered', labelKey: 'consultations.action.markDelivered',  cls: 'bg-green-600 hover:bg-green-700' },
 };
 
 interface DetailModalProps {
   c: any;
   onClose: () => void;
-  onDispense: (id: number) => void;
+  onAdvance: (id: number, nextStatus: string) => void;
 }
 
-function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
+function DetailModal({ c, onClose, onAdvance }: DetailModalProps) {
   const [showOCR, setShowOCR] = useState(false);
+  const { t } = useTranslation('pharmacist');
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 flex items-start justify-center p-4 pt-8">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-gray-900">Assigned Prescription</h2>
-            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_STYLE[c.status]?.badge}`}>
-              {STATUS_STYLE[c.status]?.label}
+            <h2 className="text-lg font-bold text-gray-900">{t('consultations.modal.title')}</h2>
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_BADGE[c.status]}`}>
+              {t(`consultations.status.${STATUS_KEY[c.status]}`)}
             </span>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
@@ -43,12 +62,12 @@ function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
           {/* Patient & doctor info */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Patient',       value: c.patient_name },
-              { label: 'Doctor',        value: c.doctor_display_name ? `Dr. ${c.doctor_display_name}` : '—' },
-              { label: 'Visit Date',    value: formatDate(c.visit_date) },
-              { label: 'Patient Email', value: c.patient_email },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-gray-50 rounded-lg p-3">
+              { key: 'patient',       label: t('consultations.modal.patient'),       value: c.patient_name },
+              { key: 'doctor',        label: t('consultations.doctorLabel'),        value: c.doctor_display_name ? t('consultations.doctorPrefix', { name: c.doctor_display_name }) : '—' },
+              { key: 'visitDate',     label: t('consultations.modal.visitDate'),    value: formatDate(c.visit_date) },
+              { key: 'patientEmail',  label: t('consultations.modal.patientEmail'), value: c.patient_email },
+            ].map(({ key, label, value }) => (
+              <div key={key} className="bg-gray-50 rounded-lg p-3">
                 <p className="text-xs text-gray-400 font-medium">{label}</p>
                 <p className="text-sm font-semibold text-gray-900 mt-0.5">{value || '—'}</p>
               </div>
@@ -58,21 +77,21 @@ function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
           {/* Patient health info */}
           {(c.blood_type || c.allergies) && (
             <div className="bg-red-50 border border-red-100 rounded-xl p-3">
-              <p className="text-xs font-bold text-red-700 mb-2">⚠️ Patient Health Info</p>
+              <p className="text-xs font-bold text-red-700 mb-2">{t('consultations.modal.healthInfoTitle')}</p>
               <div className="flex gap-4 text-sm">
-                {c.blood_type && <span className="text-gray-700">Blood: <strong>{c.blood_type}</strong></span>}
-                {c.allergies  && <span className="text-gray-700">Allergies: <strong>{c.allergies}</strong></span>}
+                {c.blood_type && <span className="text-gray-700">{t('consultations.modal.blood')} <strong>{c.blood_type}</strong></span>}
+                {c.allergies  && <span className="text-gray-700">{t('consultations.modal.allergies')} <strong>{c.allergies}</strong></span>}
               </div>
             </div>
           )}
 
           {/* Medical details */}
           {[
-            { label: 'Symptoms',   value: c.sick_description,      color: 'bg-orange-50 border-orange-100 text-orange-800' },
-            { label: 'Diagnosis',  value: c.diagnosis,             color: 'bg-blue-50   border-blue-100   text-blue-800'   },
-            { label: 'Treatment',  value: c.treatment_description, color: 'bg-teal-50   border-teal-100   text-teal-800'   },
-          ].filter(r => r.value).map(({ label, value, color }) => (
-            <div key={label} className={`rounded-xl border p-3 ${color}`}>
+            { key: 'symptoms',  label: t('consultations.modal.symptoms'),  value: c.sick_description,      color: 'bg-orange-50 border-orange-100 text-orange-800' },
+            { key: 'diagnosis', label: t('consultations.modal.diagnosis'), value: c.diagnosis,             color: 'bg-blue-50   border-blue-100   text-blue-800'   },
+            { key: 'treatment', label: t('consultations.modal.treatment'), value: c.treatment_description, color: 'bg-teal-50   border-teal-100   text-teal-800'   },
+          ].filter(r => r.value).map(({ key, label, value, color }) => (
+            <div key={key} className={`rounded-xl border p-3 ${color}`}>
               <p className="text-xs font-bold uppercase opacity-60 mb-1">{label}</p>
               <p className="text-sm">{value}</p>
             </div>
@@ -81,11 +100,11 @@ function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
           {/* Prescription image */}
           {c.prescription_file && (
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Prescription Image</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{t('consultations.modal.prescriptionImage')}</p>
               <a href={`${API_BASE}/uploads/prescriptions/${c.prescription_file}`} target="_blank" rel="noreferrer">
                 <img src={`${API_BASE}/uploads/prescriptions/${c.prescription_file}`} alt="Prescription"
                   className="w-full max-h-56 object-contain rounded-xl border border-gray-200 bg-gray-50 hover:opacity-90 cursor-zoom-in" />
-                <p className="text-xs text-primary-600 mt-1 text-center">Click to open full size</p>
+                <p className="text-xs text-primary-600 mt-1 text-center">{t('consultations.modal.clickToOpenFullSize')}</p>
               </a>
             </div>
           )}
@@ -93,10 +112,10 @@ function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
           {/* Medicines to dispense */}
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-              Medicines to Dispense ({c.medicines?.length || 0})
+              {t('consultations.modal.medicinesToDispense', { count: c.medicines?.length || 0 })}
             </p>
             {!c.medicines?.length ? (
-              <p className="text-sm text-gray-400 italic">No medicines listed.</p>
+              <p className="text-sm text-gray-400 italic">{t('consultations.modal.noMedicinesListed')}</p>
             ) : (
               <div className="space-y-2">
                 {c.medicines.map((m: any) => (
@@ -111,7 +130,7 @@ function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
                       </div>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${m.source === 'ocr' ? 'bg-primary-50 text-primary-600' : 'bg-gray-100 text-gray-500'}`}>
-                      {m.source === 'ocr' ? '🔍' : '✏️'} {m.source}
+                      {m.source === 'ocr' ? '🔍' : '✏️'} {t(`consultations.modal.source.${m.source === 'ocr' ? 'ocr' : 'manual'}`)}
                     </span>
                   </div>
                 ))}
@@ -123,7 +142,7 @@ function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
           {c.ocr_text && (
             <div>
               <button onClick={() => setShowOCR(!showOCR)} className="text-xs text-gray-400 hover:text-gray-600">
-                {showOCR ? '▲ Hide' : '▼ Show'} raw OCR text
+                {showOCR ? `▲ ${t('consultations.modal.hideOcr')}` : `▼ ${t('consultations.modal.showOcr')}`}
               </button>
               {showOCR && (
                 <pre className="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg p-3 border whitespace-pre-wrap max-h-32 overflow-y-auto font-mono">
@@ -133,23 +152,23 @@ function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
             </div>
           )}
 
-          {/* Dispense action */}
-          {c.status === 'active' && (
+          {/* Pipeline action */}
+          {NEXT_ACTION[c.status] && (
             <div className="pt-3 border-t border-gray-100">
               <button
-                onClick={() => { onDispense(c.id); onClose(); }}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                onClick={() => { onAdvance(c.id, NEXT_ACTION[c.status].next); onClose(); }}
+                className={`w-full text-white font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 ${NEXT_ACTION[c.status].cls}`}
               >
-                ✅ Mark as Dispensed — Notify Patient
+                {t(NEXT_ACTION[c.status].labelKey)}
               </button>
               <p className="text-xs text-gray-400 text-center mt-2">
-                This will notify the patient that their medicines are ready to collect.
+                {t('consultations.modal.dispenseNote')}
               </p>
             </div>
           )}
-          {c.status === 'dispensed' && (
+          {c.status === 'delivered' && (
             <div className="pt-3 border-t border-gray-100 bg-green-50 rounded-xl p-3 text-center">
-              <p className="text-sm text-green-700 font-semibold">✅ Medicines dispensed · Patient has been notified</p>
+              <p className="text-sm text-green-700 font-semibold">✅ {t('consultations.modal.deliveredNote')}</p>
             </div>
           )}
         </div>
@@ -159,6 +178,7 @@ function DetailModal({ c, onClose, onDispense }: DetailModalProps) {
 }
 
 export default function PharmacistConsultations() {
+  const { t } = useTranslation('pharmacist');
   const [selected, setSelected] = useState<any>(null);
   const [filter, setFilter] = useState('all');
   const qc = useQueryClient();
@@ -168,13 +188,13 @@ export default function PharmacistConsultations() {
     queryFn: consultationApi.getAll,
   });
 
-  const dispenseMutation = useMutation({
-    mutationFn: (id: number) => consultationApi.updateStatus(id, 'dispensed'),
-    onSuccess: () => {
+  const advanceMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) => consultationApi.updateStatus(id, status),
+    onSuccess: (_data, { status }) => {
       qc.invalidateQueries({ queryKey: ['pharmacist-consultations'] });
-      toast.success('Marked as dispensed — patient notified!');
+      toast.success(t(`consultations.toast.${status}`));
     },
-    onError: () => toast.error('Failed to update status'),
+    onError: () => toast.error(t('consultations.toast.updateFailed')),
   });
 
   const filtered = filter === 'all' ? consultations : consultations.filter((c: any) => c.status === filter);
@@ -183,28 +203,31 @@ export default function PharmacistConsultations() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Assigned Prescriptions</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Prescriptions assigned to your pharmacy by doctors</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('consultations.pageTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('consultations.pageDescription')}</p>
         </div>
         <select
           value={filter}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilter(e.target.value)}
           className="input text-sm py-1.5 w-36"
         >
-          <option value="all">All</option>
-          <option value="active">Pending</option>
-          <option value="dispensed">Dispensed</option>
+          <option value="all">{t('consultations.filter.all')}</option>
+          <option value="active">{t('consultations.filter.pending')}</option>
+          <option value="preparing">{t('consultations.filter.preparing')}</option>
+          <option value="dispensed">{t('consultations.filter.ready')}</option>
+          <option value="delivered">{t('consultations.filter.delivered')}</option>
         </select>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Assigned', value: consultations.length,                                                            icon: '📋', bg: 'bg-purple-50 border-purple-100' },
-          { label: 'Pending',        value: consultations.filter((c: any) => c.status === 'active').length,    icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
-          { label: 'Dispensed',      value: consultations.filter((c: any) => c.status === 'dispensed').length, icon: '✅', bg: 'bg-green-50  border-green-100'  },
+          { key: 'totalAssigned', label: t('consultations.stats.totalAssigned'), value: consultations.length,                                                            icon: '📋', bg: 'bg-purple-50 border-purple-100' },
+          { key: 'pending',       label: t('consultations.stats.pending'),       value: consultations.filter((c: any) => c.status === 'active').length,    icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
+          { key: 'preparing',     label: t('consultations.stats.preparing'),     value: consultations.filter((c: any) => c.status === 'preparing').length, icon: '🧪', bg: 'bg-blue-50   border-blue-100'   },
+          { key: 'ready',         label: t('consultations.stats.ready'),         value: consultations.filter((c: any) => c.status === 'dispensed').length, icon: '✅', bg: 'bg-green-50  border-green-100'  },
         ].map(s => (
-          <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
+          <div key={s.key} className={`rounded-xl border p-4 ${s.bg}`}>
             <span className="text-2xl">{s.icon}</span>
             <p className="text-2xl font-bold text-gray-900 mt-1">{s.value}</p>
             <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
@@ -218,21 +241,24 @@ export default function PharmacistConsultations() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
-          Loading prescriptions...
+          {t('consultations.loading')}
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-gray-200 p-12 text-center">
           <span className="text-4xl block mb-3">💊</span>
-          <p className="text-gray-600 font-medium">No {filter !== 'all' ? filter : ''} prescriptions</p>
-          <p className="text-sm text-gray-400 mt-1">Prescriptions assigned by doctors will appear here.</p>
+          <p className="text-gray-600 font-medium">
+            {filter !== 'all'
+              ? t('consultations.emptyTitleFiltered', { filter: t(`consultations.filter.${STATUS_KEY[filter] || filter}`) })
+              : t('consultations.emptyTitleAll')}
+          </p>
+          <p className="text-sm text-gray-400 mt-1">{t('consultations.emptySubtitle')}</p>
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((c: any) => {
-            const st = STATUS_STYLE[c.status];
             return (
               <div key={c.id} onClick={async () => {
-                try { setSelected(await consultationApi.getOne(c.id)); } catch { toast.error('Failed to load'); }
+                try { setSelected(await consultationApi.getOne(c.id)); } catch { toast.error(t('consultations.toast.loadFailed')); }
               }} className="bg-white rounded-xl border border-gray-100 p-5 hover:border-primary-200 hover:shadow-sm transition-all cursor-pointer">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -242,30 +268,30 @@ export default function PharmacistConsultations() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-bold text-gray-900">{c.patient_name}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st?.badge}`}>{st?.label}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[c.status]}`}>{t(`consultations.status.${STATUS_KEY[c.status]}`)}</span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {c.doctor_display_name ? `Dr. ${c.doctor_display_name}` : 'Doctor'} · {formatDate(c.visit_date)}
+                        {c.doctor_display_name ? t('consultations.doctorPrefix', { name: c.doctor_display_name }) : t('consultations.doctorLabel')} · {formatDate(c.visit_date)}
                       </p>
-                      {c.diagnosis && <p className="text-sm text-gray-600 mt-1 line-clamp-1">Dx: {c.diagnosis}</p>}
+                      {c.diagnosis && <p className="text-sm text-gray-600 mt-1 line-clamp-1">{t('consultations.dxPrefix', { diagnosis: c.diagnosis })}</p>}
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {c.medicine_count > 0 && (
                           <span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-medium">
-                            💊 {c.medicine_count} medicine{c.medicine_count > 1 ? 's' : ''}
+                            💊 {t('consultations.medicinesCount', { count: c.medicine_count })}
                           </span>
                         )}
                         {c.prescription_file && (
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">📄 Rx Image</span>
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">📄 {t('consultations.rxImage')}</span>
                         )}
                       </div>
                     </div>
                   </div>
-                  {c.status === 'active' && (
+                  {NEXT_ACTION[c.status] && (
                     <button
-                      onClick={(e: React.MouseEvent) => { e.stopPropagation(); dispenseMutation.mutate(c.id); }}
-                      className="shrink-0 text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+                      onClick={(e: React.MouseEvent) => { e.stopPropagation(); advanceMutation.mutate({ id: c.id, status: NEXT_ACTION[c.status].next }); }}
+                      className={`shrink-0 text-xs text-white px-3 py-1.5 rounded-lg font-medium transition-colors ${NEXT_ACTION[c.status].cls}`}
                     >
-                      Dispense ✅
+                      {t(NEXT_ACTION[c.status].labelKey)}
                     </button>
                   )}
                 </div>
@@ -279,7 +305,7 @@ export default function PharmacistConsultations() {
         <DetailModal
           c={selected}
           onClose={() => setSelected(null)}
-          onDispense={(id: number) => dispenseMutation.mutate(id)}
+          onAdvance={(id: number, status: string) => advanceMutation.mutate({ id, status })}
         />
       )}
     </div>

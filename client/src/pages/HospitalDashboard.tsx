@@ -1,11 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Stethoscope, FlaskConical, ShieldCheck, Users, ArrowUpRight, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { authApi, consultationApi, labApi, accessRequestApi, orgApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/helpers';
 
 export default function HospitalDashboard() {
+  const { t } = useTranslation('doctorCore');
+  const { t: tc } = useTranslation('common');
   const { user } = useAuth();
   const navigate = useNavigate();
   const org = user?.organization;
@@ -48,14 +51,14 @@ export default function HospitalDashboard() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-semibold bg-white/15 border border-white/20 px-2.5 py-0.5 rounded-full">
-                🏥 Hospital Portal
+                🏥 {t('hospitalDashboard.badge')}
               </span>
             </div>
             <h1 className="text-2xl font-bold mt-2">
-              {org?.name || 'Hospital Dashboard'}
+              {org?.name || t('hospitalDashboard.defaultName')}
             </h1>
             <p className="text-blue-200 text-sm mt-1">
-              Welcome back, Dr. {firstName} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              {t('dashboard.welcomeBack', { name: firstName })} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </p>
             {profile?.specialization && (
               <p className="text-blue-300 text-xs mt-1">{profile.specialization}</p>
@@ -63,7 +66,7 @@ export default function HospitalDashboard() {
           </div>
           <div className="hidden sm:flex flex-col items-center bg-white/10 rounded-xl p-4 shrink-0">
             <span className="text-4xl">🏥</span>
-            <p className="text-xs mt-1 text-blue-200">Hospital</p>
+            <p className="text-xs mt-1 text-blue-200">{t('hospitalDashboard.avatarLabel')}</p>
           </div>
         </div>
 
@@ -73,19 +76,19 @@ export default function HospitalDashboard() {
             to="/hospital/consultations"
             className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
           >
-            <Stethoscope size={13} /> New Consultation
+            <Stethoscope size={13} /> {t('dashboard.actions.newConsultation')}
           </Link>
           <Link
             to="/hospital/lab-requests"
             className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
           >
-            <FlaskConical size={13} /> Lab Requests
+            <FlaskConical size={13} /> {t('dashboard.actions.labRequests')}
           </Link>
           <Link
             to="/hospital/requests"
             className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
           >
-            <ShieldCheck size={13} /> Access Requests {pendingRequests > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRequests}</span>}
+            <ShieldCheck size={13} /> {t('hospitalDashboard.actions.accessRequests')} {pendingRequests > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRequests}</span>}
           </Link>
         </div>
       </div>
@@ -93,10 +96,10 @@ export default function HospitalDashboard() {
       {/* Stats */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {[
-          { label: 'Total Consultations', value: totalConsultations,  icon: Stethoscope, color: 'from-blue-500 to-indigo-600',   bg: 'bg-blue-50',   text: 'text-blue-600' },
-          { label: 'Active Cases',        value: activeConsultations, icon: Clock,       color: 'from-amber-500 to-orange-500',  bg: 'bg-amber-50',  text: 'text-amber-600' },
-          { label: 'Pending Lab Tests',   value: pendingLabs,         icon: FlaskConical, color: 'from-purple-500 to-violet-600', bg: 'bg-purple-50', text: 'text-purple-600' },
-          { label: 'Access Requests',     value: pendingRequests,     icon: ShieldCheck, color: 'from-teal-500 to-emerald-600',  bg: 'bg-teal-50',   text: 'text-teal-600' },
+          { label: t('hospitalDashboard.stats.totalConsultations'), value: totalConsultations,  icon: Stethoscope, color: 'from-blue-500 to-indigo-600',   bg: 'bg-blue-50',   text: 'text-blue-600' },
+          { label: t('hospitalDashboard.stats.activeCases'),        value: activeConsultations, icon: Clock,       color: 'from-amber-500 to-orange-500',  bg: 'bg-amber-50',  text: 'text-amber-600' },
+          { label: t('dashboard.stats.pendingLabTests'),   value: pendingLabs,         icon: FlaskConical, color: 'from-purple-500 to-violet-600', bg: 'bg-purple-50', text: 'text-purple-600' },
+          { label: t('dashboard.stats.accessRequests'),     value: pendingRequests,     icon: ShieldCheck, color: 'from-teal-500 to-emerald-600',  bg: 'bg-teal-50',   text: 'text-teal-600' },
         ].map(({ label, value, icon: Icon, bg, text }) => (
           <div key={label} className={`rounded-xl border p-5 ${bg}`}>
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${bg} border`}>
@@ -113,14 +116,14 @@ export default function HospitalDashboard() {
         {/* Recent consultations */}
         <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-900">Recent Consultations</h2>
+            <h2 className="font-semibold text-gray-900">{t('dashboard.recentConsultations.title')}</h2>
             <Link to="/hospital/consultations" className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
-              View all <ArrowUpRight size={12} />
+              {t('dashboard.recentConsultations.viewAll')} <ArrowUpRight size={12} />
             </Link>
           </div>
           <div className="divide-y divide-gray-50">
             {recentConsultations.length === 0 ? (
-              <div className="py-10 text-center text-gray-400 text-sm">No consultations yet</div>
+              <div className="py-10 text-center text-gray-400 text-sm">{t('dashboard.recentConsultations.empty')}</div>
             ) : recentConsultations.map((c: any) => (
               <div
                 key={c.id}
@@ -131,11 +134,11 @@ export default function HospitalDashboard() {
                   {c.patient_name?.[0]?.toUpperCase() || 'P'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{c.patient_name || `Patient #${c.patient_id}`}</p>
-                  <p className="text-xs text-gray-400 truncate">{c.diagnosis || c.sick_description || 'General consultation'}</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{c.patient_name || t('dashboard.recentConsultations.patientFallback', { id: c.patient_id })}</p>
+                  <p className="text-xs text-gray-400 truncate">{c.diagnosis || c.sick_description || t('dashboard.recentConsultations.generalConsultation')}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${statusColor(c.status)}`}>{c.status}</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${statusColor(c.status)}`}>{tc(`status.${c.status}`, { defaultValue: c.status })}</span>
                   <span className="text-xs text-gray-400">{formatDate(c.visit_date || c.created_at)}</span>
                 </div>
               </div>
@@ -149,26 +152,26 @@ export default function HospitalDashboard() {
           {/* Organization card */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <span className="text-lg">🏥</span> Organization
+              <span className="text-lg">🏥</span> {t('hospitalDashboard.org.title')}
             </h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-400">Name</span>
+                <span className="text-gray-400">{t('dashboard.info.name')}</span>
                 <span className="font-medium text-gray-700 text-right max-w-[55%] truncate">{org?.name || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">Type</span>
+                <span className="text-gray-400">{t('dashboard.info.type')}</span>
                 <span className="font-medium text-gray-700 capitalize">{org?.org_type || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">Slug</span>
+                <span className="text-gray-400">{t('dashboard.info.slug')}</span>
                 <span className="font-mono text-xs text-gray-500">{org?.slug || '—'}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">Status</span>
+                <span className="text-gray-400">{t('dashboard.info.status')}</span>
                 {org?.is_active
-                  ? <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 size={12} /> Active</span>
-                  : <span className="flex items-center gap-1 text-xs text-amber-600 font-medium"><AlertCircle size={12} /> Inactive</span>
+                  ? <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 size={12} /> {t('dashboard.info.active')}</span>
+                  : <span className="flex items-center gap-1 text-xs text-amber-600 font-medium"><AlertCircle size={12} /> {t('dashboard.info.inactive')}</span>
                 }
               </div>
             </div>
@@ -178,13 +181,13 @@ export default function HospitalDashboard() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Users size={15} className="text-gray-400" /> Staff Members
+                <Users size={15} className="text-gray-400" /> {t('hospitalDashboard.staff.title')}
               </h3>
-              <span className="text-xs text-gray-400">{(members as any[]).length} total</span>
+              <span className="text-xs text-gray-400">{t('hospitalDashboard.staff.total', { count: (members as any[]).length })}</span>
             </div>
             <div className="divide-y divide-gray-50 max-h-52 overflow-y-auto">
               {(members as any[]).length === 0 ? (
-                <p className="text-xs text-gray-400 px-5 py-4 text-center">No staff members yet</p>
+                <p className="text-xs text-gray-400 px-5 py-4 text-center">{t('hospitalDashboard.staff.empty')}</p>
               ) : (members as any[]).slice(0, 6).map((m: any) => (
                 <div key={m.id} className="flex items-center gap-3 px-5 py-2.5">
                   <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-700 shrink-0">
@@ -202,7 +205,7 @@ export default function HospitalDashboard() {
           {/* Doctor profile */}
           {profile && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h3 className="font-semibold text-gray-900 mb-3">My Profile</h3>
+              <h3 className="font-semibold text-gray-900 mb-3">{t('dashboard.profile.title')}</h3>
               <div className="space-y-1.5 text-sm">
                 {profile.specialization && (
                   <p className="text-gray-500">🩺 {profile.specialization}</p>
@@ -211,7 +214,7 @@ export default function HospitalDashboard() {
                   <p className="text-gray-500">🪪 {profile.license_number}</p>
                 )}
                 {profile.years_experience > 0 && (
-                  <p className="text-gray-500">📅 {profile.years_experience} years experience</p>
+                  <p className="text-gray-500">📅 {t('dashboard.profile.yearsExperience', { count: profile.years_experience })}</p>
                 )}
                 {profile.phone && (
                   <p className="text-gray-500">📞 {profile.phone}</p>
