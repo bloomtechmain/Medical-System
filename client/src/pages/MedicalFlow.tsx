@@ -447,6 +447,7 @@ const FILTER_GROUPS: Record<string, string | null> = {
 };
 
 export default function MedicalFlow() {
+  const { t } = useTranslation('patientConsultations');
   const [expanded, setExpanded]  = useState<string | null>(null);
   const [search,   setSearch]    = useState('');
   const [filter,   setFilter]    = useState('all');
@@ -617,12 +618,12 @@ export default function MedicalFlow() {
 
       {groups.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Event Legend</p>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{t('medicalFlow.legend.title')}</p>
           <div className="flex flex-wrap gap-3">
             {Object.entries(EV).map(([key, cfg]) => (
               <div key={key} className="flex items-center gap-1.5">
                 <div className={`w-3 h-3 rounded-full ${cfg.dot.split(' ')[0]}`} />
-                <span className="text-xs text-gray-500">{cfg.icon} {cfg.label}</span>
+                <span className="text-xs text-gray-500">{cfg.icon} {t(cfg.labelKey)}</span>
               </div>
             ))}
           </div>

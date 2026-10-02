@@ -42,6 +42,12 @@ const PHARMACY_STAGE_UI: Record<string, { headingKey: string; headingColor: stri
 
 const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+// Doctor names (registered or free-typed) sometimes already include a "Dr." prefix —
+// strip it before re-applying any "Dr. {{name}}" translation template so it's never doubled.
+const stripDrPrefix = (name: string): string => name.trim().replace(/^dr\.?\s+/i, '');
+const fmtDoctorLabel = (t: (key: string, opts?: any) => string, name: string): string =>
+  t('page.doctorCard.doctorPrefix', { name: stripDrPrefix(name) });
+
 function useDebounce(v: string, ms = 350) {
   const [d, setD] = useState(v);
   useEffect(() => { const t = setTimeout(() => setD(v), ms); return () => clearTimeout(t); }, [v, ms]);
@@ -769,6 +775,12 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                 </p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <Stethoscope size={10} strokeWidth={2} />
+                    {c.doctor_display_name || c.doctor_name
+                      ? fmtDoctorLabel(t, c.doctor_display_name || c.doctor_name)
+                      : t('page.doctorCard.selfRecorded')}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-gray-400">
                     <Calendar size={10} strokeWidth={2} /> {fmtDate(c.visit_date)}
                   </span>
                   {c.hospital_clinic && (
@@ -809,6 +821,12 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                   isLast={subSteps.length === 0}
                 >
                   <div className="text-xs text-gray-600 space-y-0.5">
+                    <p>
+                      <span className="text-gray-400">{t('page.wf.body.doctor')}</span>{' '}
+                      {c.doctor_display_name || c.doctor_name
+                        ? fmtDoctorLabel(t, c.doctor_display_name || c.doctor_name)
+                        : t('page.doctorCard.selfRecorded')}
+                    </p>
                     <p><span className="text-gray-400">{t('page.wf.body.date')}</span> {fmtDate(c.visit_date)}</p>
                     {c.hospital_clinic && <p><span className="text-gray-400">{t('page.wf.body.location')}</span> {c.hospital_clinic}</p>}
                     {c.pharmacy_name   && <p><span className="text-gray-400">{t('page.wf.body.pharmacy')}</span> {c.pharmacy_name}</p>}
@@ -958,7 +976,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                             </div>
                             {c.doctor_display_name && (
                               <p className="text-xs text-gray-500 flex items-center gap-1">
-                                <Stethoscope size={10} strokeWidth={2} /> {t('page.wf.orderedByDoctor', { name: c.doctor_display_name })}
+                                <Stethoscope size={10} strokeWidth={2} /> {t('page.wf.orderedByDoctor', { name: stripDrPrefix(c.doctor_display_name) })}
                               </p>
                             )}
                           </div>
@@ -1147,7 +1165,7 @@ export default function PatientConsultations() {
                 doctorFilter === name ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
             >
-              {name === t('page.doctorCard.selfRecorded') ? name : t('page.doctorCard.doctorPrefix', { name })}
+              {name === t('page.doctorCard.selfRecorded') ? name : fmtDoctorLabel(t, name)}
             </button>
           ))}
         </div>
