@@ -163,6 +163,32 @@
       "fee": "රු. {{amount}} ගාස්තුව"
     }
   },
+  "settings": {
+    "title": "සැකසුම්",
+    "subtitle": "රෝගීන් සහ කාර්ය මණ්ඩලය සඳහා ඔබේ වෘත්තීය පැතිකඩ යොවුන් කරගෙන තබා ගන්න.",
+    "sections": {
+      "account": "ගිණුම් තොරතුරු",
+      "professional": "වෘත්තීය විස්තර"
+    },
+    "fields": {
+      "specialization": "විශේෂඥතාව",
+      "licenseNumber": "බලපත්‍ර අංකය",
+      "hospitalAffiliation": "රෝහල / සායන සම්බන්ධතාව",
+      "consultationFee": "වෛද්‍ය හමුවීම් ගාස්තුව (රු.)",
+      "yearsExperience": "පළපුරුද්ද (වසර)",
+      "medicalSchool": "වෛද්‍ය විද්‍යාලය",
+      "bio": "ජීව දත්ත සටහන"
+    },
+    "placeholders": {
+      "specialization": "උදා., හෘද විද්‍යාව",
+      "licenseNumber": "උදා., SLMC-12345",
+      "hospitalAffiliation": "උදා., City General Hospital",
+      "medicalSchool": "උදා., කොළඹ විශ්වවිද්‍යාලය",
+      "bio": "රෝගීන් සහ කාර්ය මණ්ඩලයට පෙනෙන කෙටි සටහනක්"
+    },
+    "toastSuccess": "ප්‍රොෆයිලය සාර්ථකව යාවත්කාලීන කරන ලදී",
+    "toastError": "ප්‍රොෆයිලය යාවත්කාලීන කිරීමට අසමත් විය"
+  },
   "accessRequests": {
     "pageTitle": "ප්‍රවේශ ඉල්ලීම්",
     "pageSubtitle": "ඔබ රෝගීන් වෙත ඔවුන්ගේ සෞඛ්‍ය දත්තවලට ප්‍රවේශය සඳහා යැවූ ඉල්ලීම්",

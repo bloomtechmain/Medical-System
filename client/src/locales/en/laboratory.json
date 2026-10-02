@@ -67,6 +67,32 @@
       }
     }
   },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Keep your laboratory profile up to date for doctors and patients.",
+    "sections": {
+      "account": "Account Information",
+      "laboratory": "Laboratory Details"
+    },
+    "fields": {
+      "labName": "Laboratory Name",
+      "labType": "Lab Type",
+      "licenseNumber": "License Number",
+      "accreditation": "Accreditation",
+      "operatingHours": "Operating Hours",
+      "servicesOffered": "Services Offered"
+    },
+    "placeholders": {
+      "labName": "e.g., City Diagnostics Laboratory",
+      "labType": "e.g., Diagnostic Laboratory",
+      "licenseNumber": "e.g., LAB-12345",
+      "accreditation": "e.g., ISO 15189",
+      "operatingHours": "e.g., Mon-Sat 7:00 AM - 8:00 PM",
+      "servicesOffered": "Comma-separated, e.g. Full Blood Count, X-Ray, Ultrasound"
+    },
+    "toastSuccess": "Profile updated successfully",
+    "toastError": "Failed to update profile"
+  },
   "reports": {
     "page": {
       "title": "Lab Reports",
