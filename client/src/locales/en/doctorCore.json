@@ -163,6 +163,32 @@
       "fee": "LKR {{amount}} fee"
     }
   },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Keep your professional profile up to date for patients and staff.",
+    "sections": {
+      "account": "Account Information",
+      "professional": "Professional Details"
+    },
+    "fields": {
+      "specialization": "Specialization",
+      "licenseNumber": "License Number",
+      "hospitalAffiliation": "Hospital / Clinic Affiliation",
+      "consultationFee": "Consultation Fee (LKR)",
+      "yearsExperience": "Years of Experience",
+      "medicalSchool": "Medical School",
+      "bio": "Bio / Notes"
+    },
+    "placeholders": {
+      "specialization": "e.g., Cardiology",
+      "licenseNumber": "e.g., SLMC-12345",
+      "hospitalAffiliation": "e.g., City General Hospital",
+      "medicalSchool": "e.g., University of Colombo",
+      "bio": "A short note patients and staff will see on your profile"
+    },
+    "toastSuccess": "Profile updated successfully",
+    "toastError": "Failed to update profile"
+  },
   "accessRequests": {
     "pageTitle": "Access Requests",
     "pageSubtitle": "Requests you have sent to patients for access to their health data",

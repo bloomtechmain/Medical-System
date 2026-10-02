@@ -137,6 +137,29 @@
       "deliveredNote": "Delivered · Treatment complete"
     }
   },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Keep your pharmacy profile up to date for doctors and patients.",
+    "sections": {
+      "account": "Account Information",
+      "pharmacy": "Pharmacy Details"
+    },
+    "fields": {
+      "licenseNumber": "License Number",
+      "pharmacyName": "Pharmacy Name",
+      "pharmacyAddress": "Pharmacy Address",
+      "yearsExperience": "Years of Experience",
+      "specializationArea": "Specialization Area"
+    },
+    "placeholders": {
+      "licenseNumber": "e.g., PH-12345",
+      "pharmacyName": "e.g., City Pharmacy",
+      "pharmacyAddress": "No. 12, Main Street, Colombo 03",
+      "specializationArea": "e.g., Clinical Pharmacy"
+    },
+    "toastSuccess": "Profile updated successfully",
+    "toastError": "Failed to update profile"
+  },
   "medicines": {
     "pageTitle": "Medicines",
     "pageDescription": "Manage medicine inventory",

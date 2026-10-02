@@ -67,6 +67,32 @@
       }
     }
   },
+  "settings": {
+    "title": "සැකසුම්",
+    "subtitle": "වෛද්‍යවරුන්ට සහ රෝගීන්ට ඔබේ රසායනාගාර පැතිකඩ යොවුන් කරගෙන තබා ගන්න.",
+    "sections": {
+      "account": "ගිණුම් තොරතුරු",
+      "laboratory": "රසායනාගාර විස්තර"
+    },
+    "fields": {
+      "labName": "රසායනාගාරයේ නම",
+      "labType": "රසායනාගාර වර්ගය",
+      "licenseNumber": "බලපත්‍ර අංකය",
+      "accreditation": "ප්‍රතීතනය",
+      "operatingHours": "විවෘත කාල සටහන",
+      "servicesOffered": "සපයනු ලබන සේවා"
+    },
+    "placeholders": {
+      "labName": "උදා., City Diagnostics Laboratory",
+      "labType": "උදා., රෝග විනිශ්චය රසායනාගාරය",
+      "licenseNumber": "උදා., LAB-12345",
+      "accreditation": "උදා., ISO 15189",
+      "operatingHours": "උදා., සඳුදා-සෙනසුරාදා උ.7:00 - ප.8:00",
+      "servicesOffered": "කොමාවකින් වියුක්ත කරන්න, උදා. Full Blood Count, X-Ray, Ultrasound"
+    },
+    "toastSuccess": "ප්‍රොෆයිලය සාර්ථකව යාවත්කාලීන කරන ලදී",
+    "toastError": "ප්‍රොෆයිලය යාවත්කාලීන කිරීමට අසමත් විය"
+  },
   "reports": {
     "page": {
       "title": "රසායනාගාර වාර්තා",

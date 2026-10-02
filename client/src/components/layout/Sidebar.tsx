@@ -105,6 +105,12 @@ const ORG_NAV_KEY: Record<string, string> = {
   pharmacy: 'pharmacist', laboratory: 'laboratory',
 };
 
+const SETTINGS_ROUTE: Record<string, string> = {
+  admin: '/admin/settings', hospital: '/hospital/settings', clinic: '/clinic/settings',
+  doctor: '/doctor/settings', pharmacist: '/pharmacist/settings',
+  patient: '/patient/settings', laboratory: '/laboratory/settings',
+};
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const { t } = useTranslation('common');
@@ -247,7 +253,7 @@ export default function Sidebar() {
 
         {/* Settings */}
         <button
-          onClick={() => user?.role === 'patient' && navigate('/patient/settings')}
+          onClick={() => navigate(SETTINGS_ROUTE[navKey] || '/patient/settings')}
           className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-white/[0.08] hover:text-slate-200 transition-all duration-150 overflow-hidden"
         >
           <span className="w-11 h-11 flex items-center justify-center shrink-0">
