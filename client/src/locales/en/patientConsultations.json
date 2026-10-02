@@ -27,8 +27,7 @@
       "updated": "Consultation updated!",
       "updateFailed": "Update failed",
       "visitRecorded": "Visit recorded successfully!",
-      "labSent": "Lab request sent! Laboratory has been notified.",
-      "pharmacySent": "Prescription forwarded! Pharmacy has been notified."
+      "labSent": "Lab request sent! Laboratory has been notified."
     },
     "doctorCard": {
       "selfRecorded": "Self-Recorded",
@@ -60,12 +59,6 @@
       "prescription": "Prescription",
       "pharmacy": "Pharmacy",
       "pharmacyDispensed": "Dispensed by Pharmacy ✅",
-      "pharmacyNamed": "Pharmacy: {{name}}",
-      "pharmacyPreparingHeading": "{{name}} is Preparing",
-      "pharmacyReadyHeading": "Ready at {{name}}",
-      "pharmacyDeliveredHeading": "Delivered by {{name}}",
-      "pharmacyAssignedFallback": "Assigned",
-      "assignedPharmacyFallback": "Assigned Pharmacy",
       "labTestsRequested": "Lab Tests Requested",
       "sentTo": "Sent to: {{name}}",
       "laboratoryFallback": "Laboratory",
@@ -76,14 +69,6 @@
         "location": "Location:",
         "pharmacy": "Pharmacy:"
       },
-      "noPharmacyText": "No pharmacy assigned. Forward your prescription to a pharmacy to collect medicines.",
-      "forwardToPharmacyBtn": "Forward to Pharmacy",
-      "noPharmacyAssigned": "No pharmacy assigned.",
-      "medicinesDispensed": "✓ Medicines dispensed",
-      "awaitingDispensing": "Awaiting pharmacist",
-      "stagePreparing": "Preparing",
-      "stageReady": "Ready for pickup",
-      "stageDelivered": "✓ Delivered",
       "sendToLaboratoryBtn": "Send to Laboratory",
       "orderedByDoctor": "Ordered by Dr. {{name}}",
       "labNotesSummary": "Lab Notes / Results Summary",
@@ -113,14 +98,19 @@
     "errorGeneric": "Failed to send request",
     "sendBtn": "Send to Lab"
   },
-  "sendToPharmacyModal": {
-    "title": "Forward to Pharmacy",
-    "subtitle": "Choose a pharmacy to dispense your prescription",
-    "prescribedMedicines": "Prescribed Medicines",
-    "selectPharmacy": "Select Pharmacy",
-    "errorSelect": "Please select a pharmacy",
-    "errorGeneric": "Failed to forward prescription",
-    "forwardBtn": "Forward Prescription"
+  "pharmacyAssignments": {
+    "sendBtn": "Send to Pharmacy",
+    "sendAnotherBtn": "Send to Another Pharmacy",
+    "cancelBtn": "Withdraw from this pharmacy",
+    "cancelledToast": "Withdrawn from that pharmacy",
+    "errorGeneric": "Something went wrong — please try again",
+    "status": {
+      "active": "Awaiting Pharmacy",
+      "preparing": "Preparing",
+      "dispensed": "Ready for Pickup",
+      "delivered": "Delivered",
+      "cancelled": "Withdrawn"
+    }
   },
   "selfRecordModal": {
     "title": "Record My Visit",

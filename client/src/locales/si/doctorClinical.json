@@ -22,7 +22,6 @@
       "toastPatientChooseLab": " · රසායනාගාරය රෝගියා විසින් තෝරනු ඇත",
       "toastConsultationSaved": "වෛද්‍ය හමුවීම සුරැකින ලදී",
       "toastMedicinesAutoExtracted": " · බෙහෙත් {{count}}ක් ස්වයංක්‍රීයව හඳුනාගන්නා ලදී",
-      "toastPharmacyNotified": " · ෆාමසියට දැනුම් දෙන ලදී",
       "toastPatientNotified": " · රෝගියාට දැනුම් දෙන ලදී",
       "errorSaveFailed": "සුරැකීමට අසමත් විය",
       "title": "නව රෝගී වෛද්‍ය හමුවීම",
@@ -51,10 +50,6 @@
       "dosagePlaceholder": "මාත්‍රාව",
       "frequencyPlaceholder": "වාර ගණන",
       "durationPlaceholder": "කාලසීමාව",
-      "assignPharmacySectionTitle": "ෆාමසිය පවරන්න",
-      "assignPharmacySectionHint": "— විකල්පයි, ෆාමසියට දැනුම් දෙනු ලැබේ",
-      "searchPharmacyLabel": "ෆාමසිය සොයන්න",
-      "searchPharmacyPlaceholder": "ෆාමසි නම, ලිපිනය, හෝ ෆාමසිස්ට් නම අනුව සොයන්න...",
       "savingReadingPrescription": "සුරකිමින් සහ බෙහෙත් වට්ටෝරුව කියවමින්...",
       "savingNotifying": "සුරකිමින් සහ දැනුම් දෙමින්...",
       "saveButton": "💾 සුරකින්න සහ රෝගියාට දැනුම් දෙන්න"
@@ -103,6 +98,7 @@
       "emptyTitle": "තවම වෛද්‍ය හමුවීම් නැත",
       "emptySubtitle": "ඔබේ පළමු බෙහෙත් වට්ටෝරුව සෑදීමට \"{{buttonLabel}}\" ක්ලික් කරන්න.",
       "dxPrefix": "රෝග විනිශ්චය: {{diagnosis}}",
+      "pharmacyCount": "ෆාමසි {{count}}",
       "medicineCount": "බෙහෙත් {{count}}",
       "rxBadge": "වට්ටෝරුව"
     }

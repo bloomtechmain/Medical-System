@@ -22,7 +22,6 @@
       "toastPatientChooseLab": " · Patient to choose lab",
       "toastConsultationSaved": "Consultation saved",
       "toastMedicinesAutoExtracted": " · {{count}} medicines auto-extracted",
-      "toastPharmacyNotified": " · Pharmacy notified",
       "toastPatientNotified": " · Patient notified",
       "errorSaveFailed": "Failed to save",
       "title": "New Patient Consultation",
@@ -51,10 +50,6 @@
       "dosagePlaceholder": "Dosage",
       "frequencyPlaceholder": "Frequency",
       "durationPlaceholder": "Duration",
-      "assignPharmacySectionTitle": "Assign Pharmacy",
-      "assignPharmacySectionHint": "— optional, pharmacy will be notified",
-      "searchPharmacyLabel": "Search Pharmacy",
-      "searchPharmacyPlaceholder": "Search by pharmacy name, address, or pharmacist...",
       "savingReadingPrescription": "Saving & reading prescription...",
       "savingNotifying": "Saving & notifying...",
       "saveButton": "💾 Save & Notify Patient"
@@ -103,6 +98,7 @@
       "emptyTitle": "No consultations yet",
       "emptySubtitle": "Click \"{{buttonLabel}}\" to create your first prescription.",
       "dxPrefix": "Dx: {{diagnosis}}",
+      "pharmacyCount": "{{count}} pharmacies",
       "medicineCount": "{{count}} medicines",
       "rxBadge": "Rx"
     }

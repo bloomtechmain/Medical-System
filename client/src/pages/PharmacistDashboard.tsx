@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
-import { inventoryApi, saleApi, authApi, orderApi, medicineApi, consultationApi } from '../services/api';
+import { inventoryApi, saleApi, authApi, orderApi, medicineApi, prescriptionAssignmentApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatCurrency, formatDate, formatDateTime, stockStatus } from '../utils/helpers';
@@ -51,7 +51,7 @@ export default function PharmacistDashboard() {
   const { data: expiring = [] } = useQuery({ queryKey: ['expiring', 30], queryFn: () => inventoryApi.expiring(30) });
   const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: orderApi.getAll });
   const { data: analytics } = useQuery({ queryKey: ['sales-analytics'], queryFn: saleApi.analytics });
-  const { data: prescriptions = [] } = useQuery({ queryKey: ['pharmacist-consultations'], queryFn: consultationApi.getAll });
+  const { data: prescriptions = [] } = useQuery({ queryKey: ['pharmacist-assignments'], queryFn: prescriptionAssignmentApi.getAll });
 
   const [medSearch, setMedSearch] = useState('');
   const debouncedMedSearch = useDebounce(medSearch);
