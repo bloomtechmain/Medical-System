@@ -36,6 +36,7 @@ const TABS: Record<string, TabConfig> = {
     ],
     more: [
       { to: '/hospital/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
+      { to: '/hospital/settings',     labelKey: 'navShort.settings',     icon: Settings },
     ],
   },
   clinic: {
@@ -47,6 +48,7 @@ const TABS: Record<string, TabConfig> = {
     ],
     more: [
       { to: '/clinic/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
+      { to: '/clinic/settings',     labelKey: 'navShort.settings',     icon: Settings },
     ],
   },
   patient: {
@@ -72,6 +74,7 @@ const TABS: Record<string, TabConfig> = {
     ],
     more: [
       { to: '/doctor/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
+      { to: '/doctor/settings',     labelKey: 'navShort.settings',     icon: Settings },
     ],
   },
   admin: {
@@ -85,6 +88,7 @@ const TABS: Record<string, TabConfig> = {
       { to: '/admin/suppliers', labelKey: 'navShort.suppliers', icon: Truck },
       { to: '/admin/sales',     labelKey: 'navShort.sales',     icon: Receipt },
       { to: '/admin/inventory', labelKey: 'navShort.inventory', icon: BarChart2 },
+      { to: '/admin/settings',  labelKey: 'navShort.settings',  icon: Settings },
     ],
   },
   pharmacist: {
@@ -98,6 +102,7 @@ const TABS: Record<string, TabConfig> = {
       { to: '/pharmacist/suppliers', labelKey: 'navShort.suppliers', icon: Truck },
       { to: '/pharmacist/orders',    labelKey: 'navShort.orders',    icon: ShoppingCart },
       { to: '/pharmacist/inventory', labelKey: 'navShort.inventory', icon: BarChart2 },
+      { to: '/pharmacist/settings',  labelKey: 'navShort.settings',  icon: Settings },
     ],
   },
   laboratory: {
@@ -106,7 +111,8 @@ const TABS: Record<string, TabConfig> = {
       { to: '/laboratory/reports', labelKey: 'navShort.reports', icon: ClipboardList },
     ],
     more: [
-      { to: '/laboratory/catalog', labelKey: 'navShort.catalog', icon: Receipt },
+      { to: '/laboratory/catalog',  labelKey: 'navShort.catalog',  icon: Receipt },
+      { to: '/laboratory/settings', labelKey: 'navShort.settings', icon: Settings },
     ],
   },
 };
