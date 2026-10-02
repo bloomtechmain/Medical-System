@@ -229,6 +229,59 @@ const updateMyProfile = async (req: Request, res: Response, next: NextFunction):
   }
 };
 
+// Every organization this user belongs to, any member_role (not just 'owner') —
+// the plural counterpart to authController's singular/owner-only getOrgForUser,
+// used for doctor multi-hospital affiliation features (availability, booking,
+// Settings) without touching that legacy singular field or its consumers.
+const getMyOrganizations = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT o.id, o.name, o.org_type, o.slug, om.member_role
+      FROM public.organization_members om
+      JOIN public.organizations o ON o.id = om.organization_id
+      WHERE om.user_id = $1 AND o.is_active = TRUE
+      ORDER BY o.name
+    `, [req.user.id]);
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
+// Self-service join — a doctor adding another hospital/clinic affiliation later
+// from Settings. Only doctors may join as 'doctor'; the org must be a hospital/clinic.
+const joinOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (req.user.role !== 'doctor') { res.status(403).json({ message: 'Only doctors can join a hospital/clinic this way' }); return; }
+    const { organization_id } = req.body as { organization_id?: number };
+    if (!organization_id) { res.status(400).json({ message: 'organization_id is required' }); return; }
+
+    const { rows: org } = await pool.query(
+      "SELECT id, org_type FROM public.organizations WHERE id=$1 AND is_active=TRUE AND org_type IN ('hospital','clinic')",
+      [organization_id]
+    );
+    if (!org.length) { res.status(404).json({ message: 'Organization not found' }); return; }
+
+    const { rows } = await pool.query(`
+      INSERT INTO public.organization_members (organization_id, user_id, member_role)
+      VALUES ($1, $2, 'doctor')
+      ON CONFLICT (organization_id, user_id) DO NOTHING
+      RETURNING *
+    `, [organization_id, req.user.id]);
+
+    res.status(201).json(rows[0] || { organization_id, user_id: req.user.id, member_role: 'doctor' });
+  } catch (err) { next(err); }
+};
+
+const leaveOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rowCount } = await pool.query(
+      "DELETE FROM public.organization_members WHERE organization_id=$1 AND user_id=$2 AND member_role != 'owner'",
+      [req.params.organizationId, req.user.id]
+    );
+    if (!rowCount) { res.status(404).json({ message: 'Membership not found (or you are the owner and cannot leave)' }); return; }
+    res.status(204).end();
+  } catch (err) { next(err); }
+};
+
 const toggleActive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query(
@@ -384,7 +437,14 @@ const searchDoctors = async (req: Request, res: Response, next: NextFunction): P
     const { q = '' } = req.query as { q?: string };
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
-             p.specialization, p.hospital_affiliation, p.phone, p.license_number
+             p.specialization, p.hospital_affiliation, p.phone, p.license_number,
+             COALESCE(
+               (SELECT JSON_AGG(JSON_BUILD_OBJECT('id', o.id, 'name', o.name, 'org_type', o.org_type) ORDER BY o.name)
+                FROM public.organization_members om
+                JOIN public.organizations o ON o.id = om.organization_id
+                WHERE om.user_id = u.id AND o.is_active = TRUE AND o.org_type IN ('hospital','clinic')),
+               '[]'
+             ) AS organizations
       FROM public.users u
       LEFT JOIN public.doctor_profiles p ON p.user_id = u.id
       WHERE u.role = 'doctor' AND u.is_active = TRUE
@@ -415,4 +475,4 @@ const searchLaboratories = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-export { getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors };
+export { getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, getMyOrganizations, joinOrganization, leaveOrganization, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors };

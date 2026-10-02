@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import {
-  Calendar, Clock, CheckCircle2, XCircle, X, Settings, ClipboardList, Ban,
+  Calendar, Clock, CheckCircle2, XCircle, X, Settings, ClipboardList, Ban, Building2, Plus,
 } from 'lucide-react';
-import { appointmentApi } from '../services/api';
+import { appointmentApi, userApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import HospitalSearchAdd from '../components/common/HospitalSearchAdd';
 
 const SLOT_OPTIONS = [10, 15, 20, 30, 45, 60];
 
@@ -212,6 +213,54 @@ function AppointmentsPanel() {
   );
 }
 
+function MyHospitalsCard({ myOrgs }: { myOrgs: any[] }) {
+  const { t } = useTranslation('doctorPatients');
+  const qc = useQueryClient();
+
+  const joinMutation = useMutation({
+    mutationFn: (organizationId: number) => userApi.joinOrganization(organizationId),
+    onSuccess: () => { toast.success(t('appointments.hospitals.toastAdded')); qc.invalidateQueries({ queryKey: ['my-organizations'] }); },
+    onError:   (err: any) => toast.error(err.message || t('appointments.hospitals.toastAddFailed')),
+  });
+
+  const leaveMutation = useMutation({
+    mutationFn: (organizationId: number) => userApi.leaveOrganization(organizationId),
+    onSuccess: () => { toast.success(t('appointments.hospitals.toastRemoved')); qc.invalidateQueries({ queryKey: ['my-organizations'] }); },
+    onError:   (err: any) => toast.error(err.message || t('appointments.hospitals.toastRemoveFailed')),
+  });
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-5">
+      <p className="text-sm font-bold text-gray-900">{t('appointments.hospitals.title')}</p>
+      <p className="text-xs text-gray-400 mt-0.5">{t('appointments.hospitals.description')}</p>
+
+      {myOrgs.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {myOrgs.map((org: any) => (
+            <div key={org.id} className="flex items-center gap-1.5 bg-primary-50 border border-primary-100 text-primary-700 text-sm font-medium pl-3 pr-2 py-1.5 rounded-xl">
+              <Building2 size={13} strokeWidth={2} />
+              {org.name}
+              {org.member_role !== 'owner' && (
+                <button onClick={() => leaveMutation.mutate(org.id)} disabled={leaveMutation.isPending}
+                  className="text-primary-400 hover:text-red-500 ml-0.5">
+                  <X size={13} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center gap-2">
+        <Plus size={14} strokeWidth={2.5} className="text-gray-400 shrink-0" />
+        <div className="flex-1">
+          <HospitalSearchAdd onAdd={(org) => joinMutation.mutate(org.id)} excludeIds={myOrgs.map(o => o.id)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Availability settings ───────────────────────────────────────────────────
 interface DayForm { enabled: boolean; start: string; end: string; slot: number; }
 const DEFAULT_DAY: DayForm = { enabled: false, start: '09:00', end: '17:00', slot: 30 };
@@ -223,7 +272,12 @@ function AvailabilityPanel() {
   const WEEKDAY_SHORT = t('appointments.weekdaysShort', { returnObjects: true }) as string[];
   const qc = useQueryClient();
   const [form, setForm] = useState<DayForm[]>(() => Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY })));
-  const [loaded, setLoaded] = useState(false);
+  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
+
+  const { data: myOrgs = [] } = useQuery({
+    queryKey: ['my-organizations'],
+    queryFn:  userApi.getMyOrganizations,
+  });
 
   const { data: weekly } = useQuery({
     queryKey: ['doctor-weekly-availability'],
@@ -238,15 +292,20 @@ function AvailabilityPanel() {
   const from = toDateStr(next7[0]);
   const to   = toDateStr(next7[6]);
 
-  const { data: overrides = [] } = useQuery({
+  const { data: overridesAll = [] } = useQuery({
     queryKey: ['doctor-overrides', from, to],
     queryFn:  () => appointmentApi.getOverrides(from, to),
   });
+  const overrides = (overridesAll as any[]).filter(o => (o.organization_id ?? null) === selectedOrgId);
 
+  // Rebuilds the 7-day form from whichever organization is currently selected —
+  // each organization keeps its own independent weekly pattern, which is how a
+  // doctor ends up with different hours at different hospitals on the same day.
   useEffect(() => {
-    if (loaded || weekly === undefined) return;
+    if (weekly === undefined) return;
     const next = Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY }));
     for (const row of weekly as any[]) {
+      if ((row.organization_id ?? null) !== selectedOrgId) continue;
       next[row.day_of_week] = {
         enabled: true,
         start: row.start_time.slice(0, 5),
@@ -255,8 +314,7 @@ function AvailabilityPanel() {
       };
     }
     setForm(next);
-    setLoaded(true);
-  }, [weekly, loaded]);
+  }, [weekly, selectedOrgId]);
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -264,14 +322,14 @@ function AvailabilityPanel() {
         .map((d, day_of_week) => ({ ...d, day_of_week }))
         .filter(d => d.enabled)
         .map(d => ({ day_of_week: d.day_of_week, start_time: d.start, end_time: d.end, slot_duration_minutes: d.slot }));
-      return appointmentApi.setWeeklyAvailability(schedule);
+      return appointmentApi.setWeeklyAvailability(schedule, selectedOrgId);
     },
     onSuccess: () => { toast.success(t('appointments.availability.toastWeeklySaved')); qc.invalidateQueries({ queryKey: ['doctor-weekly-availability'] }); },
     onError:   (err: any) => toast.error(err.message || t('appointments.availability.toastWeeklyFailed')),
   });
 
   const overrideMutation = useMutation({
-    mutationFn: (data: { date: string; is_available: boolean; reason?: string }) => appointmentApi.setOverride(data),
+    mutationFn: (data: { date: string; is_available: boolean; reason?: string }) => appointmentApi.setOverride({ ...data, organization_id: selectedOrgId }),
     onSuccess: () => { toast.success(t('appointments.availability.toastDayUpdated')); qc.invalidateQueries({ queryKey: ['doctor-overrides'] }); },
     onError:   (err: any) => toast.error(err.message || t('appointments.availability.toastDayUpdateFailed')),
   });
@@ -289,6 +347,29 @@ function AvailabilityPanel() {
 
   return (
     <div className="space-y-6">
+      <MyHospitalsCard myOrgs={myOrgs as any[]} />
+
+      {(myOrgs as any[]).length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('appointments.hospitals.editingHoursFor')}</span>
+          <button
+            onClick={() => setSelectedOrgId(null)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${selectedOrgId === null ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+          >
+            {t('appointments.hospitals.general')}
+          </button>
+          {(myOrgs as any[]).map((org: any) => (
+            <button
+              key={org.id}
+              onClick={() => setSelectedOrgId(org.id)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${selectedOrgId === org.id ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+            >
+              {org.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
         <div className="flex items-center justify-between mb-1">
           <div>

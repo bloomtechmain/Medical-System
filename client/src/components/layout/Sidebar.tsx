@@ -111,6 +111,14 @@ const SETTINGS_ROUTE: Record<string, string> = {
   patient: '/patient/settings', laboratory: '/laboratory/settings',
 };
 
+// Team (member management) only exists for org dashboards, and only the owner
+// can use it — user.organization is already owner-only (getOrgForUser), so its
+// mere presence is the owner check.
+const TEAM_ROUTE: Record<string, string> = {
+  hospital: '/hospital/team', clinic: '/clinic/team',
+  pharmacist: '/pharmacist/team', laboratory: '/laboratory/team',
+};
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const { t } = useTranslation('common');
@@ -250,6 +258,22 @@ export default function Sidebar() {
 
       {/* ── Bottom section ── */}
       <div className="flex flex-col gap-0.5 pb-4 px-3 border-t border-white/5 pt-3 shrink-0 overflow-hidden">
+
+        {/* Team — org owners only (an org dashboard with no TEAM_ROUTE entry, or
+            no user.organization at all, means this isn't an owner) */}
+        {TEAM_ROUTE[navKey] && user?.organization && (
+          <button
+            onClick={() => navigate(TEAM_ROUTE[navKey])}
+            className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-white/[0.08] hover:text-slate-200 transition-all duration-150 overflow-hidden"
+          >
+            <span className="w-11 h-11 flex items-center justify-center shrink-0">
+              <Users size={19} strokeWidth={1.8} />
+            </span>
+            <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 pr-2">
+              {t('nav.team')}
+            </span>
+          </button>
+        )}
 
         {/* Settings */}
         <button

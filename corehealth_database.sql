@@ -177,6 +177,18 @@ CREATE TABLE public.organization_members (
 CREATE INDEX idx_orgmem_user ON public.organization_members(user_id);
 CREATE INDEX idx_orgmem_org  ON public.organization_members(organization_id);
 
+-- What medical specialties a hospital/clinic organization offers (distinct from
+-- the single owning doctor's own personal doctor_profiles.specialization) —
+-- a free-form tag list, multi-select + custom entries at registration time.
+CREATE TABLE public.organization_specializations (
+  id              SERIAL       PRIMARY KEY,
+  organization_id INTEGER      NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  name            VARCHAR(150) NOT NULL,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  UNIQUE (organization_id, name)
+);
+CREATE INDEX idx_orgspec_org ON public.organization_specializations(organization_id);
+
 -- 2.4 staff profiles (professional info — not patient PHI -> public)
 CREATE TABLE public.doctor_profiles (
   id                   SERIAL        PRIMARY KEY,
@@ -342,6 +354,21 @@ CREATE INDEX idx_pa_consultation ON clinical.prescription_assignments(consultati
 CREATE INDEX idx_pa_pharmacist   ON clinical.prescription_assignments(pharmacist_id);
 CREATE INDEX idx_pa_status       ON clinical.prescription_assignments(status);
 
+-- Free-text chat between a patient and a pharmacy on one prescription assignment
+-- (e.g. "that medicine isn't in stock" / patient replies) — same shape and RLS
+-- convention as lab_request_messages below.
+CREATE TABLE clinical.prescription_assignment_messages (
+  id             SERIAL      PRIMARY KEY,
+  assignment_id  INTEGER     NOT NULL REFERENCES clinical.prescription_assignments(id) ON DELETE CASCADE,
+  patient_id     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  pharmacist_id  INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_id      INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_role    VARCHAR(20) NOT NULL,
+  body           TEXT        NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_pam_assignment ON clinical.prescription_assignment_messages(assignment_id);
+
 -- lab_requests holds both the REQUEST and the RESULT in one place.
 -- This is the correct design because the report is patient PHI — it belongs to the
 -- patient, not to the lab organisation. Keeping it here means:
@@ -442,7 +469,13 @@ CREATE INDEX idx_dar_patient ON clinical.data_access_requests(patient_id);
 CREATE INDEX idx_dar_status  ON clinical.data_access_requests(status);
 
 -- Doctor-initiated appointment booking: a patient books a specific date/time slot
--- directly with a doctor (no organization involved) and the doctor accepts/declines.
+-- directly with a doctor and the doctor accepts/declines. organization_id is
+-- nullable: NULL means "no specific location tagged" (a private/general-practice
+-- doctor with no hospital affiliation), so existing rows need no backfill. A
+-- doctor can have a different weekly pattern per organization_id (different
+-- hours at different hospitals on the same weekday) — only the booked-slot
+-- busy-check stays doctor-wide across all orgs, since a doctor can't physically
+-- be in two places at once regardless of which location a slot belongs to.
 -- This is distinct from the per-organization tenant_<slug>.appointments table (that's
 -- an org's own front-desk record, seeded/aggregated for the admin dashboard only).
 -- Like data_access_requests, this is patient-doctor-owned relationship data, so it
@@ -450,6 +483,7 @@ CREATE INDEX idx_dar_status  ON clinical.data_access_requests(status);
 CREATE TABLE clinical.doctor_weekly_availability (
   id                    SERIAL      PRIMARY KEY,
   doctor_id             INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  organization_id       INTEGER     REFERENCES public.organizations(id) ON DELETE CASCADE,
   day_of_week           SMALLINT    NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sunday .. 6=Saturday
   start_time            TIME        NOT NULL,
   end_time              TIME        NOT NULL,
@@ -460,25 +494,32 @@ CREATE TABLE clinical.doctor_weekly_availability (
   CHECK (end_time > start_time)
 );
 CREATE INDEX idx_dwa_doctor ON clinical.doctor_weekly_availability(doctor_id);
+CREATE INDEX idx_dwa_org    ON clinical.doctor_weekly_availability(organization_id);
 
 -- Per-date exceptions to the weekly pattern: a doctor can close a normally-open day
--- (holiday/leave) or open a normally-closed one (extra clinic hours) for one date.
+-- (holiday/leave) or open a normally-closed one (extra clinic hours) for one date,
+-- scoped per organization the same way the weekly pattern is.
 CREATE TABLE clinical.doctor_availability_overrides (
-  id            SERIAL      PRIMARY KEY,
-  doctor_id     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  override_date DATE        NOT NULL,
-  is_available  BOOLEAN     NOT NULL,
-  reason        VARCHAR(255),
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (doctor_id, override_date)
+  id              SERIAL      PRIMARY KEY,
+  doctor_id       INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  organization_id INTEGER     REFERENCES public.organizations(id) ON DELETE CASCADE,
+  override_date   DATE        NOT NULL,
+  is_available    BOOLEAN     NOT NULL,
+  reason          VARCHAR(255),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_dao_doctor_date ON clinical.doctor_availability_overrides(doctor_id, override_date);
+CREATE INDEX idx_dao_org         ON clinical.doctor_availability_overrides(organization_id);
+-- NULL-safe via COALESCE so two NULL-org overrides for the same doctor+date still collide.
+CREATE UNIQUE INDEX idx_dao_doctor_org_date
+  ON clinical.doctor_availability_overrides (doctor_id, COALESCE(organization_id, 0), override_date);
 
 CREATE TABLE clinical.doctor_appointments (
   id               SERIAL      PRIMARY KEY,
   doctor_id        INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   patient_id       INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  organization_id  INTEGER     REFERENCES public.organizations(id) ON DELETE SET NULL,
   appointment_date DATE        NOT NULL,
   start_time       TIME        NOT NULL,
   end_time         TIME        NOT NULL,
@@ -494,7 +535,9 @@ CREATE INDEX idx_da_doctor  ON clinical.doctor_appointments(doctor_id);
 CREATE INDEX idx_da_patient ON clinical.doctor_appointments(patient_id);
 CREATE INDEX idx_da_status  ON clinical.doctor_appointments(status);
 CREATE INDEX idx_da_date    ON clinical.doctor_appointments(appointment_date);
--- One active (pending/confirmed) booking per doctor per date+time slot — prevents double-booking.
+CREATE INDEX idx_da_org     ON clinical.doctor_appointments(organization_id);
+-- One active (pending/confirmed) booking per doctor per date+time slot, doctor-wide
+-- across every organization — prevents double-booking regardless of location.
 CREATE UNIQUE INDEX idx_da_slot_unique ON clinical.doctor_appointments(doctor_id, appointment_date, start_time)
   WHERE status IN ('pending','confirmed');
 
@@ -632,6 +675,7 @@ DECLARE t text;
 BEGIN
   FOR t IN SELECT unnest(ARRAY[
       'patient_profiles','medical_consultations','consultation_medicines','prescription_assignments',
+      'prescription_assignment_messages',
       'lab_requests','lab_request_messages','lab_view_requests','data_access_requests',
       'doctor_weekly_availability','doctor_availability_overrides','doctor_appointments',
       'patient_reports','patient_vitals','notifications'])
@@ -700,6 +744,13 @@ CREATE POLICY pa_upd_party ON clinical.prescription_assignments FOR UPDATE USING
 CREATE POLICY pa_upd_pharmacist ON clinical.prescription_assignments FOR UPDATE USING (
   pharmacist_id = public.app_uid()
 ) WITH CHECK (pharmacist_id = public.app_uid());
+
+-- prescription_assignment_messages: the patient or pharmacist party; admin
+CREATE POLICY pam_all ON clinical.prescription_assignment_messages FOR ALL USING (
+  public.app_role() = 'admin' OR patient_id = public.app_uid() OR pharmacist_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR patient_id = public.app_uid() OR pharmacist_id = public.app_uid()
+);
 
 -- lab_requests: patient own; ordering doctor; the lab itself (by user id or org); doctor with accepted lab view; admin
 CREATE POLICY lr_sel ON clinical.lab_requests FOR SELECT USING (

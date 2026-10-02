@@ -863,7 +863,11 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
             </div>
           </div>
 
-          <ChatPanel labRequestId={r.id} />
+          <ChatPanel
+            queryKey={['lab-request-messages', r.id]}
+            fetchMessages={() => labApi.getMessages(r.id)}
+            sendMessage={(body) => labApi.sendMessage(r.id, body)}
+          />
         </div>
       </div>
     </div>

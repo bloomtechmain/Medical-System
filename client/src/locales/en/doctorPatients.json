@@ -205,6 +205,19 @@
       "open": "Open",
       "block": "Block",
       "reset": "Reset"
+    },
+    "hospitals": {
+      "title": "My Hospitals / Clinics",
+      "description": "Affiliate with the hospitals or clinics where you practice — set different hours for each from below.",
+      "searchPlaceholder": "Search for a hospital or clinic...",
+      "searching": "Searching…",
+      "noResults": "No matching hospitals or clinics found",
+      "toastAdded": "Added to your hospitals",
+      "toastAddFailed": "Failed to add that affiliation",
+      "toastRemoved": "Removed from your hospitals",
+      "toastRemoveFailed": "Failed to remove that affiliation",
+      "editingHoursFor": "Editing hours for:",
+      "general": "General (no specific location)"
     }
   }
 }

@@ -13,6 +13,7 @@ import enDoctorPatients from './locales/en/doctorPatients.json';
 import enPharmacist from './locales/en/pharmacist.json';
 import enLaboratory from './locales/en/laboratory.json';
 import enAdmin from './locales/en/admin.json';
+import enOrgTeam from './locales/en/orgTeam.json';
 
 import siCommon from './locales/si/common.json';
 import siPatientDashboard from './locales/si/patientDashboard.json';
@@ -25,6 +26,7 @@ import siDoctorPatients from './locales/si/doctorPatients.json';
 import siPharmacist from './locales/si/pharmacist.json';
 import siLaboratory from './locales/si/laboratory.json';
 import siAdmin from './locales/si/admin.json';
+import siOrgTeam from './locales/si/orgTeam.json';
 
 // All dashboard text lives in these namespaces. `common` holds strings shared
 // across every role (buttons, statuses, nav labels, generic empty states).
@@ -35,7 +37,7 @@ const NS = [
   'common',
   'patientDashboard', 'patientSettings', 'patientConsultations', 'patientReports',
   'doctorCore', 'doctorClinical', 'doctorPatients',
-  'pharmacist', 'laboratory', 'admin',
+  'pharmacist', 'laboratory', 'admin', 'orgTeam',
 ] as const;
 
 i18n
@@ -47,13 +49,13 @@ i18n
         common: enCommon,
         patientDashboard: enPatientDashboard, patientSettings: enPatientSettings, patientConsultations: enPatientConsultations, patientReports: enPatientReports,
         doctorCore: enDoctorCore, doctorClinical: enDoctorClinical, doctorPatients: enDoctorPatients,
-        pharmacist: enPharmacist, laboratory: enLaboratory, admin: enAdmin,
+        pharmacist: enPharmacist, laboratory: enLaboratory, admin: enAdmin, orgTeam: enOrgTeam,
       },
       si: {
         common: siCommon,
         patientDashboard: siPatientDashboard, patientSettings: siPatientSettings, patientConsultations: siPatientConsultations, patientReports: siPatientReports,
         doctorCore: siDoctorCore, doctorClinical: siDoctorClinical, doctorPatients: siDoctorPatients,
-        pharmacist: siPharmacist, laboratory: siLaboratory, admin: siAdmin,
+        pharmacist: siPharmacist, laboratory: siLaboratory, admin: siAdmin, orgTeam: siOrgTeam,
       },
     },
     fallbackLng: 'en',

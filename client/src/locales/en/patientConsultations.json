@@ -102,6 +102,7 @@
     "sendBtn": "Send to Pharmacy",
     "sendAnotherBtn": "Send to Another Pharmacy",
     "cancelBtn": "Withdraw from this pharmacy",
+    "chatBtn": "Chat with this pharmacy",
     "cancelledToast": "Withdrawn from that pharmacy",
     "errorGeneric": "Something went wrong — please try again",
     "status": {
