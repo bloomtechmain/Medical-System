@@ -36,7 +36,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     const {
       visit_date, doctor_name, hospital_clinic,
       sick_description, diagnosis, treatment_description,
-      manual_medicines, patient_id, assigned_pharmacist_id,
+      manual_medicines, patient_id,
       lab_tests_requested, assigned_laboratory_id,
     } = req.body;
 
@@ -62,16 +62,15 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     const { rows: [consultation] } = await client.query(`
       INSERT INTO medical_consultations
-        (patient_id, doctor_id, assigned_pharmacist_id,
+        (patient_id, doctor_id,
          visit_date, doctor_name, hospital_clinic,
          sick_description, diagnosis, treatment_description,
          prescription_file, ocr_text, lab_tests_requested, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active')
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active')
       RETURNING *
     `, [
       patientId,
       doctorId,
-      assigned_pharmacist_id || null,
       visit_date,
       doctor_name           || null,
       hospital_clinic       || null,
@@ -151,16 +150,6 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
         { consultation_id: consultation.id }
       );
 
-      if (assigned_pharmacist_id) {
-        await sendNotification(
-          assigned_pharmacist_id,
-          'consultation_assigned',
-          'New Prescription Assigned',
-          `Dr. ${drName} has assigned a prescription for patient ${ptName}. Please dispense the medicines.`,
-          { consultation_id: consultation.id }
-        );
-      }
-
       if (directLabRequest) {
         await sendNotification(
           labId!,
@@ -191,6 +180,23 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
     const { role, id } = req.user;
     let query: string, params: unknown[];
 
+    // Correlated subquery (not a JOIN) so it never fans out against the medicines
+    // JSON_AGG above it — a consultation with 3 medicines and 2 pharmacy
+    // assignments would otherwise multiply into 6 rows before aggregation.
+    const pharmacyAssignmentsSelect = `
+      COALESCE(
+        (SELECT JSON_AGG(JSON_BUILD_OBJECT(
+           'id', pa.id, 'pharmacist_id', pa.pharmacist_id,
+           'pharmacy_name', COALESCE(pp2.pharmacy_name, phu.name),
+           'status', pa.status, 'created_at', pa.created_at
+         ) ORDER BY pa.created_at)
+         FROM prescription_assignments pa
+         JOIN users phu ON phu.id = pa.pharmacist_id
+         LEFT JOIN pharmacist_profiles pp2 ON pp2.user_id = pa.pharmacist_id
+         WHERE pa.consultation_id = c.id),
+        '[]'
+      ) AS pharmacy_assignments`;
+
     if (role === 'patient') {
       query  = `SELECT c.*,
                   COALESCE(
@@ -209,46 +215,25 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
                   ) AS medicines,
                   COUNT(m.id)::int AS medicine_count,
                   u.name  AS doctor_display_name,
-                  ph.name AS pharmacist_name,
-                  pp.pharmacy_name,
-                  pp.pharmacy_address,
-                  pp.phone AS pharmacy_phone
+                  ${pharmacyAssignmentsSelect}
                 FROM medical_consultations c
                 LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
                 LEFT JOIN users u   ON u.id  = c.doctor_id
-                LEFT JOIN users ph  ON ph.id = c.assigned_pharmacist_id
-                LEFT JOIN pharmacist_profiles pp ON pp.user_id = c.assigned_pharmacist_id
                 WHERE c.patient_id = $1
-                GROUP BY c.id, u.name, ph.name, pp.pharmacy_name, pp.pharmacy_address, pp.phone
+                GROUP BY c.id, u.name
                 ORDER BY c.visit_date DESC, c.created_at DESC`;
       params = [id];
     } else if (role === 'doctor') {
       query  = `SELECT c.*,
                   COUNT(m.id)::int AS medicine_count,
                   pt.name AS patient_name, pt.email AS patient_email,
-                  ph.name AS pharmacist_name,
-                  pp.pharmacy_name
+                  ${pharmacyAssignmentsSelect}
                 FROM medical_consultations c
                 LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
                 LEFT JOIN users pt ON pt.id = c.patient_id
-                LEFT JOIN users ph ON ph.id = c.assigned_pharmacist_id
-                LEFT JOIN pharmacist_profiles pp ON pp.user_id = c.assigned_pharmacist_id
                 WHERE c.doctor_id = $1
-                GROUP BY c.id, pt.name, pt.email, ph.name, pp.pharmacy_name
+                GROUP BY c.id, pt.name, pt.email
                 ORDER BY c.visit_date DESC, c.created_at DESC`;
-      params = [id];
-    } else if (role === 'pharmacist') {
-      query  = `SELECT c.*,
-                  COUNT(m.id)::int AS medicine_count,
-                  pt.name AS patient_name, pt.email AS patient_email,
-                  u.name AS doctor_display_name
-                FROM medical_consultations c
-                LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
-                LEFT JOIN users pt ON pt.id = c.patient_id
-                LEFT JOIN users u  ON u.id  = c.doctor_id
-                WHERE c.assigned_pharmacist_id = $1
-                GROUP BY c.id, pt.name, pt.email, u.name
-                ORDER BY c.status ASC, c.visit_date DESC`;
       params = [id];
     } else {
       res.json([]); return;
@@ -262,24 +247,29 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 const getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { role, id } = req.user;
-    let condition: string;
-    if (role === 'patient')    condition = 'c.patient_id = $2';
-    else if (role === 'doctor')condition = 'c.doctor_id  = $2';
-    else                       condition = 'c.assigned_pharmacist_id = $2';
+    const condition = role === 'patient' ? 'c.patient_id = $2' : 'c.doctor_id = $2';
 
     const { rows } = await queryAs(actor(req), `
       SELECT c.*,
         pt.name AS patient_name, pt.email AS patient_email,
         u.name  AS doctor_display_name,
-        ph.name AS pharmacist_name,
-        pp.pharmacy_name, pp.pharmacy_address, pp.phone AS pharmacy_phone,
-        pat.phone AS patient_phone, pat.blood_type, pat.allergies
+        pat.phone AS patient_phone, pat.blood_type, pat.allergies,
+        COALESCE(
+          (SELECT JSON_AGG(JSON_BUILD_OBJECT(
+             'id', pa.id, 'pharmacist_id', pa.pharmacist_id,
+             'pharmacy_name', COALESCE(pp.pharmacy_name, phu.name),
+             'status', pa.status, 'created_at', pa.created_at
+           ) ORDER BY pa.created_at)
+           FROM prescription_assignments pa
+           JOIN users phu ON phu.id = pa.pharmacist_id
+           LEFT JOIN pharmacist_profiles pp ON pp.user_id = pa.pharmacist_id
+           WHERE pa.consultation_id = c.id),
+          '[]'
+        ) AS pharmacy_assignments
       FROM medical_consultations c
       LEFT JOIN users pt  ON pt.id  = c.patient_id
       LEFT JOIN users u   ON u.id   = c.doctor_id
-      LEFT JOIN users ph  ON ph.id  = c.assigned_pharmacist_id
-      LEFT JOIN pharmacist_profiles pp  ON pp.user_id  = c.assigned_pharmacist_id
-      LEFT JOIN patient_profiles    pat ON pat.user_id = c.patient_id
+      LEFT JOIN patient_profiles pat ON pat.user_id = c.patient_id
       WHERE c.id = $1 AND ${condition}
     `, [req.params.id, id]);
 
@@ -291,74 +281,6 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
     );
 
     res.json({ ...rows[0], medicines });
-  } catch (err) { next(err); }
-};
-
-// Pharmacy fulfilment pipeline — each stage can only move to the next one, so a
-// pharmacist can't accidentally skip straight from "active" to "delivered" via
-// a direct API call (the UI only ever offers the single next step anyway).
-const ALLOWED_STATUS_TRANSITIONS: Record<string, string> = {
-  active:    'preparing',
-  preparing: 'dispensed',
-  dispensed: 'delivered',
-};
-
-const STATUS_NOTIFICATIONS: Record<string, { title: string; patient: (phName: string) => string; doctor?: (ptName: string, phName: string) => string }> = {
-  preparing: {
-    title: 'Pharmacy Preparing Your Medicines',
-    patient: (phName) => `${phName} has started preparing your medicines.`,
-  },
-  dispensed: {
-    title: 'Medicines Ready ✅',
-    patient: (phName) => `Your medicines are ready for pickup/delivery at ${phName}.`,
-    doctor:  (ptName, phName) => `The prescription for patient ${ptName} is ready for pickup/delivery at ${phName}.`,
-  },
-  delivered: {
-    title: 'Medicines Delivered ✅',
-    patient: (phName) => `Your medicines from ${phName} have been delivered. Treatment complete!`,
-    doctor:  (ptName, phName) => `Patient ${ptName} has received their medicines from ${phName}.`,
-  },
-};
-
-const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const { status } = req.body;
-
-    const { rows: currentRows } = await queryAs(actor(req),
-      'SELECT * FROM medical_consultations WHERE id=$1 AND assigned_pharmacist_id=$2',
-      [req.params.id, req.user.id]
-    );
-    if (!currentRows.length) { res.status(404).json({ message: 'Not found' }); return; }
-
-    if (ALLOWED_STATUS_TRANSITIONS[currentRows[0].status] !== status) {
-      res.status(400).json({ message: `Cannot move from "${currentRows[0].status}" to "${status}"` });
-      return;
-    }
-
-    const { rows } = await queryAs(actor(req),
-      `UPDATE medical_consultations SET status=$1, updated_at=NOW()
-       WHERE id=$2 AND assigned_pharmacist_id=$3
-       RETURNING *`,
-      [status, req.params.id, req.user.id]
-    );
-
-    const notif = STATUS_NOTIFICATIONS[status];
-    if (notif) {
-      const c = rows[0];
-
-      const phRow = (await pool.query('SELECT name FROM users WHERE id=$1', [req.user.id])).rows[0];
-      const phName = phRow?.name || 'the pharmacy';
-
-      await sendNotification(c.patient_id, `prescription_${status}`, notif.title, notif.patient(phName), { consultation_id: c.id });
-
-      if (c.doctor_id && notif.doctor) {
-        const ptRow = (await pool.query('SELECT name FROM users WHERE id=$1', [c.patient_id])).rows[0];
-        const ptName = ptRow?.name || 'the patient';
-        await sendNotification(c.doctor_id, `prescription_${status}`, notif.title, notif.doctor(ptName, phName), { consultation_id: c.id });
-      }
-    }
-
-    res.json(rows[0]);
   } catch (err) { next(err); }
 };
 
@@ -374,7 +296,7 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
     const prev = existing[0];
     const {
       visit_date, hospital_clinic, sick_description,
-      diagnosis, treatment_description, assigned_pharmacist_id,
+      diagnosis, treatment_description,
       manual_medicines,
     } = req.body;
 
@@ -399,9 +321,9 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
       UPDATE medical_consultations SET
         visit_date=$1, hospital_clinic=$2,
         sick_description=$3, diagnosis=$4, treatment_description=$5,
-        assigned_pharmacist_id=$6, prescription_file=$7, ocr_text=$8,
+        prescription_file=$6, ocr_text=$7,
         updated_at=NOW()
-      WHERE id=$9
+      WHERE id=$8
       RETURNING *
     `, [
       visit_date,
@@ -409,7 +331,6 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
       sick_description         || null,
       diagnosis                || null,
       treatment_description    || null,
-      assigned_pharmacist_id   || null,
       prescriptionFile,
       ocrText                  || null,
       req.params.id,
@@ -478,8 +399,6 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
       SELECT c.*,
         u.name  AS doctor_display_name,
         dp.specialization AS doctor_specialization,
-        ph.name AS pharmacist_name,
-        pp.pharmacy_name,
         COALESCE(
           JSON_AGG(
             JSON_BUILD_OBJECT(
@@ -492,15 +411,25 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
             ) ORDER BY m.id
           ) FILTER (WHERE m.id IS NOT NULL),
           '[]'
-        ) AS medicines
+        ) AS medicines,
+        COALESCE(
+          (SELECT JSON_AGG(JSON_BUILD_OBJECT(
+             'id', pa.id, 'pharmacist_id', pa.pharmacist_id,
+             'pharmacy_name', COALESCE(pp.pharmacy_name, phu.name),
+             'status', pa.status, 'created_at', pa.created_at
+           ) ORDER BY pa.created_at)
+           FROM prescription_assignments pa
+           JOIN users phu ON phu.id = pa.pharmacist_id
+           LEFT JOIN pharmacist_profiles pp ON pp.user_id = pa.pharmacist_id
+           WHERE pa.consultation_id = c.id),
+          '[]'
+        ) AS pharmacy_assignments
       FROM medical_consultations c
       LEFT JOIN users u            ON u.id  = c.doctor_id
       LEFT JOIN doctor_profiles dp ON dp.user_id = c.doctor_id
-      LEFT JOIN users ph           ON ph.id = c.assigned_pharmacist_id
-      LEFT JOIN pharmacist_profiles pp ON pp.user_id = c.assigned_pharmacist_id
       LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
       WHERE c.patient_id = $1
-      GROUP BY c.id, u.name, dp.specialization, ph.name, pp.pharmacy_name
+      GROUP BY c.id, u.name, dp.specialization
       ORDER BY c.visit_date DESC, c.created_at DESC
     `, [patientId]);
 
@@ -612,52 +541,4 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
   }
 };
 
-const assignPharmacy = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const { pharmacist_id } = req.body;
-    const patientId = req.user.id;
-
-    if (!pharmacist_id) { res.status(400).json({ message: 'pharmacist_id is required' }); return; }
-
-    const { rows: existing } = await queryAs(actor(req),
-      'SELECT * FROM medical_consultations WHERE id=$1 AND patient_id=$2',
-      [req.params.id, patientId]
-    );
-    if (!existing.length) { res.status(404).json({ message: 'Consultation not found' }); return; }
-
-    const c = existing[0];
-    if (c.assigned_pharmacist_id) {
-      res.status(409).json({ message: 'A pharmacy is already assigned to this consultation' }); return;
-    }
-    if (c.status !== 'active') {
-      res.status(400).json({ message: 'Cannot reassign pharmacy after dispensing' }); return;
-    }
-
-    const { rows: phRows } = await pool.query(
-      "SELECT u.id, u.name, pp.pharmacy_name FROM users u LEFT JOIN pharmacist_profiles pp ON pp.user_id = u.id WHERE u.id=$1 AND u.role='pharmacist' AND u.is_active=TRUE",
-      [pharmacist_id]
-    );
-    if (!phRows.length) { res.status(404).json({ message: 'Pharmacist not found' }); return; }
-
-    const { rows: [updated] } = await queryAs(actor(req),
-      'UPDATE medical_consultations SET assigned_pharmacist_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
-      [pharmacist_id, req.params.id]
-    );
-
-    const ptRow  = await pool.query('SELECT name FROM users WHERE id=$1', [patientId]);
-    const ptName = ptRow.rows[0]?.name || 'A patient';
-    const phName = phRows[0].pharmacy_name || phRows[0].name || 'Pharmacy';
-
-    await sendNotification(
-      pharmacist_id,
-      'consultation_assigned',
-      'New Prescription Forwarded',
-      `Patient ${ptName} has forwarded a prescription to ${phName}. Please prepare the medicines.`,
-      { consultation_id: c.id }
-    );
-
-    res.json(updated);
-  } catch (err) { next(err); }
-};
-
-export { create, update, updateByPatient, getAll, getOne, updateStatus, getPatientHistory, remove, assignPharmacy };
+export { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove };

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { consultationApi } from '../services/api';
+import { prescriptionAssignmentApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
 
@@ -13,7 +13,7 @@ const STATUS_BADGE: Record<string, string> = {
   preparing: 'bg-blue-100    text-blue-700',
   dispensed: 'bg-violet-100  text-violet-700',
   delivered: 'bg-green-100   text-green-700',
-  completed: 'bg-gray-100    text-gray-500',
+  cancelled: 'bg-gray-100    text-gray-400 line-through',
 };
 
 const STATUS_KEY: Record<string, string> = {
@@ -21,7 +21,7 @@ const STATUS_KEY: Record<string, string> = {
   preparing: 'preparing',
   dispensed: 'ready',
   delivered: 'delivered',
-  completed: 'completed',
+  cancelled: 'cancelled',
 };
 
 // Pharmacy fulfilment pipeline: each status's single next step, button label, and color.
@@ -171,6 +171,11 @@ function DetailModal({ c, onClose, onAdvance }: DetailModalProps) {
               <p className="text-sm text-green-700 font-semibold">✅ {t('consultations.modal.deliveredNote')}</p>
             </div>
           )}
+          {c.status === 'cancelled' && (
+            <div className="pt-3 border-t border-gray-100 bg-gray-50 rounded-xl p-3 text-center">
+              <p className="text-sm text-gray-500 font-semibold">{t('consultations.modal.cancelledNote')}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -184,14 +189,14 @@ export default function PharmacistConsultations() {
   const qc = useQueryClient();
 
   const { data: consultations = [], isLoading } = useQuery({
-    queryKey: ['pharmacist-consultations'],
-    queryFn: consultationApi.getAll,
+    queryKey: ['pharmacist-assignments'],
+    queryFn: prescriptionAssignmentApi.getAll,
   });
 
   const advanceMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => consultationApi.updateStatus(id, status),
+    mutationFn: ({ id, status }: { id: number; status: string }) => prescriptionAssignmentApi.updateStatus(id, status),
     onSuccess: (_data, { status }) => {
-      qc.invalidateQueries({ queryKey: ['pharmacist-consultations'] });
+      qc.invalidateQueries({ queryKey: ['pharmacist-assignments'] });
       toast.success(t(`consultations.toast.${status}`));
     },
     onError: () => toast.error(t('consultations.toast.updateFailed')),
@@ -216,13 +221,14 @@ export default function PharmacistConsultations() {
           <option value="preparing">{t('consultations.filter.preparing')}</option>
           <option value="dispensed">{t('consultations.filter.ready')}</option>
           <option value="delivered">{t('consultations.filter.delivered')}</option>
+          <option value="cancelled">{t('consultations.filter.cancelled')}</option>
         </select>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { key: 'totalAssigned', label: t('consultations.stats.totalAssigned'), value: consultations.length,                                                            icon: '📋', bg: 'bg-purple-50 border-purple-100' },
+          { key: 'totalAssigned', label: t('consultations.stats.totalAssigned'), value: consultations.filter((c: any) => c.status !== 'cancelled').length,              icon: '📋', bg: 'bg-purple-50 border-purple-100' },
           { key: 'pending',       label: t('consultations.stats.pending'),       value: consultations.filter((c: any) => c.status === 'active').length,    icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
           { key: 'preparing',     label: t('consultations.stats.preparing'),     value: consultations.filter((c: any) => c.status === 'preparing').length, icon: '🧪', bg: 'bg-blue-50   border-blue-100'   },
           { key: 'ready',         label: t('consultations.stats.ready'),         value: consultations.filter((c: any) => c.status === 'dispensed').length, icon: '✅', bg: 'bg-green-50  border-green-100'  },
@@ -257,9 +263,8 @@ export default function PharmacistConsultations() {
         <div className="space-y-3">
           {filtered.map((c: any) => {
             return (
-              <div key={c.id} onClick={async () => {
-                try { setSelected(await consultationApi.getOne(c.id)); } catch { toast.error(t('consultations.toast.loadFailed')); }
-              }} className="bg-white rounded-xl border border-gray-100 p-5 hover:border-primary-200 hover:shadow-sm transition-all cursor-pointer">
+              <div key={c.id} onClick={() => setSelected(c)}
+                className="bg-white rounded-xl border border-gray-100 p-5 hover:border-primary-200 hover:shadow-sm transition-all cursor-pointer">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 bg-purple-100 text-purple-700 rounded-xl flex items-center justify-center text-sm font-bold shrink-0">

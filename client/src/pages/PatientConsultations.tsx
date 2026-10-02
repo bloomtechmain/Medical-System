@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { consultationApi, labApi, userApi } from '../services/api';
 import { SERVER_ORIGIN } from '../env';
+import PharmacyAssignmentsPanel from '../components/common/PharmacyAssignmentsPanel';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
@@ -27,17 +28,6 @@ const STATUS_STYLE: Record<string, any> = {
   dispensed: { cls: 'bg-violet-100 text-violet-700',   dot: 'bg-violet-400'   },
   delivered: { cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-400'  },
   completed: { cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-400'  },
-};
-
-// Pharmacy fulfilment pipeline display config, keyed by medical_consultations.status.
-// 'dispensed' means "ready for pickup/delivery" (kept as the DB literal for
-// backward compatibility with existing rows) — not the final state anymore.
-const PHARMACY_STAGE_UI: Record<string, { headingKey: string; headingColor: string; iconBg: string; badgeKey: string; badgeCls: string }> = {
-  active:    { headingKey: 'page.wf.pharmacyNamed',   headingColor: 'text-violet-700', iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600', badgeKey: 'page.wf.awaitingDispensing', badgeCls: 'bg-amber-100 text-amber-700' },
-  preparing: { headingKey: 'page.wf.pharmacyPreparingHeading', headingColor: 'text-blue-700', iconBg: 'bg-gradient-to-br from-blue-500 to-indigo-600', badgeKey: 'page.wf.stagePreparing', badgeCls: 'bg-blue-100 text-blue-700' },
-  dispensed: { headingKey: 'page.wf.pharmacyReadyHeading', headingColor: 'text-violet-700', iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600', badgeKey: 'page.wf.stageReady', badgeCls: 'bg-violet-100 text-violet-700' },
-  delivered: { headingKey: 'page.wf.pharmacyDeliveredHeading', headingColor: 'text-emerald-600', iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600', badgeKey: 'page.wf.stageDelivered', badgeCls: 'bg-emerald-100 text-emerald-700' },
-  completed: { headingKey: 'page.wf.pharmacyDeliveredHeading', headingColor: 'text-emerald-600', iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600', badgeKey: 'page.wf.stageDelivered', badgeCls: 'bg-emerald-100 text-emerald-700' },
 };
 
 const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -189,159 +179,6 @@ function SendToLabModal({ consultation, onClose, onSent }: SendToLabModalProps) 
               className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-cyan-500 to-teal-600 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
               {mutation.isPending && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
               <Send size={14} strokeWidth={2.5} /> {t('sendToLabModal.sendBtn')}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PharmacySearchDropdown({ selected, onSelect }: { selected: any; onSelect: (item: any) => void }) {
-  const { t } = useTranslation('patientConsultations');
-  const { t: tc } = useTranslation('common');
-  const [q, setQ]       = useState('');
-  const dq              = useDebounce(q);
-  const [open, setOpen] = useState(false);
-  const ref             = useRef<HTMLDivElement>(null);
-
-  const { data: results = [], isFetching } = useQuery({
-    queryKey: ['search-pharm-consult', dq],
-    queryFn:  () => userApi.searchPharmacists(dq),
-    enabled:  open,
-  });
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  if (selected) return (
-    <div className="flex items-center justify-between bg-violet-50 border border-violet-200 rounded-xl px-3.5 py-2.5">
-      <div className="flex items-center gap-2">
-        <Package size={14} strokeWidth={2} className="text-violet-600 shrink-0" />
-        <div>
-          <p className="text-sm font-semibold text-violet-700">{selected.pharmacy_name || selected.name}</p>
-          <p className="text-xs text-gray-400">{selected.pharmacy_address || selected.email}</p>
-        </div>
-      </div>
-      <button type="button" onClick={() => { onSelect(null); setQ(''); }}
-        className="text-gray-400 hover:text-red-500 text-xs font-medium">{tc('actions.change')}</button>
-    </div>
-  );
-
-  return (
-    <div className="relative" ref={ref}>
-      <div className="relative">
-        <Search size={14} strokeWidth={2} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400"
-          placeholder={t('pharmacySearch.placeholder')}
-          value={q}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setQ(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-        />
-        {isFetching && <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-gray-200 border-t-violet-400 rounded-full animate-spin" />}
-      </div>
-      {open && (
-        <ul className="absolute z-40 mt-1 w-full bg-white rounded-2xl shadow-xl border border-gray-100 max-h-48 overflow-y-auto">
-          {isFetching
-            ? <li className="px-4 py-3 flex items-center gap-2 text-sm text-gray-400">
-                <span className="w-3.5 h-3.5 border-2 border-gray-200 border-t-violet-400 rounded-full animate-spin shrink-0" />
-                {t('pharmacySearch.loading')}
-              </li>
-            : (results as any[]).length === 0
-              ? <li className="px-4 py-3 text-sm text-gray-400">{t('pharmacySearch.noResults')}</li>
-              : (results as any[]).map((p: any) => (
-                <li key={p.id} onClick={() => { onSelect(p); setOpen(false); setQ(''); }}
-                  className="px-4 py-2.5 hover:bg-violet-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center gap-2">
-                  <div className="w-7 h-7 bg-violet-100 rounded-xl flex items-center justify-center shrink-0">
-                    <Package size={12} strokeWidth={2} className="text-violet-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{p.pharmacy_name || p.name}</p>
-                    <p className="text-xs text-gray-400">{p.pharmacy_address || p.email}</p>
-                    {p.specialization_area && <p className="text-xs text-violet-600">{p.specialization_area}</p>}
-                  </div>
-                </li>
-              ))
-          }
-        </ul>
-      )}
-    </div>
-  );
-}
-
-interface SendToPharmacyModalProps {
-  consultation: any;
-  onClose: () => void;
-  onSent?: () => void;
-}
-
-function SendToPharmacyModal({ consultation, onClose, onSent }: SendToPharmacyModalProps) {
-  const { t } = useTranslation('patientConsultations');
-  const { t: tc } = useTranslation('common');
-  const [selectedPharmacy, setSelectedPharmacy] = useState<any>(null);
-  const [error, setError]                       = useState('');
-  const qc = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: () => consultationApi.assignPharmacy(consultation.id, selectedPharmacy.id),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['consultations'] }); onSent?.(); onClose(); },
-    onError: (err: any) => setError(err.message || t('sendToPharmacyModal.errorGeneric')),
-  });
-
-  const meds: any[] = consultation.medicines || [];
-
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-5 py-5 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-                <Package size={16} strokeWidth={2} />
-              </div>
-              <div>
-                <p className="font-bold">{t('sendToPharmacyModal.title')}</p>
-                <p className="text-white/70 text-xs">{t('sendToPharmacyModal.subtitle')}</p>
-              </div>
-            </div>
-            <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30">
-              <X size={14} strokeWidth={2.5} />
-            </button>
-          </div>
-        </div>
-        <div className="px-5 py-4 space-y-4">
-          {meds.length > 0 && (
-            <div className="bg-violet-50 border border-violet-100 rounded-xl px-3.5 py-2.5">
-              <p className="text-[10px] font-bold text-violet-600 uppercase tracking-widest mb-1.5">{t('sendToPharmacyModal.prescribedMedicines')}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {meds.map((m: any, i: number) => (
-                  <span key={i} className="text-xs bg-white border border-violet-100 text-gray-700 font-medium px-2.5 py-1 rounded-xl">
-                    {m.medicine_name}{m.dosage ? ` · ${m.dosage}` : ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              {t('sendToPharmacyModal.selectPharmacy')} <span className="text-red-400">*</span>
-            </label>
-            <PharmacySearchDropdown selected={selectedPharmacy} onSelect={setSelectedPharmacy} />
-          </div>
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2">{error}</p>}
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">{tc('actions.cancel')}</button>
-            <button
-              onClick={() => { if (!selectedPharmacy) { setError(t('sendToPharmacyModal.errorSelect')); return; } mutation.mutate(); }}
-              disabled={mutation.isPending}
-              className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
-              {mutation.isPending && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-              <Send size={14} strokeWidth={2.5} /> {t('sendToPharmacyModal.forwardBtn')}
             </button>
           </div>
         </div>
@@ -711,12 +548,12 @@ interface ConsultationCommitProps {
   isLast: boolean;
   onEdit: (c: any) => void;
   onSendToLab: (c: any) => void;
-  onSendToPharmacy: (c: any) => void;
 }
 
-function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLab, onSendToPharmacy }: ConsultationCommitProps) {
+function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLab }: ConsultationCommitProps) {
   const { t } = useTranslation('patientConsultations');
   const { t: tc } = useTranslation('common');
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const statusKey = STATUS_STYLE[c.status] ? c.status : 'active';
   const st = STATUS_STYLE[statusKey];
@@ -732,9 +569,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
   const labSent          = !!labRequest;
   const labDone          = labRequest?.status === 'completed';
   const labInProg        = labRequest?.status === 'in_progress';
-  const hasPharmacy      = !!c.pharmacy_name || !!c.assigned_pharmacist_id;
-  const pharmacyStage    = PHARMACY_STAGE_UI[c.status] || PHARMACY_STAGE_UI.active;
-  const canForwardPharm  = (hasMeds || hasRx) && !hasPharmacy && c.status === 'active';
+  const pharmacyAssignments: any[] = c.pharmacy_assignments || [];
 
   const subSteps = [
     hasSymptoms && 'symptoms',
@@ -742,7 +577,7 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
     hasTx       && 'treatment',
     hasMeds     && 'medicines',
     hasRx       && 'prescription',
-    (hasMeds || hasRx || hasPharmacy) && 'pharmacy',
+    (hasMeds || hasRx || pharmacyAssignments.length > 0) && 'pharmacy',
     hasLabReq   && 'lab',
   ].filter(Boolean);
 
@@ -894,39 +729,22 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                   </WFNode>
                 )}
 
-                {/* Pharmacy workflow node */}
-                {(hasMeds || hasRx || hasPharmacy) && (
+                {/* Pharmacy workflow node — a prescription can go to several pharmacies at once */}
+                {(hasMeds || hasRx || pharmacyAssignments.length > 0) && (
                   <WFNode
-                    icon={<Package size={12} strokeWidth={2} className={hasPharmacy ? 'text-white' : 'text-violet-600'} />}
-                    iconBg={hasPharmacy ? pharmacyStage.iconBg : 'bg-violet-100'}
-                    label={hasPharmacy ? t(pharmacyStage.headingKey, { name: c.pharmacy_name || t('page.wf.pharmacyAssignedFallback') }) : t('page.wf.pharmacy')}
-                    labelColor={hasPharmacy ? pharmacyStage.headingColor : 'text-violet-600'}
+                    icon={<Package size={12} strokeWidth={2} className="text-violet-600" />}
+                    iconBg="bg-violet-100"
+                    label={t('page.wf.pharmacy')}
+                    labelColor="text-violet-600"
                     isLast={subSteps[subSteps.length-1] === 'pharmacy' && !hasLabReq}
                   >
-                    {hasPharmacy ? (
-                      <div className="bg-violet-50 border border-violet-100 rounded-xl px-3 py-2.5 space-y-1">
-                        <p className="text-sm font-bold text-gray-900">{c.pharmacy_name || t('page.wf.assignedPharmacyFallback')}</p>
-                        {c.pharmacy_address && <p className="text-xs text-gray-400 flex items-center gap-1"><MapPin size={9} strokeWidth={2} />{c.pharmacy_address}</p>}
-                        {c.pharmacy_phone   && <p className="text-xs text-gray-400">{c.pharmacy_phone}</p>}
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${pharmacyStage.badgeCls}`}>
-                          {t(pharmacyStage.badgeKey)}
-                        </span>
-                      </div>
-                    ) : canForwardPharm ? (
-                      <div className="bg-violet-50 rounded-xl px-3 py-2 border border-violet-100 space-y-2">
-                        <p className="text-xs text-gray-600 leading-relaxed">
-                          {t('page.wf.noPharmacyText')}
-                        </p>
-                        <button
-                          onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSendToPharmacy(c); }}
-                          className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-white bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl hover:opacity-90 shadow-sm"
-                        >
-                          <Send size={11} strokeWidth={2.5} /> {t('page.wf.forwardToPharmacyBtn')}
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">{t('page.wf.noPharmacyAssigned')}</p>
-                    )}
+                    <PharmacyAssignmentsPanel
+                      consultationId={c.id}
+                      assignments={pharmacyAssignments}
+                      canManage
+                      hasMedicines={hasMeds || hasRx}
+                      onChanged={() => qc.invalidateQueries({ queryKey: ['consultations'] })}
+                    />
                   </WFNode>
                 )}
 
@@ -1019,7 +837,6 @@ export default function PatientConsultations() {
   const qc = useQueryClient();
   const [editConsultation,      setEditConsultation]      = useState<any>(null);
   const [sendLabConsultation,   setSendLabConsultation]   = useState<any>(null);
-  const [sendPharmConsultation, setSendPharmConsultation] = useState<any>(null);
   const [showSelfRecord,        setShowSelfRecord]        = useState(false);
   const [toast,                 setToast]                 = useState<{ msg: string; type: string } | null>(null);
   const [doctorFilter,          setDoctorFilter]          = useState('all');
@@ -1182,7 +999,6 @@ export default function PatientConsultations() {
               isLast={i === filteredConsultations.length - 1}
               onEdit={setEditConsultation}
               onSendToLab={setSendLabConsultation}
-              onSendToPharmacy={setSendPharmConsultation}
             />
           ))}
         </div>
@@ -1208,13 +1024,6 @@ export default function PatientConsultations() {
           consultation={sendLabConsultation}
           onClose={() => setSendLabConsultation(null)}
           onSent={() => showToast(t('page.toast.labSent'))}
-        />
-      )}
-      {sendPharmConsultation && (
-        <SendToPharmacyModal
-          consultation={sendPharmConsultation}
-          onClose={() => setSendPharmConsultation(null)}
-          onSent={() => showToast(t('page.toast.pharmacySent'))}
         />
       )}
       {editConsultation && (

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
-import { create, update, updateByPatient, getAll, getOne, updateStatus, getPatientHistory, remove, assignPharmacy } from '../controllers/consultationController';
+import { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove } from '../controllers/consultationController';
 import { protect, authorize } from '../middleware/auth';
 import { Request } from 'express';
 
@@ -30,13 +30,11 @@ const upload = multer({
 });
 
 router.get('/patient/:patientId/history', protect, authorize('doctor', 'admin'), getPatientHistory);
-router.get('/',        protect, authorize('patient', 'doctor', 'pharmacist'), getAll);
-router.get('/:id',     protect, authorize('patient', 'doctor', 'pharmacist'), getOne);
+router.get('/',        protect, authorize('patient', 'doctor'), getAll);
+router.get('/:id',     protect, authorize('patient', 'doctor'), getOne);
 router.post('/',       protect, authorize('patient', 'doctor'), upload.single('prescription'), create);
 router.put('/:id',                  protect, authorize('doctor'),      upload.single('prescription'), update);
 router.put('/:id/patient',          protect, authorize('patient'),     updateByPatient);
-router.patch('/:id/status',         protect, authorize('pharmacist'),  updateStatus);
-router.patch('/:id/assign-pharmacy',protect, authorize('patient'),     assignPharmacy);
 router.delete('/:id',               protect, authorize('patient', 'doctor'), remove);
 
 export default router;

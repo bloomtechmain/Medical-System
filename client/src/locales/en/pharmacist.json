@@ -73,14 +73,16 @@
       "pending": "Pending",
       "preparing": "Preparing",
       "ready": "Ready",
-      "delivered": "Delivered"
+      "delivered": "Delivered",
+      "cancelled": "Cancelled"
     },
     "status": {
       "pending": "Pending",
       "preparing": "Preparing",
       "ready": "Ready",
       "delivered": "Delivered",
-      "completed": "Completed"
+      "completed": "Completed",
+      "cancelled": "Cancelled"
     },
     "stats": {
       "totalAssigned": "Total Assigned",
@@ -134,7 +136,8 @@
       "markDispensedButton": "Mark as Dispensed — Notify Patient",
       "dispenseNote": "This will notify the patient of the status change.",
       "dispensedNote": "Medicines dispensed · Patient has been notified",
-      "deliveredNote": "Delivered · Treatment complete"
+      "deliveredNote": "Delivered · Treatment complete",
+      "cancelledNote": "This prescription was withdrawn — no action needed"
     }
   },
   "settings": {

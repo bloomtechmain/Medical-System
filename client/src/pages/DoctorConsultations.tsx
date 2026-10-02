@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { consultationApi, userApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
+import PharmacyAssignmentsPanel from '../components/common/PharmacyAssignmentsPanel';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
@@ -117,7 +118,6 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
     lab_tests_requested: '',
   });
   const [selectedPatient,     setSelectedPatient]     = useState<any>(null);
-  const [selectedPharmacist,  setSelectedPharmacist]  = useState<any>(null);
   const [selectedLaboratory,  setSelectedLaboratory]  = useState<any>(null);
   const [medicines, setMedicines] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -145,7 +145,6 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
     try {
       const fd = new FormData();
       fd.append('patient_id', selectedPatient.id);
-      if (selectedPharmacist)  fd.append('assigned_pharmacist_id',  selectedPharmacist.id);
       if (selectedLaboratory)  fd.append('assigned_laboratory_id',  selectedLaboratory.id);
       Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
       fd.append('manual_medicines', JSON.stringify(medicines.filter(m => m.medicine_name.trim())));
@@ -161,7 +160,6 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
       toast.success(
         t('consultations.newModal.toastConsultationSaved') +
         (found > 0 ? t('consultations.newModal.toastMedicinesAutoExtracted', { count: found }) : '') +
-        (selectedPharmacist ? t('consultations.newModal.toastPharmacyNotified') : '') +
         labMsg +
         t('consultations.newModal.toastPatientNotified')
       );
@@ -363,41 +361,6 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
             )}
           </div>
 
-          {/* Pharmacy assignment */}
-          <div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-              {t('consultations.newModal.assignPharmacySectionTitle')}
-              <span className="ml-2 text-gray-400 normal-case font-normal">{t('consultations.newModal.assignPharmacySectionHint')}</span>
-            </h3>
-            <SearchDropdown
-              label={t('consultations.newModal.searchPharmacyLabel')}
-              placeholder={t('consultations.newModal.searchPharmacyPlaceholder')}
-              fetchFn={userApi.searchPharmacists}
-              queryKey="search-pharmacists"
-              selected={selectedPharmacist}
-              onSelect={setSelectedPharmacist}
-              renderItem={(p) => (
-                <div className="flex items-start gap-2">
-                  <span className="text-lg">💊</span>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{p.pharmacy_name || p.name}</p>
-                    <p className="text-xs text-gray-400">{p.pharmacy_address || p.email}</p>
-                    {p.specialization_area && <p className="text-xs text-primary-600">{p.specialization_area}</p>}
-                  </div>
-                </div>
-              )}
-              renderSelected={(p) => (
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">💊</span>
-                  <div>
-                    <p className="text-sm font-semibold text-primary-700">{p.pharmacy_name || p.name}</p>
-                    <p className="text-xs text-gray-500">{p.pharmacy_address || p.email}</p>
-                  </div>
-                </div>
-              )}
-            />
-          </div>
-
           {/* Submit */}
           <div className="flex gap-3 pt-2 border-t border-gray-100">
             <button type="submit" disabled={submitting} className="btn-primary flex-1 py-2.5">
@@ -443,11 +406,6 @@ function EditConsultationModal({ consultation: c, onClose, onSaved }: EditConsul
       duration:      m.duration      || '',
     }))
   );
-  const [selectedPharmacist, _setSelectedPharmacist] = useState<any>(
-    c.assigned_pharmacist_id
-      ? { id: c.assigned_pharmacist_id, pharmacy_name: c.pharmacy_name, pharmacy_address: c.pharmacy_address, name: c.pharmacist_name }
-      : null
-  );
   const [file] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -463,7 +421,6 @@ function EditConsultationModal({ consultation: c, onClose, onSaved }: EditConsul
     try {
       const fd = new FormData();
       Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
-      if (selectedPharmacist) fd.append('assigned_pharmacist_id', selectedPharmacist.id);
       fd.append('manual_medicines', JSON.stringify(medicines.filter((m: any) => m.medicine_name.trim())));
       if (file) fd.append('prescription', file);
 
@@ -586,10 +543,15 @@ interface DetailModalProps {
   onEdit: (c: any) => void;
 }
 
-function DetailModal({ consultation: c, onClose, onEdit }: DetailModalProps) {
+function DetailModal({ consultation: initialC, onClose, onEdit }: DetailModalProps) {
   const { t } = useTranslation('doctorClinical');
   const { t: tc } = useTranslation('common');
+  const qc = useQueryClient();
   const [showOCR, setShowOCR] = useState(false);
+  // Local copy, refreshed in place after a pharmacy assignment change so the doctor
+  // can send to several pharmacies in one sitting without the modal closing/reopening.
+  const [c, setC] = useState(initialC);
+  const hasMeds = (c.medicines?.length || 0) > 0;
 
   const STATUS_COLOR: Record<string, string> = { active: 'bg-yellow-100 text-yellow-700', dispensed: 'bg-green-100 text-green-700', completed: 'bg-gray-100 text-gray-600' };
   const STATUS_LABEL: Record<string, string> = { active: tc('status.active'), dispensed: t('consultations.page.statusDispensed'), completed: tc('status.completed') };
@@ -623,7 +585,6 @@ function DetailModal({ consultation: c, onClose, onEdit }: DetailModalProps) {
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: t('consultations.detailModal.patientLabel'),  value: c.patient_name },
-              { label: t('consultations.detailModal.pharmacyLabel'), value: c.pharmacy_name || c.pharmacist_name || '—' },
               { label: t('consultations.detailModal.dateLabel'),     value: formatDate(c.visit_date) },
               { label: t('consultations.detailModal.hospitalLabel'), value: c.hospital_clinic || '—' },
             ].map(({ label, value }) => (
@@ -632,6 +593,21 @@ function DetailModal({ consultation: c, onClose, onEdit }: DetailModalProps) {
                 <p className="text-sm font-semibold text-gray-900 mt-0.5">{value}</p>
               </div>
             ))}
+          </div>
+
+          <div>
+            <p className="text-xs text-gray-400 font-medium mb-1.5">{t('consultations.detailModal.pharmacyLabel')}</p>
+            <PharmacyAssignmentsPanel
+              consultationId={c.id}
+              assignments={c.pharmacy_assignments}
+              canManage
+              hasMedicines={hasMeds || !!c.prescription_file}
+              onChanged={async () => {
+                qc.invalidateQueries({ queryKey: ['doctor-consultations'] });
+                const updated = await consultationApi.getOne(c.id);
+                setC(updated);
+              }}
+            />
           </div>
 
           {[
@@ -801,9 +777,11 @@ export default function DoctorConsultations() {
                           💊 {t('consultations.page.medicineCount', { count: c.medicine_count })}
                         </span>
                       )}
-                      {c.pharmacy_name && (
+                      {c.pharmacy_assignments?.length > 0 && (
                         <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-medium">
-                          🏪 {c.pharmacy_name}
+                          🏪 {c.pharmacy_assignments.length === 1
+                            ? c.pharmacy_assignments[0].pharmacy_name
+                            : t('consultations.page.pharmacyCount', { count: c.pharmacy_assignments.length })}
                         </span>
                       )}
                       {c.prescription_file && (
