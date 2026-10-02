@@ -118,8 +118,9 @@ const createProfile = async (
 const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const { name, email, password, role, profile } = req.body as {
+    const { name, email, password, role, profile, hospital_organization_ids } = req.body as {
       name: string; email: string; password: string; role: string; profile?: Record<string, any>;
+      hospital_organization_ids?: number[];
     };
 
     const existing = await client.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -146,6 +147,23 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     );
 
     if (profile) await createProfile(client, role, user.id, profile);
+
+    // A doctor can self-register already affiliated with 0+ existing hospitals/
+    // clinics (more can be added later from Settings) — just membership rows,
+    // same as the admin-driven addMember flow, no approval needed.
+    if (role === 'doctor' && Array.isArray(hospital_organization_ids) && hospital_organization_ids.length) {
+      const { rows: validOrgs } = await client.query(
+        "SELECT id FROM public.organizations WHERE id = ANY($1) AND is_active = TRUE AND org_type IN ('hospital','clinic')",
+        [hospital_organization_ids]
+      );
+      for (const org of validOrgs) {
+        await client.query(
+          `INSERT INTO public.organization_members (organization_id, user_id, member_role)
+           VALUES ($1, $2, 'doctor') ON CONFLICT (organization_id, user_id) DO NOTHING`,
+          [org.id, user.id]
+        );
+      }
+    }
 
     await client.query('COMMIT');
     res.status(201).json({ user, token: generateToken(user as DbUser) });

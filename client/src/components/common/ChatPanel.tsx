@@ -2,29 +2,37 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Send, MessageCircle } from 'lucide-react';
-import { labApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 function fmtTime(d: string): string {
   return new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ChatPanel({ labRequestId }: { labRequestId: number }) {
+interface ChatPanelProps {
+  queryKey: unknown[];
+  fetchMessages: () => Promise<any>;
+  sendMessage: (body: string) => Promise<any>;
+}
+
+// Generic chat UI shared by lab-request messaging (patient/doctor/laboratory on
+// a lab_requests row) and pharmacy messaging (patient/pharmacist on a
+// prescription_assignments row) — identical shape, only the data source differs.
+export default function ChatPanel({ queryKey, fetchMessages, sendMessage }: ChatPanelProps) {
   const { t } = useTranslation('common');
   const { user } = useAuth();
   const qc = useQueryClient();
   const [text, setText] = useState('');
 
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: ['lab-request-messages', labRequestId],
-    queryFn:  () => labApi.getMessages(labRequestId),
+    queryKey,
+    queryFn: fetchMessages,
   });
 
   const sendMutation = useMutation({
-    mutationFn: (body: string) => labApi.sendMessage(labRequestId, body),
+    mutationFn: (body: string) => sendMessage(body),
     onSuccess: () => {
       setText('');
-      qc.invalidateQueries({ queryKey: ['lab-request-messages', labRequestId] });
+      qc.invalidateQueries({ queryKey });
     },
   });
 

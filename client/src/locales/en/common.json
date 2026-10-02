@@ -110,6 +110,7 @@
     "prescriptions": "Prescriptions",
     "patientInformation": "Patient Information",
     "settings": "Settings",
+    "team": "Team",
     "signOut": "Sign out"
   },
   "navShort": {
@@ -134,6 +135,7 @@
     "reports": "Reports",
     "more": "More",
     "settings": "Settings",
+    "team": "Team",
     "signOut": "Sign Out"
   },
   "roleLabels": {

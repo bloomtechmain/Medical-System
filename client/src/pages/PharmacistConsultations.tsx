@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { prescriptionAssignmentApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
+import ChatPanel from '../components/common/ChatPanel';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
@@ -150,6 +151,15 @@ function DetailModal({ c, onClose, onAdvance }: DetailModalProps) {
                 </pre>
               )}
             </div>
+          )}
+
+          {/* Chat with the patient — e.g. "that medicine isn't in stock" */}
+          {c.status !== 'cancelled' && (
+            <ChatPanel
+              queryKey={['prescription-assignment-messages', c.id]}
+              fetchMessages={() => prescriptionAssignmentApi.getMessages(c.id)}
+              sendMessage={(body) => prescriptionAssignmentApi.sendMessage(c.id, body)}
+            />
           )}
 
           {/* Pipeline action */}

@@ -172,18 +172,39 @@ const searchOwnerCandidates = async (req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 };
 
+// Lets a doctor (at self-registration, or later from Settings) search existing
+// hospital/clinic organizations to affiliate with. Public (no session at
+// registration time) but deliberately narrow: active orgs only, 2+ char query.
+const searchHospitalsClinics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { q } = req.query as { q?: string };
+    if (!q || q.trim().length < 2) { res.json([]); return; }
+
+    const { rows } = await pool.query(
+      `SELECT id, name, org_type, slug
+       FROM public.organizations
+       WHERE org_type IN ('hospital','clinic') AND is_active = TRUE
+         AND name ILIKE $1
+       ORDER BY name LIMIT 10`,
+      [`%${q.trim()}%`]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
 const registerOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let client;
   try {
     client = await pool.connect();
     const {
       org_name, slug, org_type, owner_user_id,
-      owner_name, owner_email, owner_password, profile,
+      owner_name, owner_email, owner_password, profile, specializations,
     } = req.body as {
       org_name: string; slug: string; org_type: string;
       owner_user_id?: number;
       owner_name?: string; owner_email?: string; owner_password?: string;
       profile?: Record<string, any>;
+      specializations?: string[];
     };
 
     const role = ORG_OWNER_ROLE[org_type];
@@ -242,6 +263,21 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
       [slug, owner.id]
     );
 
+    const cleanSpecs = (specializations || []).map(s => s.trim()).filter(Boolean);
+    if (cleanSpecs.length) {
+      const { rows: [{ id: orgId }] } = await client.query('SELECT id FROM public.organizations WHERE slug = $1', [slug]);
+      const values: string[] = [];
+      const params: unknown[] = [];
+      cleanSpecs.forEach((name, i) => {
+        values.push(`($${i * 2 + 1},$${i * 2 + 2})`);
+        params.push(orgId, name);
+      });
+      await client.query(
+        `INSERT INTO public.organization_specializations (organization_id, name) VALUES ${values.join(',')} ON CONFLICT DO NOTHING`,
+        params
+      );
+    }
+
     await client.query('COMMIT');
     res.status(201).json({
       message: existingOwner
@@ -256,4 +292,4 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export { getAll, getMembers, addMember, removeMember, provision, toggleActive, registerOrganization, searchOwnerCandidates };
+export { getAll, getMembers, addMember, removeMember, provision, toggleActive, registerOrganization, searchOwnerCandidates, searchHospitalsClinics };

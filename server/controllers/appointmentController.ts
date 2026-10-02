@@ -40,11 +40,14 @@ interface DaySlots {
 }
 
 // Weekly pattern + per-date overrides + already-booked times → the concrete list of
-// bookable slots for the next `days` days. Runs impersonating the doctor's own RLS
-// identity so it can see every booking on their calendar (not just the caller's own),
-// which is required to correctly exclude already-taken slots — it only ever returns
-// bare start/end times here, never who booked them or why.
-const computeAvailableSlots = async (doctorId: number, days: number): Promise<DaySlots[]> => {
+// bookable slots for the next `days` days, scoped to one organization (a doctor can
+// have a different weekly pattern per hospital/clinic). The already-booked exclusion
+// stays doctor-wide across every organization — a doctor can't physically be in two
+// places at once, regardless of which location a given weekly block belongs to.
+// Runs impersonating the doctor's own RLS identity so it can see every booking on
+// their calendar (not just the caller's own) — it only ever returns bare start/end
+// times here, never who booked them or why.
+const computeAvailableSlots = async (doctorId: number, organizationId: number | null, days: number): Promise<DaySlots[]> => {
   const doctorActor: RLSActor = { id: doctorId, role: 'doctor' };
   const today   = new Date();
   const fromStr = toDateStr(today);
@@ -54,11 +57,11 @@ const computeAvailableSlots = async (doctorId: number, days: number): Promise<Da
 
   const [{ rows: weekly }, { rows: overrides }, { rows: booked }] = await Promise.all([
     queryAs(doctorActor,
-      'SELECT * FROM doctor_weekly_availability WHERE doctor_id=$1 AND is_active=true',
-      [doctorId]),
+      'SELECT * FROM doctor_weekly_availability WHERE doctor_id=$1 AND is_active=true AND organization_id IS NOT DISTINCT FROM $2',
+      [doctorId, organizationId]),
     queryAs(doctorActor,
-      'SELECT * FROM doctor_availability_overrides WHERE doctor_id=$1 AND override_date BETWEEN $2 AND $3',
-      [doctorId, fromStr, toStr]),
+      'SELECT * FROM doctor_availability_overrides WHERE doctor_id=$1 AND organization_id IS NOT DISTINCT FROM $2 AND override_date BETWEEN $3 AND $4',
+      [doctorId, organizationId, fromStr, toStr]),
     queryAs(doctorActor,
       `SELECT appointment_date, start_time FROM doctor_appointments
        WHERE doctor_id=$1 AND appointment_date BETWEEN $2 AND $3 AND status IN ('pending','confirmed')`,
@@ -120,11 +123,12 @@ const getDoctorSlots = async (req: Request, res: Response, next: NextFunction): 
   try {
     const doctorId = parseInt(req.params.doctorId, 10);
     const days = Math.min(Math.max(parseInt((req.query.days as string) || '14', 10) || 14, 1), MAX_SLOTS_DAYS);
+    const organizationId = req.query.organization_id ? parseInt(req.query.organization_id as string, 10) : null;
 
     const { rows: dr } = await pool.query("SELECT id FROM users WHERE id=$1 AND role='doctor'", [doctorId]);
     if (!dr.length) { res.status(404).json({ message: 'Doctor not found' }); return; }
 
-    const availableDays = await computeAvailableSlots(doctorId, days);
+    const availableDays = await computeAvailableSlots(doctorId, organizationId, days);
     res.json({ days: availableDays });
   } catch (err) { next(err); }
 };
@@ -139,12 +143,28 @@ const getWeeklyAvailability = async (req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 };
 
+// Replaces one organization's weekly pattern for this doctor (organization_id may be
+// null for "general/no specific location"). Other organizations' patterns for the
+// same doctor are untouched — this is what lets a doctor have different hours at
+// different hospitals on the same weekday.
 const setWeeklyAvailability = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { schedule } = req.body as {
+    const { schedule, organization_id } = req.body as {
       schedule?: { day_of_week: number; start_time: string; end_time: string; slot_duration_minutes: number }[];
+      organization_id?: number | null;
     };
     if (!Array.isArray(schedule)) { res.status(400).json({ message: 'schedule must be an array' }); return; }
+
+    const doctorId = req.user.id;
+    const orgId = organization_id ?? null;
+
+    if (orgId !== null) {
+      const { rows: member } = await pool.query(
+        "SELECT 1 FROM public.organization_members WHERE organization_id=$1 AND user_id=$2",
+        [orgId, doctorId]
+      );
+      if (!member.length) { res.status(403).json({ message: 'Not a member of that organization' }); return; }
+    }
 
     for (const block of schedule) {
       if (
@@ -158,25 +178,27 @@ const setWeeklyAvailability = async (req: Request, res: Response, next: NextFunc
       }
     }
 
-    const doctorId = req.user.id;
-    await queryAs(actor(req), 'DELETE FROM doctor_weekly_availability WHERE doctor_id=$1', [doctorId]);
+    await queryAs(actor(req),
+      'DELETE FROM doctor_weekly_availability WHERE doctor_id=$1 AND organization_id IS NOT DISTINCT FROM $2',
+      [doctorId, orgId]
+    );
 
     if (schedule.length > 0) {
       const values: string[] = [];
       const params: unknown[] = [];
       schedule.forEach((b, i) => {
-        const base = i * 5;
-        values.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
-        params.push(doctorId, b.day_of_week, b.start_time, b.end_time, b.slot_duration_minutes);
+        const base = i * 6;
+        values.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
+        params.push(doctorId, orgId, b.day_of_week, b.start_time, b.end_time, b.slot_duration_minutes);
       });
       await queryAs(actor(req), `
-        INSERT INTO doctor_weekly_availability (doctor_id, day_of_week, start_time, end_time, slot_duration_minutes)
+        INSERT INTO doctor_weekly_availability (doctor_id, organization_id, day_of_week, start_time, end_time, slot_duration_minutes)
         VALUES ${values.join(',')}
       `, params);
     }
 
     const { rows } = await queryAs(actor(req),
-      'SELECT * FROM doctor_weekly_availability WHERE doctor_id=$1 ORDER BY day_of_week, start_time',
+      'SELECT * FROM doctor_weekly_availability WHERE doctor_id=$1 ORDER BY organization_id NULLS FIRST, day_of_week, start_time',
       [doctorId]
     );
     res.json(rows);
@@ -203,18 +225,21 @@ const getOverrides = async (req: Request, res: Response, next: NextFunction): Pr
 
 const setOverride = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { date, is_available, reason } = req.body as { date?: string; is_available?: boolean; reason?: string };
+    const { date, is_available, reason, organization_id } = req.body as {
+      date?: string; is_available?: boolean; reason?: string; organization_id?: number | null;
+    };
     if (!date || !DAY_RE.test(date))      { res.status(400).json({ message: 'Valid date is required' }); return; }
     if (typeof is_available !== 'boolean') { res.status(400).json({ message: 'is_available must be true or false' }); return; }
     if (date < toDateStr(new Date()))     { res.status(400).json({ message: 'Cannot set availability for a past date' }); return; }
 
+    const orgId = organization_id ?? null;
     const { rows: [row] } = await queryAs(actor(req), `
-      INSERT INTO doctor_availability_overrides (doctor_id, override_date, is_available, reason)
-      VALUES ($1,$2,$3,$4)
-      ON CONFLICT (doctor_id, override_date)
+      INSERT INTO doctor_availability_overrides (doctor_id, organization_id, override_date, is_available, reason)
+      VALUES ($1,$2,$3,$4,$5)
+      ON CONFLICT (doctor_id, COALESCE(organization_id, 0), override_date)
       DO UPDATE SET is_available=EXCLUDED.is_available, reason=EXCLUDED.reason, updated_at=NOW()
       RETURNING *
-    `, [req.user.id, date, is_available, reason || null]);
+    `, [req.user.id, orgId, date, is_available, reason || null]);
 
     res.status(201).json(row);
   } catch (err) { next(err); }
@@ -233,10 +258,11 @@ const deleteOverride = async (req: Request, res: Response, next: NextFunction): 
 
 const createAppointment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { doctor_id, appointment_date, start_time, reason } = req.body as {
-      doctor_id?: number; appointment_date?: string; start_time?: string; reason?: string;
+    const { doctor_id, appointment_date, start_time, reason, organization_id } = req.body as {
+      doctor_id?: number; appointment_date?: string; start_time?: string; reason?: string; organization_id?: number | null;
     };
     const patientId = req.user.id;
+    const orgId = organization_id ?? null;
 
     if (!doctor_id)                              { res.status(400).json({ message: 'Doctor is required' }); return; }
     if (!appointment_date || !DAY_RE.test(appointment_date)) { res.status(400).json({ message: 'Valid appointment date is required' }); return; }
@@ -246,11 +272,19 @@ const createAppointment = async (req: Request, res: Response, next: NextFunction
     const { rows: dr } = await pool.query("SELECT id, name FROM users WHERE id=$1 AND role='doctor'", [doctor_id]);
     if (!dr.length) { res.status(404).json({ message: 'Doctor not found' }); return; }
 
+    if (orgId !== null) {
+      const { rows: member } = await pool.query(
+        'SELECT 1 FROM public.organization_members WHERE organization_id=$1 AND user_id=$2',
+        [orgId, doctor_id]
+      );
+      if (!member.length) { res.status(400).json({ message: 'Doctor is not affiliated with that organization' }); return; }
+    }
+
     const daysAhead = Math.min(
       Math.ceil((new Date(appointment_date).getTime() - Date.now()) / 86_400_000) + 1,
       MAX_SLOTS_DAYS
     );
-    const availableDays = await computeAvailableSlots(doctor_id, Math.max(daysAhead, 1));
+    const availableDays = await computeAvailableSlots(doctor_id, orgId, Math.max(daysAhead, 1));
     const day = availableDays.find(d => d.date === appointment_date);
     const slot = day?.slots.find(s => s.start_time === start_time);
     if (!slot) { res.status(409).json({ message: 'That slot is no longer available. Please choose another.' }); return; }
@@ -258,9 +292,9 @@ const createAppointment = async (req: Request, res: Response, next: NextFunction
     let appointment;
     try {
       ({ rows: [appointment] } = await queryAs(actor(req), `
-        INSERT INTO doctor_appointments (doctor_id, patient_id, appointment_date, start_time, end_time, reason)
-        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *
-      `, [doctor_id, patientId, appointment_date, slot.start_time, slot.end_time, reason || null]));
+        INSERT INTO doctor_appointments (doctor_id, patient_id, organization_id, appointment_date, start_time, end_time, reason)
+        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
+      `, [doctor_id, patientId, orgId, appointment_date, slot.start_time, slot.end_time, reason || null]));
     } catch (err) {
       if ((err as { code?: string }).code === '23505') {
         res.status(409).json({ message: 'That slot was just booked by someone else. Please choose another.' }); return;
@@ -293,11 +327,13 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
         dr.name AS doctor_name,
         pt.name AS patient_name,
         dp.specialization AS doctor_specialization,
-        dp.hospital_affiliation AS doctor_hospital
+        dp.hospital_affiliation AS doctor_hospital,
+        o.name AS organization_name, o.org_type AS organization_type
       FROM doctor_appointments a
       JOIN users dr ON dr.id = a.doctor_id
       JOIN users pt ON pt.id = a.patient_id
       LEFT JOIN doctor_profiles dp ON dp.user_id = a.doctor_id
+      LEFT JOIN public.organizations o ON o.id = a.organization_id
       WHERE ${cond}
       ORDER BY a.appointment_date DESC, a.start_time DESC
     `, [id]);
