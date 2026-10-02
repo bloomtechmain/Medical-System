@@ -82,6 +82,15 @@
       "admin": "Admin"
     }
   },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Update your account details.",
+    "sections": {
+      "account": "Account Information"
+    },
+    "toastSuccess": "Profile updated successfully",
+    "toastError": "Failed to update profile"
+  },
   "users": {
     "fields": {
       "specialization": "Specialization",

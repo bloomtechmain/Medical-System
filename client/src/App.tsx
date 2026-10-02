@@ -28,6 +28,10 @@ import DoctorAccessRequests from './pages/DoctorAccessRequests';
 import DoctorAppointments from './pages/DoctorAppointments';
 import BookDoctor from './pages/BookDoctor';
 import PatientSettings from './pages/PatientSettings';
+import DoctorSettings from './pages/DoctorSettings';
+import PharmacistSettings from './pages/PharmacistSettings';
+import LaboratorySettings from './pages/LaboratorySettings';
+import AdminSettings from './pages/AdminSettings';
 import LaboratoryCatalog from './pages/LaboratoryCatalog';
 import Medicines from './pages/Medicines';
 import Suppliers from './pages/Suppliers';
@@ -91,6 +95,7 @@ export default function App() {
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="organizations" element={<Organizations />} />
+        <Route path="settings" element={<AdminSettings />} />
       </Route>
 
       {/* Hospital routes */}
@@ -101,6 +106,7 @@ export default function App() {
         <Route path="patients/:patientId" element={<DoctorPatientView />} />
         <Route path="requests"            element={<DoctorAccessRequests />} />
         <Route path="appointments"        element={<DoctorAppointments />} />
+        <Route path="settings"            element={<DoctorSettings />} />
       </Route>
 
       {/* Clinic routes */}
@@ -111,6 +117,7 @@ export default function App() {
         <Route path="patients/:patientId" element={<DoctorPatientView />} />
         <Route path="requests"            element={<DoctorAccessRequests />} />
         <Route path="appointments"        element={<DoctorAppointments />} />
+        <Route path="settings"            element={<DoctorSettings />} />
       </Route>
 
       {/* Doctor routes */}
@@ -122,6 +129,7 @@ export default function App() {
         <Route path="patients/:patientId" element={<DoctorPatientView />} />
         <Route path="requests"        element={<DoctorAccessRequests />} />
         <Route path="appointments"    element={<DoctorAppointments />} />
+        <Route path="settings"        element={<DoctorSettings />} />
       </Route>
 
       {/* Pharmacist routes */}
@@ -133,6 +141,7 @@ export default function App() {
         <Route path="orders"        element={<Orders />} />
         <Route path="sales"         element={<Sales />} />
         <Route path="inventory"     element={<Inventory />} />
+        <Route path="settings"      element={<PharmacistSettings />} />
       </Route>
 
       {/* Patient routes */}
@@ -152,6 +161,7 @@ export default function App() {
         <Route index element={<LaboratoryDashboard />} />
         <Route path="reports" element={<LaboratoryReports />} />
         <Route path="catalog" element={<LaboratoryCatalog />} />
+        <Route path="settings" element={<LaboratorySettings />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

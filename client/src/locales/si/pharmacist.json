@@ -137,6 +137,29 @@
       "deliveredNote": "භාර දී ඇත · ප්‍රතිකාරය සම්පූර්ණයි"
     }
   },
+  "settings": {
+    "title": "සැකසුම්",
+    "subtitle": "වෛද්‍යවරුන්ට සහ රෝගීන්ට ඔබේ ෆාමසි පැතිකඩ යොවුන් කරගෙන තබා ගන්න.",
+    "sections": {
+      "account": "ගිණුම් තොරතුරු",
+      "pharmacy": "ෆාමසි විස්තර"
+    },
+    "fields": {
+      "licenseNumber": "බලපත්‍ර අංකය",
+      "pharmacyName": "ෆාමසියේ නම",
+      "pharmacyAddress": "ෆාමසියේ ලිපිනය",
+      "yearsExperience": "පළපුරුද්ද (වසර)",
+      "specializationArea": "විශේෂඥතා ක්ෂේත්‍රය"
+    },
+    "placeholders": {
+      "licenseNumber": "උදා., PH-12345",
+      "pharmacyName": "උදා., City Pharmacy",
+      "pharmacyAddress": "අංක 12, ප්‍රධාන වීදිය, කොළඹ 03",
+      "specializationArea": "උදා., Clinical Pharmacy"
+    },
+    "toastSuccess": "ප්‍රොෆයිලය සාර්ථකව යාවත්කාලීන කරන ලදී",
+    "toastError": "ප්‍රොෆයිලය යාවත්කාලීන කිරීමට අසමත් විය"
+  },
   "medicines": {
     "pageTitle": "බෙහෙත්",
     "pageDescription": "බෙහෙත් තොග කළමනාකරණය කරන්න",
