@@ -78,11 +78,19 @@ export const consultationApi = {
   getOne:           (id: number): Promise<any>                     => api.get(`/consultations/${id}`),
   create:           (formData: FormData): Promise<any>             => api.post('/consultations', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   update:           (id: number, formData: FormData): Promise<any> => api.put(`/consultations/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  updateStatus:     (id: number, status: string): Promise<any>     => api.patch(`/consultations/${id}/status`, { status }),
   remove:           (id: number): Promise<any>                     => api.delete(`/consultations/${id}`),
   updateByPatient:  (id: number, data: unknown): Promise<any>      => api.put(`/consultations/${id}/patient`, data),
   getPatientHistory:(patientId: number): Promise<any>              => api.get(`/consultations/patient/${patientId}/history`),
-  assignPharmacy:   (id: number, pharmacist_id: number): Promise<any> => api.patch(`/consultations/${id}/assign-pharmacy`, { pharmacist_id }),
+};
+
+// A prescription can be sent to several pharmacies at once, each independently
+// cancellable/re-sendable — see server/controllers/prescriptionAssignmentController.ts.
+export const prescriptionAssignmentApi = {
+  getAll:        (): Promise<any>                                    => api.get('/prescription-assignments'),
+  getForConsultation: (consultationId: number): Promise<any>         => api.get('/prescription-assignments', { params: { consultation_id: consultationId } }),
+  assign:        (consultation_id: number, pharmacist_id: number): Promise<any> => api.post('/prescription-assignments', { consultation_id, pharmacist_id }),
+  updateStatus:  (id: number, status: string): Promise<any>          => api.patch(`/prescription-assignments/${id}/status`, { status }),
+  cancel:        (id: number): Promise<any>                          => api.patch(`/prescription-assignments/${id}/cancel`),
 };
 
 export const labApi = {

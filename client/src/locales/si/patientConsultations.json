@@ -27,8 +27,7 @@
       "updated": "වෛද්‍ය හමුවීම යාවත්කාලීන කරන ලදී!",
       "updateFailed": "යාවත්කාලීන කිරීම අසාර්ථක විය",
       "visitRecorded": "හමුවීම සාර්ථකව වාර්තා කරන ලදී!",
-      "labSent": "රසායනාගාර ඉල්ලීම යවන ලදී! රසායනාගාරයට දැනුම් දී ඇත.",
-      "pharmacySent": "බෙහෙත් වට්ටෝරුව යොමු කරන ලදී! ෆාමසියට දැනුම් දී ඇත."
+      "labSent": "රසායනාගාර ඉල්ලීම යවන ලදී! රසායනාගාරයට දැනුම් දී ඇත."
     },
     "doctorCard": {
       "selfRecorded": "ස්වයං-වාර්තා කළ",
@@ -60,12 +59,6 @@
       "prescription": "බෙහෙත් වට්ටෝරුව",
       "pharmacy": "ෆාමසිය",
       "pharmacyDispensed": "ෆාමසිය මගින් නිකුත් කරන ලදී ✅",
-      "pharmacyNamed": "ෆාමසිය: {{name}}",
-      "pharmacyPreparingHeading": "{{name}} සූදානම් කරමින්",
-      "pharmacyReadyHeading": "{{name}} හි සූදානම්",
-      "pharmacyDeliveredHeading": "{{name}} විසින් භාර දෙන ලදී",
-      "pharmacyAssignedFallback": "පවරා ඇත",
-      "assignedPharmacyFallback": "පවරන ලද ෆාමසිය",
       "labTestsRequested": "ඉල්ලූ රසායනාගාර පරීක්ෂණ",
       "sentTo": "යවන ලද්දේ: {{name}}",
       "laboratoryFallback": "රසායනාගාරය",
@@ -76,14 +69,6 @@
         "location": "ස්ථානය:",
         "pharmacy": "ෆාමසිය:"
       },
-      "noPharmacyText": "කිසිදු ෆාමසියක් පවරා නොමැත. බෙහෙත් ලබා ගැනීමට ඔබේ බෙහෙත් වට්ටෝරුව ෆාමසියකට යොමු කරන්න.",
-      "forwardToPharmacyBtn": "ෆාමසියට යොමු කරන්න",
-      "noPharmacyAssigned": "කිසිදු ෆාමසියක් පවරා නොමැත.",
-      "medicinesDispensed": "✓ බෙහෙත් නිකුත් කර ඇත",
-      "awaitingDispensing": "ෆාමසිස්ට්වරයා බලාපොරොත්තුවෙන්",
-      "stagePreparing": "සූදානම් කරමින්",
-      "stageReady": "ලබා ගැනීමට සූදානම්",
-      "stageDelivered": "✓ භාර දී ඇත",
       "sendToLaboratoryBtn": "රසායනාගාරයට යවන්න",
       "orderedByDoctor": "ඉල්ලූයේ වෛද්‍ය {{name}}",
       "labNotesSummary": "රසායනාගාර සටහන් / ප්‍රතිඵල සාරාංශය",
@@ -113,14 +98,19 @@
     "errorGeneric": "ඉල්ලීම යැවීම අසාර්ථක විය",
     "sendBtn": "රසායනාගාරයට යවන්න"
   },
-  "sendToPharmacyModal": {
-    "title": "ෆාමසියට යොමු කරන්න",
-    "subtitle": "ඔබේ බෙහෙත් වට්ටෝරුව නිකුත් කිරීමට ෆාමසියක් තෝරන්න",
-    "prescribedMedicines": "නියම කළ බෙහෙත්",
-    "selectPharmacy": "ෆාමසිය තෝරන්න",
-    "errorSelect": "කරුණාකර ෆාමසියක් තෝරන්න",
-    "errorGeneric": "බෙහෙත් වට්ටෝරුව යොමු කිරීම අසාර්ථක විය",
-    "forwardBtn": "බෙහෙත් වට්ටෝරුව යොමු කරන්න"
+  "pharmacyAssignments": {
+    "sendBtn": "ෆාමසියට යවන්න",
+    "sendAnotherBtn": "තවත් ෆාමසියකට යවන්න",
+    "cancelBtn": "මෙම ෆාමසියෙන් ඉවත් කරන්න",
+    "cancelledToast": "එම ෆාමසියෙන් ඉවත් කරන ලදී",
+    "errorGeneric": "යම් දෝෂයක් සිදු විය — කරුණාකර නැවත උත්සාහ කරන්න",
+    "status": {
+      "active": "ෆාමසිය බලාපොරොත්තුවෙන්",
+      "preparing": "සූදානම් කරමින්",
+      "dispensed": "ලබා ගැනීමට සූදානම්",
+      "delivered": "භාර දී ඇත",
+      "cancelled": "ඉවත් කරන ලදී"
+    }
   },
   "selfRecordModal": {
     "title": "මගේ හමුවීම වාර්තා කරන්න",

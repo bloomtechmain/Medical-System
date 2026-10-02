@@ -32,26 +32,31 @@ function buildEvents(consultations: any[], labReports: any[]) {
       searchText: [c.diagnosis, c.sick_description, c.doctor_display_name, c.hospital_clinic, c.treatment_description, ...(c.medicines || []).map((m: any) => m.medicine_name)].filter(Boolean).join(' ').toLowerCase(),
     });
 
-    if (['preparing', 'dispensed', 'delivered', 'completed'].includes(c.status)) {
-      events.push({
-        id: `c-${c.id}-preparing`, type: 'prescription_preparing', ts: baseTs + 3_600_000, dateStr: base, timeStr: null, consultation: c,
-        searchText: [c.doctor_display_name, c.pharmacy_name].filter(Boolean).join(' ').toLowerCase(),
-      });
-    }
+    // A prescription can go to several pharmacies at once, each progressing through
+    // the pipeline independently — so these are per-assignment events, not per-visit.
+    const assignments: any[] = (c.pharmacy_assignments || []).filter((a: any) => a.status !== 'cancelled');
+    assignments.forEach((a: any) => {
+      if (['preparing', 'dispensed', 'delivered'].includes(a.status)) {
+        events.push({
+          id: `c-${c.id}-pa${a.id}-preparing`, type: 'prescription_preparing', ts: baseTs + 3_600_000, dateStr: base, timeStr: null, consultation: c, pharmacyName: a.pharmacy_name,
+          searchText: [c.doctor_display_name, a.pharmacy_name].filter(Boolean).join(' ').toLowerCase(),
+        });
+      }
 
-    if (['dispensed', 'delivered', 'completed'].includes(c.status)) {
-      events.push({
-        id: `c-${c.id}-dispensed`, type: 'prescription_dispensed', ts: baseTs + 7_200_000, dateStr: base, timeStr: null, consultation: c,
-        searchText: [c.doctor_display_name, c.hospital_clinic, ...(c.medicines || []).map((m: any) => m.medicine_name)].filter(Boolean).join(' ').toLowerCase(),
-      });
-    }
+      if (['dispensed', 'delivered'].includes(a.status)) {
+        events.push({
+          id: `c-${c.id}-pa${a.id}-dispensed`, type: 'prescription_dispensed', ts: baseTs + 7_200_000, dateStr: base, timeStr: null, consultation: c, pharmacyName: a.pharmacy_name,
+          searchText: [c.doctor_display_name, c.hospital_clinic, ...(c.medicines || []).map((m: any) => m.medicine_name)].filter(Boolean).join(' ').toLowerCase(),
+        });
+      }
 
-    if (c.status === 'delivered' || c.status === 'completed') {
-      events.push({
-        id: `c-${c.id}-delivered`, type: 'prescription_delivered', ts: baseTs + 9_000_000, dateStr: base, timeStr: null, consultation: c,
-        searchText: [c.doctor_display_name, c.pharmacy_name].filter(Boolean).join(' ').toLowerCase(),
-      });
-    }
+      if (a.status === 'delivered') {
+        events.push({
+          id: `c-${c.id}-pa${a.id}-delivered`, type: 'prescription_delivered', ts: baseTs + 9_000_000, dateStr: base, timeStr: null, consultation: c, pharmacyName: a.pharmacy_name,
+          searchText: [c.doctor_display_name, a.pharmacy_name].filter(Boolean).join(' ').toLowerCase(),
+        });
+      }
+    });
 
     if (c.status === 'completed') {
       events.push({
@@ -225,7 +230,7 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
               <p className="text-sm font-semibold text-gray-900">{c.diagnosis || c.sick_description || t('medicalFlow.card.fallback.medicalConsultation')}</p>
             )}
             {event.type === 'prescription_preparing' && (
-              <p className="text-sm font-semibold text-gray-900">{c.pharmacy_name ? `${c.pharmacy_name} is preparing your medicines` : t('medicalFlow.card.fallback.prescriptionDispensed')}</p>
+              <p className="text-sm font-semibold text-gray-900">{event.pharmacyName ? `${event.pharmacyName} is preparing your medicines` : t('medicalFlow.card.fallback.prescriptionDispensed')}</p>
             )}
             {event.type === 'prescription_dispensed' && (
               <p className="text-sm font-semibold text-gray-900">
@@ -234,7 +239,7 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
               </p>
             )}
             {event.type === 'prescription_delivered' && (
-              <p className="text-sm font-semibold text-gray-900">{c.pharmacy_name ? `Delivered from ${c.pharmacy_name}` : 'Medicines delivered'}</p>
+              <p className="text-sm font-semibold text-gray-900">{event.pharmacyName ? `Delivered from ${event.pharmacyName}` : 'Medicines delivered'}</p>
             )}
             {event.type === 'treatment_completed' && (
               <p className="text-sm font-semibold text-gray-900">{c.diagnosis || c.sick_description || t('medicalFlow.card.fallback.treatment')} — {t('medicalFlow.card.resolvedSuffix')}</p>
@@ -312,7 +317,7 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
               <span className="text-2xl">🧪</span>
               <div>
                 <p className="text-sm font-bold text-blue-800">Pharmacist is Preparing Your Medicines</p>
-                {c.pharmacy_name && <p className="text-xs text-blue-700 mt-0.5">🏪 {c.pharmacy_name}</p>}
+                {event.pharmacyName && <p className="text-xs text-blue-700 mt-0.5">🏪 {event.pharmacyName}</p>}
               </div>
             </div>
           )}
@@ -351,7 +356,7 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
               <span className="text-2xl">📦</span>
               <div>
                 <p className="text-sm font-bold text-emerald-800">Medicines Delivered</p>
-                <p className="text-xs text-emerald-700 mt-0.5">{c.pharmacy_name ? `From ${c.pharmacy_name}` : 'Delivered to you'}</p>
+                <p className="text-xs text-emerald-700 mt-0.5">{event.pharmacyName ? `From ${event.pharmacyName}` : 'Delivered to you'}</p>
               </div>
             </div>
           )}

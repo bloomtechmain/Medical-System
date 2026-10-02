@@ -321,6 +321,27 @@ CREATE TABLE clinical.consultation_medicines (
 );
 CREATE INDEX idx_cm_consultation ON clinical.consultation_medicines(consultation_id);
 
+-- A prescription can be sent to several pharmacies at once (and later cancelled/re-sent
+-- to any of them independently) — one row per (consultation, pharmacist) pair carries its
+-- own fulfilment pipeline, replacing the old single assigned_pharmacist_id/status columns
+-- on medical_consultations (which stay in place, unused by new code, for backward compat).
+CREATE TABLE clinical.prescription_assignments (
+  id              SERIAL      PRIMARY KEY,
+  consultation_id INTEGER     NOT NULL REFERENCES clinical.medical_consultations(id) ON DELETE CASCADE,
+  pharmacist_id   INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  assigned_by     INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
+  status          VARCHAR(20) NOT NULL DEFAULT 'active'
+                  CHECK (status IN ('active','preparing','dispensed','delivered','cancelled')),
+  cancelled_by    INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
+  cancelled_at    TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (consultation_id, pharmacist_id)
+);
+CREATE INDEX idx_pa_consultation ON clinical.prescription_assignments(consultation_id);
+CREATE INDEX idx_pa_pharmacist   ON clinical.prescription_assignments(pharmacist_id);
+CREATE INDEX idx_pa_status       ON clinical.prescription_assignments(status);
+
 -- lab_requests holds both the REQUEST and the RESULT in one place.
 -- This is the correct design because the report is patient PHI — it belongs to the
 -- patient, not to the lab organisation. Keeping it here means:
@@ -610,7 +631,7 @@ DO $$
 DECLARE t text;
 BEGIN
   FOR t IN SELECT unnest(ARRAY[
-      'patient_profiles','medical_consultations','consultation_medicines',
+      'patient_profiles','medical_consultations','consultation_medicines','prescription_assignments',
       'lab_requests','lab_request_messages','lab_view_requests','data_access_requests',
       'doctor_weekly_availability','doctor_availability_overrides','doctor_appointments',
       'patient_reports','patient_vitals','notifications'])
@@ -653,6 +674,32 @@ CREATE POLICY cm_all ON clinical.consultation_medicines FOR ALL USING (
 ) WITH CHECK (
   EXISTS (SELECT 1 FROM clinical.medical_consultations mc WHERE mc.id = consultation_id)
 );
+
+-- prescription_assignments: the pharmacist assigned to that row; the patient/doctor who owns
+-- the parent consultation (both can write — assign/cancel); admin. Written out explicitly
+-- rather than copied from mc_mod, which omits the pharmacist from write access entirely.
+CREATE POLICY pa_sel ON clinical.prescription_assignments FOR SELECT USING (
+  public.app_role() = 'admin'
+  OR pharmacist_id = public.app_uid()
+  OR EXISTS (SELECT 1 FROM clinical.medical_consultations c
+             WHERE c.id = prescription_assignments.consultation_id
+               AND (c.patient_id = public.app_uid() OR c.doctor_id = public.app_uid()))
+);
+CREATE POLICY pa_ins ON clinical.prescription_assignments FOR INSERT WITH CHECK (
+  public.app_role() = 'admin'
+  OR EXISTS (SELECT 1 FROM clinical.medical_consultations c
+             WHERE c.id = consultation_id
+               AND (c.patient_id = public.app_uid() OR c.doctor_id = public.app_uid()))
+);
+CREATE POLICY pa_upd_party ON clinical.prescription_assignments FOR UPDATE USING (
+  public.app_role() = 'admin'
+  OR EXISTS (SELECT 1 FROM clinical.medical_consultations c
+             WHERE c.id = prescription_assignments.consultation_id
+               AND (c.patient_id = public.app_uid() OR c.doctor_id = public.app_uid()))
+) WITH CHECK (true);
+CREATE POLICY pa_upd_pharmacist ON clinical.prescription_assignments FOR UPDATE USING (
+  pharmacist_id = public.app_uid()
+) WITH CHECK (pharmacist_id = public.app_uid());
 
 -- lab_requests: patient own; ordering doctor; the lab itself (by user id or org); doctor with accepted lab view; admin
 CREATE POLICY lr_sel ON clinical.lab_requests FOR SELECT USING (
@@ -1209,6 +1256,14 @@ INSERT INTO clinical.consultation_medicines (consultation_id, medicine_name, dos
   (4,'Cetirizine 10mg','10mg','Once at night','5 days','manual'),
   (5,'Azithromycin 250mg','500mg','Once daily','5 days','manual'),
   (5,'Salbutamol 2mg','2mg','As needed','14 days','manual');
+
+-- Pharmacy assignments, mirroring the single assigned_pharmacist_id each demo consultation
+-- above already carries (consultation 4 has none — private self-recorded visit, no pharmacy).
+INSERT INTO clinical.prescription_assignments (consultation_id, pharmacist_id, assigned_by, status) VALUES
+  (1, 5, 2, 'dispensed'),
+  (2, 5, 3, 'active'),
+  (3, 6, 4, 'active'),
+  (5, 5, 2, 'active');
 
 -- 8.8 Lab requests (PHI -> clinical).
 -- The report file + notes for completed requests live HERE in clinical.lab_requests
