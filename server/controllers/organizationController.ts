@@ -100,8 +100,24 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
     const org = rows[0];
     // Mirror the org's active state onto its owner's login so approving an
     // organization also unblocks the owner, and suspending one blocks them again.
+    // An owner can now be an existing user shared across organizations (picked
+    // via the owner-search flow in registerOrganization below), so suspending
+    // this org must not lock them out of a different org they're still active on.
     if (org.owner_user_id) {
-      await pool.query('UPDATE public.users SET is_active = $1 WHERE id = $2', [org.is_active, org.owner_user_id]);
+      if (org.is_active) {
+        await pool.query('UPDATE public.users SET is_active = TRUE WHERE id = $1', [org.owner_user_id]);
+      } else {
+        const { rows: otherActive } = await pool.query(
+          `SELECT 1 FROM public.organization_members om
+           JOIN public.organizations o ON o.id = om.organization_id
+           WHERE om.user_id = $1 AND o.id != $2 AND o.is_active = TRUE
+           LIMIT 1`,
+          [org.owner_user_id, org.id]
+        );
+        if (!otherActive.length) {
+          await pool.query('UPDATE public.users SET is_active = FALSE WHERE id = $1', [org.owner_user_id]);
+        }
+      }
     }
     res.json(org);
   } catch (err) { next(err); }
@@ -119,35 +135,100 @@ const ORG_OWNER_ROLE: Record<string, string> = {
   laboratory: 'laboratory',
 };
 
+// Minimal, non-sensitive columns surfaced to the public owner-search box on
+// the org-register page, per owner role — enough to tell two same-named
+// people apart without exposing the full admin user record.
+const OWNER_SEARCH_PROFILE: Record<string, { table: string; extra: string[] }> = {
+  doctor:     { table: 'public.doctor_profiles',     extra: ['specialization', 'hospital_affiliation'] },
+  pharmacist: { table: 'public.pharmacist_profiles', extra: ['pharmacy_name', 'license_number'] },
+  laboratory: { table: 'public.laboratory_profiles', extra: ['lab_name', 'license_number'] },
+};
+
+// ── Public owner lookup ───────────────────────────────────────────────────
+// Lets the org-register page search for an existing, already-approved user
+// to reuse as the new organization's owner instead of creating a fresh login.
+// Unauthenticated (registration happens before any session exists), so the
+// query is deliberately narrow: requires org_type + a 2+ char query, and
+// returns only active users whose role matches that org type's owner role.
+const searchOwnerCandidates = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { org_type, q } = req.query as { org_type?: string; q?: string };
+    const role = ORG_OWNER_ROLE[org_type || ''];
+    if (!role) { res.status(400).json({ message: 'Invalid organization type' }); return; }
+    if (!q || q.trim().length < 2) { res.json([]); return; }
+
+    const { table, extra } = OWNER_SEARCH_PROFILE[role];
+    const extraCols = extra.map(c => `p.${c}`).join(', ');
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.email, ${extraCols}
+       FROM public.users u
+       LEFT JOIN ${table} p ON p.user_id = u.id
+       WHERE u.role = $1 AND u.is_active = TRUE
+         AND (u.name ILIKE $2 OR u.email ILIKE $2)
+       ORDER BY u.name LIMIT 10`,
+      [role, `%${q.trim()}%`]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
 const registerOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let client;
   try {
     client = await pool.connect();
-    const { org_name, slug, org_type, owner_name, owner_email, owner_password, profile } = req.body as {
+    const {
+      org_name, slug, org_type, owner_user_id,
+      owner_name, owner_email, owner_password, profile,
+    } = req.body as {
       org_name: string; slug: string; org_type: string;
-      owner_name: string; owner_email: string; owner_password: string;
+      owner_user_id?: number;
+      owner_name?: string; owner_email?: string; owner_password?: string;
       profile?: Record<string, any>;
     };
 
     const role = ORG_OWNER_ROLE[org_type];
     if (!role) { res.status(400).json({ message: 'Invalid organization type' }); return; }
 
-    const existingEmail = await client.query('SELECT id FROM public.users WHERE email = $1', [owner_email]);
-    if (existingEmail.rows.length) { res.status(409).json({ message: 'Email already in use' }); return; }
-
     const existingSlug = await client.query('SELECT id FROM public.organizations WHERE slug = $1', [slug]);
     if (existingSlug.rows.length) { res.status(409).json({ message: 'That organization slug is already taken' }); return; }
 
+    // Owner is either an existing, already-approved user picked via the
+    // search box (reused as-is, no new login created) or a brand-new account
+    // entered manually — same two paths the form offers.
+    let existingOwner: { id: number; name: string; email: string } | null = null;
+    if (owner_user_id) {
+      const { rows } = await client.query(
+        'SELECT id, name, email, role, is_active FROM public.users WHERE id = $1',
+        [owner_user_id]
+      );
+      if (!rows.length) { res.status(404).json({ message: 'Selected owner account not found' }); return; }
+      if (rows[0].role !== role) { res.status(400).json({ message: `Selected owner must be a registered ${role}` }); return; }
+      if (!rows[0].is_active) { res.status(400).json({ message: 'Selected owner account is not active' }); return; }
+      existingOwner = rows[0];
+    } else {
+      if (!owner_name || !owner_email || !owner_password) {
+        res.status(400).json({ message: 'Owner name, email, and password are required' });
+        return;
+      }
+      const existingEmail = await client.query('SELECT id FROM public.users WHERE email = $1', [owner_email]);
+      if (existingEmail.rows.length) { res.status(409).json({ message: 'Email already in use' }); return; }
+    }
+
     await client.query('BEGIN');
 
-    const hash = await bcrypt.hash(owner_password, 10);
-    const { rows: [owner] } = await client.query(
-      `INSERT INTO public.users (name, email, password, role, is_active)
-       VALUES ($1,$2,$3,$4, FALSE) RETURNING id, name, email, role`,
-      [owner_name, owner_email, hash, role]
-    );
-
-    if (profile) await createProfile(client, role, owner.id, profile);
+    let owner: { id: number; name: string; email: string };
+    if (existingOwner) {
+      owner = existingOwner;
+    } else {
+      const hash = await bcrypt.hash(owner_password as string, 10);
+      const { rows: [newUser] } = await client.query(
+        `INSERT INTO public.users (name, email, password, role, is_active)
+         VALUES ($1,$2,$3,$4, FALSE) RETURNING id, name, email, role`,
+        [owner_name, owner_email, hash, role]
+      );
+      if (profile) await createProfile(client, role, newUser.id, profile);
+      owner = newUser;
+    }
 
     await client.query('SELECT public.provision_tenant($1, $2, $3, $4)', [slug, org_name, org_type, owner.id]);
 
@@ -163,7 +244,9 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
 
     await client.query('COMMIT');
     res.status(201).json({
-      message: 'Registration submitted. An administrator will review your organization and you’ll be able to sign in once it’s approved.',
+      message: existingOwner
+        ? 'Registration submitted. An administrator will review your organization — your existing account will gain access to it once approved.'
+        : 'Registration submitted. An administrator will review your organization and you’ll be able to sign in once it’s approved.',
     });
   } catch (err) {
     if (client) await client.query('ROLLBACK').catch(() => {});
@@ -173,4 +256,4 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export { getAll, getMembers, addMember, removeMember, provision, toggleActive, registerOrganization };
+export { getAll, getMembers, addMember, removeMember, provision, toggleActive, registerOrganization, searchOwnerCandidates };

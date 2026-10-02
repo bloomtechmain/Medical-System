@@ -17,6 +17,8 @@ const NOTIF_ICONS: Record<string, string> = {
   new_consultation:       '🩺',
   consultation_assigned:  '💊',
   prescription_dispensed: '✅',
+  lab_request_rejected:   '❌',
+  lab_request_message:    '💬',
 };
 
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
@@ -44,6 +46,13 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       if (notif.type === 'lab_report_ready') {
         queryClient.invalidateQueries({ queryKey: ['patient-vitals'] });
         queryClient.invalidateQueries({ queryKey: ['patient-lab-reports'] });
+      }
+
+      if (notif.type === 'lab_request_rejected') {
+        queryClient.invalidateQueries({ queryKey: ['patient-lab-reports'] });
+      }
+      if (notif.type === 'lab_request_message') {
+        queryClient.invalidateQueries({ queryKey: ['lab-request-messages'] });
       }
 
       // Toast

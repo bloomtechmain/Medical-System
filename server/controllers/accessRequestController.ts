@@ -18,6 +18,8 @@ const ACCESS_LABELS: Record<string, string> = {
   medical_history:  'Medical History',
   personal_reports: 'Personal Health Reports',
   contact_info:     'Contact Information',
+  vitals:           'Vitals',
+  all:              'Full Health Record',
 };
 
 const createRequest = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -177,6 +179,7 @@ const getPatientView = async (req: Request, res: Response, next: NextFunction): 
     for (const r of accessRows) {
       access[r.access_type] = { status: r.status, request_id: r.request_id, created_at: r.created_at };
     }
+    const hasAll = access.all?.status === 'accepted';
 
     const { rows: activeMeds } = await queryAs(actor(req), `
       SELECT cm.medicine_name, cm.dosage, cm.frequency, cm.duration, mc.diagnosis
@@ -188,7 +191,7 @@ const getPatientView = async (req: Request, res: Response, next: NextFunction): 
 
     const data: Record<string, unknown> = {};
 
-    if (access.lab_reports?.status === 'accepted') {
+    if (hasAll || access.lab_reports?.status === 'accepted') {
       const { rows } = await queryAs(actor(req), `
         SELECT lr.*,
           lp.lab_name, lp.lab_type, lp.address AS lab_address
@@ -200,7 +203,7 @@ const getPatientView = async (req: Request, res: Response, next: NextFunction): 
       data.lab_reports = rows;
     }
 
-    if (access.medical_history?.status === 'accepted') {
+    if (hasAll || access.medical_history?.status === 'accepted') {
       const { rows } = await queryAs(actor(req), `
         SELECT c.*,
           u.name AS doctor_name,
@@ -228,7 +231,7 @@ const getPatientView = async (req: Request, res: Response, next: NextFunction): 
       data.consultations = rows;
     }
 
-    if (access.personal_reports?.status === 'accepted') {
+    if (hasAll || access.personal_reports?.status === 'accepted') {
       const { rows } = await queryAs(actor(req),
         'SELECT * FROM patient_reports WHERE patient_id=$1 ORDER BY issued_date DESC',
         [patientId]
@@ -236,7 +239,7 @@ const getPatientView = async (req: Request, res: Response, next: NextFunction): 
       data.personal_reports = rows;
     }
 
-    if (access.vitals?.status === 'accepted') {
+    if (hasAll || access.vitals?.status === 'accepted') {
       const { rows: vitalsHistory } = await queryAs(actor(req),
         `SELECT * FROM patient_vitals WHERE patient_id=$1 ORDER BY recorded_at DESC`,
         [patientId]
@@ -273,7 +276,7 @@ const serveLabReportFile = async (req: Request, res: Response, next: NextFunctio
 
     const { rows: accessRows } = await queryAs(actor(req),
       `SELECT id FROM data_access_requests
-       WHERE doctor_id=$1 AND patient_id=$2 AND access_type='lab_reports' AND status='accepted'
+       WHERE doctor_id=$1 AND patient_id=$2 AND access_type IN ('lab_reports','all') AND status='accepted'
        LIMIT 1`,
       [doctorId, patientId]
     );

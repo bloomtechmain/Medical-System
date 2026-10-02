@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { labApi, userApi } from '../services/api';
+import { useTranslation } from 'react-i18next';
+import { labApi, userApi, labCatalogApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
 import { Plus, Search, X, FlaskConical, Send, Upload } from 'lucide-react';
+import ChatPanel from '../components/common/ChatPanel';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
@@ -26,6 +28,7 @@ interface SearchDropdownProps {
 }
 
 function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSelect, renderItem, renderSelected }: SearchDropdownProps) {
+  const { t } = useTranslation('patientReports');
   const [q, setQ]       = useState('');
   const dq              = useDebounce(q);
   const [open, setOpen] = useState(false);
@@ -67,7 +70,7 @@ function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSel
           {open && dq.length >= 1 && (
             <ul className="absolute z-40 mt-1 w-full bg-white rounded-2xl shadow-xl border border-gray-100 max-h-52 overflow-y-auto">
               {(results as any[]).length === 0 && !isFetching
-                ? <li className="px-4 py-3 text-sm text-gray-400">No results for "{dq}"</li>
+                ? <li className="px-4 py-3 text-sm text-gray-400">{t('labTests.modal.noResultsFor', { query: dq })}</li>
                 : (results as any[]).map((item: any) => (
                   <li key={item.id}
                     onClick={() => { onSelect(item); setOpen(false); setQ(''); }}
@@ -87,8 +90,11 @@ function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSel
 interface BookTestModalProps { onClose: () => void; onBooked: () => void; }
 
 function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
+  const { t } = useTranslation('patientReports');
+  const { t: tc } = useTranslation('common');
   const [lab,          setLab]          = useState<any>(null);
   const [reportType,   setReportType]   = useState('');
+  const [customTest,   setCustomTest]   = useState('');
   const [notes,        setNotes]        = useState('');
   const [scheduledAt,  setScheduledAt]  = useState('');
   const [referral,     setReferral]     = useState<File | null>(null);
@@ -100,25 +106,39 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
     ? lab.services_offered.split(',').map((s: string) => s.trim()).filter(Boolean)
     : [];
 
+  const { data: catalogTests = [] } = useQuery({
+    queryKey: ['lab-catalog-for', lab?.id],
+    queryFn:  () => labCatalogApi.getForLab(lab.id),
+    enabled:  !!lab,
+  });
+  const hasCatalog = (catalogTests as any[]).length > 0;
+
+  const isOther = reportType === '__other__';
+  const selectedCatalogTest = hasCatalog && !isOther
+    ? (catalogTests as any[]).find((c: any) => String(c.id) === reportType)
+    : null;
+  const effectiveReportType = isOther ? customTest.trim() : (selectedCatalogTest ? selectedCatalogTest.test_name : reportType);
+
   const mutation = useMutation({
     mutationFn: () => {
       const fd = new FormData();
       fd.append('laboratory_id', String(lab.id));
-      fd.append('test_description', reportType);
-      fd.append('report_type', reportType);
+      fd.append('test_description', effectiveReportType);
+      fd.append('report_type', effectiveReportType);
+      if (selectedCatalogTest) fd.append('test_catalog_id', String(selectedCatalogTest.id));
       if (scheduledAt)     fd.append('scheduled_at', new Date(scheduledAt).toISOString());
       if (notes.trim())    fd.append('notes', notes.trim());
       if (referral)        fd.append('referral', referral);
       return labApi.create(fd);
     },
-    onSuccess: () => { toast.success(`Test booked with ${lab.lab_name || lab.name}!`); onBooked(); onClose(); },
-    onError: (err: any) => setError(err.message || 'Failed to book test'),
+    onSuccess: () => { toast.success(t('labTests.modal.bookedSuccess', { lab: lab.lab_name || lab.name })); onBooked(); onClose(); },
+    onError: (err: any) => setError(err.message || t('labTests.modal.errors.bookFailed')),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lab)             return setError('Please select a laboratory');
-    if (!reportType)      return setError('Please select a test');
+    if (!lab)                 return setError(t('labTests.modal.errors.selectLab'));
+    if (!effectiveReportType) return setError(t('labTests.modal.errors.selectTest'));
     setError('');
     mutation.mutate();
   };
@@ -131,7 +151,7 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
             <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
               <FlaskConical size={16} className="text-white" />
             </div>
-            <p className="text-sm font-bold text-white">Book a Lab Test</p>
+            <p className="text-sm font-bold text-white">{t('labTests.modal.title')}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white">
             <X size={15} />
@@ -146,12 +166,12 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
           )}
 
           <SearchDropdown
-            label="Laboratory *"
-            placeholder="Search by lab name or address…"
+            label={t('labTests.modal.laboratoryLabel')}
+            placeholder={t('labTests.modal.laboratorySearchPlaceholder')}
             fetchFn={userApi.searchLaboratories}
             queryKey="patient-search-labs"
             selected={lab}
-            onSelect={(l: any) => { setLab(l); setReportType(''); }}
+            onSelect={(l: any) => { setLab(l); setReportType(''); setCustomTest(''); }}
             renderItem={(l: any) => (
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 bg-cyan-100 rounded-xl flex items-center justify-center shrink-0">
@@ -172,26 +192,51 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
           />
 
           <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Test *</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('labTests.modal.testLabel')}</label>
             {!lab ? (
               <div className="text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl px-3.5 py-2.5">
-                Select a laboratory first to see its available tests
+                {t('labTests.modal.selectLabFirst')}
+              </div>
+            ) : hasCatalog ? (
+              <div className="space-y-2">
+                <select className="input text-sm" value={reportType}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setReportType(e.target.value); if (e.target.value !== '__other__') setCustomTest(''); }}>
+                  <option value="">{t('labTests.modal.selectTestPlaceholder')}</option>
+                  {(catalogTests as any[]).map((c: any) => (
+                    <option key={c.id} value={String(c.id)}>{t('labTests.modal.catalogOptionLabel', { name: c.test_name, price: c.price })}</option>
+                  ))}
+                  <option value="__other__">{t('labTests.modal.otherOption')}</option>
+                </select>
+                {isOther && (
+                  <input type="text" className="input text-sm" placeholder={t('labTests.modal.otherInputPlaceholder')}
+                    value={customTest} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTest(e.target.value)} autoFocus />
+                )}
+                {selectedCatalogTest && (
+                  <p className="text-xs text-emerald-600 font-medium">{t('labTests.modal.priceConfirmed', { price: selectedCatalogTest.price })}</p>
+                )}
               </div>
             ) : services.length > 0 ? (
-              <select className="input text-sm" value={reportType}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setReportType(e.target.value)}>
-                <option value="">Select a test…</option>
-                {services.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <div className="space-y-2">
+                <select className="input text-sm" value={reportType}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setReportType(e.target.value); if (e.target.value !== '__other__') setCustomTest(''); }}>
+                  <option value="">{t('labTests.modal.selectTestPlaceholder')}</option>
+                  {services.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value="__other__">{t('labTests.modal.otherOption')}</option>
+                </select>
+                {isOther && (
+                  <input type="text" className="input text-sm" placeholder={t('labTests.modal.otherInputPlaceholder')}
+                    value={customTest} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTest(e.target.value)} autoFocus />
+                )}
+              </div>
             ) : (
-              <input type="text" className="input text-sm" placeholder="e.g. Full Blood Count"
+              <input type="text" className="input text-sm" placeholder={t('labTests.modal.testInputPlaceholder')}
                 value={reportType} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReportType(e.target.value)} />
             )}
           </div>
 
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Preferred Date &amp; Time <span className="text-gray-300 font-normal normal-case">(optional)</span>
+              {t('labTests.modal.dateTimeLabel')} <span className="text-gray-300 font-normal normal-case">{t('labTests.modal.optional')}</span>
             </label>
             <input type="datetime-local" className="input text-sm" min={minScheduleValue}
               value={scheduledAt} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setScheduledAt(e.target.value)} />
@@ -199,19 +244,19 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
 
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Doctor's Referral / Prescription <span className="text-gray-300 font-normal normal-case">(optional)</span>
+              {t('labTests.modal.referralLabel')} <span className="text-gray-300 font-normal normal-case">{t('labTests.modal.optional')}</span>
             </label>
             {!referral ? (
               <button type="button" onClick={() => referralRef.current?.click()}
                 className="w-full border-2 border-dashed border-gray-200 rounded-xl p-3.5 hover:border-cyan-400 hover:bg-cyan-50 transition-colors flex items-center justify-center gap-2 text-gray-400 hover:text-cyan-600">
                 <Upload size={15} strokeWidth={2} />
-                <span className="text-sm font-medium">Attach referral (PDF/image)</span>
+                <span className="text-sm font-medium">{t('labTests.modal.attachReferral')}</span>
               </button>
             ) : (
               <div className="flex items-center justify-between bg-gray-50 rounded-xl border border-gray-200 px-3.5 py-2.5">
                 <p className="text-sm text-gray-700 truncate">{referral.name}</p>
                 <button type="button" onClick={() => { setReferral(null); if (referralRef.current) referralRef.current.value = ''; }}
-                  className="text-xs text-red-500 hover:text-red-700 font-medium ml-2 shrink-0">Remove</button>
+                  className="text-xs text-red-500 hover:text-red-700 font-medium ml-2 shrink-0">{tc('actions.remove')}</button>
               </div>
             )}
             <input ref={referralRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif" className="hidden"
@@ -220,9 +265,9 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
 
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Notes for the Lab <span className="text-gray-300 font-normal normal-case">(optional)</span>
+              {t('labTests.modal.notesLabel')} <span className="text-gray-300 font-normal normal-case">{t('labTests.modal.optional')}</span>
             </label>
-            <textarea rows={2} className="input text-sm resize-none" placeholder="Any symptoms or details worth mentioning…"
+            <textarea rows={2} className="input text-sm resize-none" placeholder={t('labTests.modal.notesPlaceholder')}
               value={notes} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)} />
           </div>
 
@@ -231,9 +276,9 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
               className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-cyan-600 to-cyan-800 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
               {mutation.isPending && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
               <Send size={14} strokeWidth={2.5} />
-              Book Test
+              {t('labTests.modal.submitBtn')}
             </button>
-            <button type="button" onClick={onClose} className="btn-secondary px-5">Cancel</button>
+            <button type="button" onClick={onClose} className="btn-secondary px-5">{tc('actions.cancel')}</button>
           </div>
         </form>
       </div>
@@ -241,10 +286,11 @@ function BookTestModal({ onClose, onBooked }: BookTestModalProps) {
   );
 }
 
-const STATUS_STYLE: Record<string, { badge: string; label: string; icon: string }> = {
-  pending:     { badge: 'bg-yellow-100 text-yellow-700', label: 'Pending',     icon: '⏳' },
-  in_progress: { badge: 'bg-blue-100   text-blue-700',   label: 'In Progress', icon: '🔄' },
-  completed:   { badge: 'bg-green-100  text-green-700',  label: 'Report Ready', icon: '✅' },
+const STATUS_STYLE: Record<string, { badge: string; labelKey: string; icon: string }> = {
+  pending:     { badge: 'bg-yellow-100 text-yellow-700', labelKey: 'pending',     icon: '⏳' },
+  in_progress: { badge: 'bg-blue-100   text-blue-700',   labelKey: 'inProgress', icon: '🔄' },
+  completed:   { badge: 'bg-green-100  text-green-700',  labelKey: 'reportReady', icon: '✅' },
+  rejected:    { badge: 'bg-red-100    text-red-700',    labelKey: 'rejected',   icon: '❌' },
 };
 
 interface ReportModalProps {
@@ -253,6 +299,7 @@ interface ReportModalProps {
 }
 
 function ReportModal({ req: r, onClose }: ReportModalProps) {
+  const { t } = useTranslation('patientReports');
   const isPDF = r.report_mimetype?.includes('pdf');
 
   return (
@@ -260,7 +307,7 @@ function ReportModal({ req: r, onClose }: ReportModalProps) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Lab Report</h2>
+            <h2 className="text-lg font-bold text-gray-900">{t('labTests.reportModal.title')}</h2>
             <p className="text-xs text-gray-400 mt-0.5">{r.lab_name} · {formatDate(r.created_at)}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
@@ -274,10 +321,10 @@ function ReportModal({ req: r, onClose }: ReportModalProps) {
           {/* Info */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Requesting Doctor', value: r.doctor_name ? `Dr. ${r.doctor_name}` : '—' },
-              { label: 'Laboratory',        value: r.lab_name || '—' },
-              { label: 'Requested On',      value: formatDate(r.created_at) },
-              { label: 'Lab Type',          value: r.lab_type?.split(',')[0] || '—' },
+              { label: t('labTests.reportModal.requestingDoctor'), value: r.doctor_name ? `Dr. ${r.doctor_name}` : '—' },
+              { label: t('labTests.reportModal.laboratory'),        value: r.lab_name || '—' },
+              { label: t('labTests.reportModal.requestedOn'),      value: formatDate(r.created_at) },
+              { label: t('labTests.reportModal.labType'),          value: r.lab_type?.split(',')[0] || '—' },
             ].map(({ label, value }) => (
               <div key={label} className="bg-gray-50 rounded-lg p-3">
                 <p className="text-xs text-gray-400 font-medium">{label}</p>
@@ -288,14 +335,33 @@ function ReportModal({ req: r, onClose }: ReportModalProps) {
 
           {/* Tests */}
           <div className="bg-cyan-50 border border-cyan-100 rounded-xl p-4">
-            <p className="text-xs font-bold text-cyan-700 mb-1">🧪 Tests Performed</p>
+            <p className="text-xs font-bold text-cyan-700 mb-1">{t('labTests.reportModal.testsPerformed')}</p>
             <p className="text-sm text-gray-800 whitespace-pre-wrap">{r.test_description}</p>
           </div>
+
+          {/* Price */}
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+            <p className="text-xs font-bold text-emerald-700 mb-1">{t('labTests.reportModal.priceHeading')}</p>
+            <p className="text-sm text-gray-800">
+              {r.price != null ? t('labTests.reportModal.priceValue', { price: r.price }) : t('labTests.reportModal.priceNotSet')}
+            </p>
+          </div>
+
+          {/* Rejected */}
+          {r.status === 'rejected' && (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+              <p className="text-xs font-bold text-red-700 mb-1">{t('labTests.reportModal.rejectedHeading')}</p>
+              <p className="text-sm text-gray-700">{t('labTests.reportModal.rejectedHint')}</p>
+            </div>
+          )}
+
+          {/* Chat */}
+          <ChatPanel labRequestId={r.id} />
 
           {/* Report */}
           {r.report_notes && (
             <div className="bg-teal-50 border border-teal-100 rounded-xl p-4">
-              <p className="text-xs font-bold text-teal-700 mb-1">🔬 Lab Report Notes</p>
+              <p className="text-xs font-bold text-teal-700 mb-1">{t('labTests.reportModal.labReportNotes')}</p>
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.report_notes}</p>
             </div>
           )}
@@ -306,8 +372,8 @@ function ReportModal({ req: r, onClose }: ReportModalProps) {
                 className="flex items-center gap-3 p-4 bg-primary-50 border-2 border-primary-200 rounded-xl hover:bg-primary-100 transition-colors group">
                 <span className="text-3xl">{isPDF ? '📄' : '🖼️'}</span>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-primary-700">{isPDF ? 'Open Lab Report (PDF)' : 'View Lab Report Image'}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Click to view or download your report</p>
+                  <p className="text-sm font-bold text-primary-700">{isPDF ? t('labTests.reportModal.openPdf') : t('labTests.reportModal.viewImage')}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{t('labTests.reportModal.clickToView')}</p>
                 </div>
                 <svg className="w-5 h-5 text-primary-500 group-hover:text-primary-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -326,6 +392,8 @@ function ReportModal({ req: r, onClose }: ReportModalProps) {
 }
 
 export default function PatientLabReports() {
+  const { t } = useTranslation('patientReports');
+  const { t: tc } = useTranslation('common');
   const [selected, setSelected] = useState<any>(null);
   const [booking,  setBooking]  = useState(false);
   const [filter, setFilter]     = useState('all');
@@ -338,7 +406,7 @@ export default function PatientLabReports() {
 
   const openDetail = async (id: number) => {
     try { setSelected(await labApi.getOne(id)); }
-    catch { toast.error('Failed to load'); }
+    catch { toast.error(t('labTests.loadFailed')); }
   };
 
   const filtered = filter === 'all' ? reports : (reports as any[]).filter((r: any) => r.status === filter);
@@ -347,20 +415,21 @@ export default function PatientLabReports() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Lab Reports</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Book a test with a lab, and view your test requests and results</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('labTests.pageTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('labTests.pageSubtitle')}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => setBooking(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-br from-cyan-600 to-cyan-800 rounded-xl shadow-sm hover:opacity-90 transition-opacity">
             <Plus size={15} strokeWidth={2.5} />
-            Book a Lab Test
+            {t('labTests.bookTestBtn')}
           </button>
           <select value={filter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilter(e.target.value)} className="input text-sm py-1.5 w-36">
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Reports Ready</option>
+            <option value="all">{t('labTests.filters.all')}</option>
+            <option value="pending">{tc('status.pending')}</option>
+            <option value="in_progress">{tc('status.inProgress')}</option>
+            <option value="completed">{t('labTests.filters.reportsReady')}</option>
+            <option value="rejected">{tc('status.rejected')}</option>
           </select>
         </div>
       </div>
@@ -368,9 +437,9 @@ export default function PatientLabReports() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Total Tests',    value: (reports as any[]).length,                                                            icon: '🔬', bg: 'bg-cyan-50   border-cyan-100'   },
-          { label: 'In Progress',    value: (reports as any[]).filter((r: any) => r.status !== 'completed').length, icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
-          { label: 'Reports Ready',  value: (reports as any[]).filter((r: any) => r.status === 'completed').length, icon: '📋', bg: 'bg-green-50  border-green-100'  },
+          { label: t('labTests.stats.totalTests'),    value: (reports as any[]).length,                                                            icon: '🔬', bg: 'bg-cyan-50   border-cyan-100'   },
+          { label: tc('status.inProgress'),    value: (reports as any[]).filter((r: any) => r.status === 'pending' || r.status === 'in_progress').length, icon: '⏳', bg: 'bg-yellow-50 border-yellow-100' },
+          { label: t('labTests.stats.reportsReady'),  value: (reports as any[]).filter((r: any) => r.status === 'completed').length, icon: '📋', bg: 'bg-green-50  border-green-100'  },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
             <span className="text-2xl">{s.icon}</span>
@@ -386,13 +455,13 @@ export default function PatientLabReports() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
-          Loading lab reports...
+          {t('labTests.loading')}
         </div>
       ) : (filtered as any[]).length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-gray-200 p-12 text-center">
           <span className="text-4xl block mb-3">🔬</span>
-          <p className="text-gray-600 font-medium">No lab reports yet</p>
-          <p className="text-sm text-gray-400 mt-1">Book a test yourself, or your doctor will assign one when needed.</p>
+          <p className="text-gray-600 font-medium">{t('labTests.empty.title')}</p>
+          <p className="text-sm text-gray-400 mt-1">{t('labTests.empty.subtitle')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -410,18 +479,23 @@ export default function PatientLabReports() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-bold text-gray-900">{r.lab_name || 'Laboratory'}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>
+                        <p className="text-sm font-bold text-gray-900">{r.lab_name || t('labTests.labFallback')}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{t(`labTests.statusLabels.${st.labelKey}`)}</span>
+                        {r.price != null && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+                            {t('labTests.reportModal.priceValue', { price: r.price })}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {r.doctor_name ? `Dr. ${r.doctor_name}` : 'Self-booked'} · {formatDate(r.created_at)}
+                        {r.doctor_name ? `Dr. ${r.doctor_name}` : t('labTests.selfBooked')} · {formatDate(r.created_at)}
                       </p>
                       <p className="text-sm text-gray-600 mt-1 line-clamp-1">{r.test_description}</p>
                     </div>
                   </div>
                   {r.status === 'completed' && (
                     <button className="shrink-0 text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors">
-                      View Report →
+                      {t('labTests.viewReport')}
                     </button>
                   )}
                 </div>

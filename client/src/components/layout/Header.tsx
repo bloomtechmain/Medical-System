@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { useNavigate } from 'react-router-dom';
 import { notificationApi } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Bell, User, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList } from 'lucide-react';
+import { Search, Bell, User, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Activity, XCircle, MessageCircle } from 'lucide-react';
+import LanguageSwitcher from '../common/LanguageSwitcher';
 
 // ── Notification type icons ───────────────────────────────────────────────────
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -13,6 +15,9 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   prescription_dispensed: <CheckCircle2 size={14} />,
   lab_request_assigned:   <FlaskConical size={14} />,
   lab_report_ready:       <ClipboardList size={14} />,
+  lab_request_rejected:   <XCircle size={14} />,
+  lab_request_message:    <MessageCircle size={14} />,
+  vitals_updated:         <Activity size={14} />,
 };
 
 const NOTIF_ROUTE: Record<string, (role?: string) => string> = {
@@ -21,6 +26,9 @@ const NOTIF_ROUTE: Record<string, (role?: string) => string> = {
   prescription_dispensed: (role) => role === 'doctor'   ? '/doctor/consultations' : '/patient/medical',
   lab_request_assigned:   ()     => '/laboratory/reports',
   lab_report_ready:       (role) => role === 'doctor'   ? '/doctor/lab-requests'  : '/patient/lab-reports',
+  lab_request_rejected:   (role) => role === 'doctor'   ? '/doctor/lab-requests'  : '/patient/lab-tests',
+  lab_request_message:    (role) => role === 'laboratory' ? '/laboratory/reports' : role === 'doctor' ? '/doctor/lab-requests' : '/patient/lab-tests',
+  vitals_updated:         ()     => '/patient',
   access_request:         ()     => '/patient/requests',
   access_accepted:        ()     => '/doctor/requests',
   access_declined:        ()     => '/doctor/requests',
@@ -36,6 +44,7 @@ function timeAgo(ts: string): string {
 
 // ── Header ────────────────────────────────────────────────────────────────────
 export default function Header() {
+  const { t }           = useTranslation('common');
   const { user }       = useAuth();
   const { newPulse }   = useSocket() || {};
   const navigate       = useNavigate();
@@ -93,7 +102,7 @@ export default function Header() {
       {/* ── Left: greeting ── */}
       <div className="flex flex-col justify-center">
         <h1 className="text-[22px] font-semibold text-gray-900 leading-tight tracking-tight">
-          Hello, <span className="font-bold">{firstName}</span>!
+          {t('header.greetingPrefix')} <span className="font-bold">{firstName}</span>{t('header.greetingSuffix')}
         </h1>
         <p className="text-[11px] text-gray-400 leading-none mt-0.5 tracking-wide">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -102,6 +111,8 @@ export default function Header() {
 
       {/* ── Right: actions ── */}
       <div className="flex items-center gap-1.5">
+
+        <LanguageSwitcher />
 
         {/* Search */}
         <button className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
@@ -149,7 +160,7 @@ export default function Header() {
             <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-gray-900">Notifications</span>
+                  <span className="text-sm font-bold text-gray-900">{t('header.notifications')}</span>
                   {count > 0 && (
                     <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
                       {count}
@@ -161,7 +172,7 @@ export default function Header() {
                     onClick={() => markAllMutation.mutate()}
                     className="text-xs text-primary-600 hover:text-primary-700 font-semibold"
                   >
-                    Mark all read
+                    {t('header.markAllRead')}
                   </button>
                 )}
               </div>
@@ -170,7 +181,7 @@ export default function Header() {
                 {notifications.length === 0 ? (
                   <div className="py-10 text-center">
                     <Bell size={28} className="mx-auto text-gray-200 mb-2" />
-                    <p className="text-sm text-gray-400">No notifications yet</p>
+                    <p className="text-sm text-gray-400">{t('header.noNotifications')}</p>
                   </div>
                 ) : notifications.map((n) => {
                   const hasRoute = !!NOTIF_ROUTE[n.type];
@@ -206,7 +217,7 @@ export default function Header() {
 
               {notifications.length > 0 && (
                 <div className="px-4 py-2.5 border-t border-gray-50 text-center">
-                  <p className="text-[11px] text-gray-400">{notifications.length} total notifications</p>
+                  <p className="text-[11px] text-gray-400">{t('header.totalNotifications', { count: notifications.length })}</p>
                 </div>
               )}
             </div>

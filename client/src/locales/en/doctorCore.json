@@ -1,0 +1,197 @@
+{
+  "dashboard": {
+    "loading": "Loading…",
+    "welcomeBack": "Welcome back, Dr. {{name}}",
+    "search": {
+      "placeholder": "Search by patient name or email…",
+      "searching": "Searching…",
+      "noResults": "No patients found for \"{{query}}\"",
+      "yrs": "{{age}} yrs",
+      "allergiesTag": "Allergies"
+    },
+    "actions": {
+      "newConsultation": "New Consultation",
+      "labRequests": "Lab Requests"
+    },
+    "recentConsultations": {
+      "title": "Recent Consultations",
+      "viewAll": "View all",
+      "empty": "No consultations yet",
+      "patientFallback": "Patient #{{id}}",
+      "generalConsultation": "General consultation"
+    },
+    "info": {
+      "name": "Name",
+      "type": "Type",
+      "slug": "Slug",
+      "status": "Status",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "profile": {
+      "title": "My Profile",
+      "yearsExperience": "{{count}} years experience"
+    },
+    "stats": {
+      "pendingLabTests": "Pending Lab Tests",
+      "accessRequests": "Access Requests"
+    }
+  },
+  "doctorDashboard": {
+    "welcome": {
+      "greeting": "Welcome back,",
+      "namePrefix": "Dr. {{name}}",
+      "defaultSpecialization": "Medical Professional",
+      "pendingRequests": "Pending Requests",
+      "accessGranted": "Access Granted",
+      "yearsExp": "Years Exp."
+    },
+    "stats": {
+      "specialization": "Specialization",
+      "licenseNo": "License No.",
+      "consultationFee": "Consultation",
+      "affiliation": "Affiliation"
+    },
+    "quickActions": {
+      "newConsultation": "New Consultation",
+      "newLabRequest": "New Lab Request",
+      "viewRequests": "View Requests"
+    },
+    "alerts": {
+      "pendingLabResults": "Pending Lab Results",
+      "noPendingLabResults": "No lab tests awaiting results.",
+      "labFallback": "Lab",
+      "waitingDays": "{{count}}d waiting",
+      "activeConsultationsAging": "Active Consultations Aging",
+      "noAgingConsultations": "No consultations awaiting dispensing.",
+      "noDiagnosisRecorded": "No diagnosis recorded",
+      "activeDays": "{{count}}d active",
+      "accessRequestsAwaitingPatient": "Access Requests Awaiting Patient",
+      "noPendingAccessRequests": "No pending access requests.",
+      "daysAgo": "{{count}}d ago",
+      "reportViewRequestsAwaitingPatient": "Report View Requests Awaiting Patient",
+      "noPendingViewRequests": "No pending report view requests."
+    },
+    "search": {
+      "title": "Patient Search",
+      "subtitle": "Find & View Patient Profiles",
+      "hint": "Start typing to search across all registered patients — click a result to view their history"
+    },
+    "history": {
+      "loading": "Loading history…",
+      "bloodType": "Blood Type",
+      "allergies": "Allergies",
+      "none": "None",
+      "conditions": "Conditions",
+      "insurance": "Insurance",
+      "visits": "Visits",
+      "medicines": "Medicines",
+      "doctors": "Doctors",
+      "diagnoses": "Diagnoses",
+      "timelineTitle": "Consultation History ({{count}})",
+      "timelineEmpty": "No consultation records found",
+      "dxPrefix": "Dx: {{diagnosis}}",
+      "doctorPrefix": "Dr. {{name}}",
+      "symptoms": "Symptoms",
+      "diagnosis": "Diagnosis",
+      "treatment": "Treatment",
+      "viewFullProfile": "View Full Profile"
+    },
+    "recent": {
+      "seenPatients": "Recently Seen Patients",
+      "noConsultations": "No consultations recorded yet.",
+      "activity": "Recent Activity",
+      "noActivity": "No recent activity.",
+      "labResultReady": "Lab result ready — {{name}}",
+      "prescriptionDispensed": "Prescription dispensed — {{name}}",
+      "prescriptionDelivered": "Medicines delivered — {{name}}",
+      "accessRequestResponse": "{{name}} {{status}} your access request"
+    },
+    "profile": {
+      "title": "Professional Profile",
+      "fullName": "Full Name",
+      "email": "Email",
+      "phone": "Phone",
+      "licenseNo": "License No.",
+      "medicalSchool": "Medical School",
+      "affiliation": "Affiliation",
+      "bio": "Bio"
+    }
+  },
+  "hospitalDashboard": {
+    "badge": "Hospital Portal",
+    "defaultName": "Hospital Dashboard",
+    "avatarLabel": "Hospital",
+    "actions": {
+      "accessRequests": "Access Requests"
+    },
+    "stats": {
+      "totalConsultations": "Total Consultations",
+      "activeCases": "Active Cases"
+    },
+    "org": {
+      "title": "Organization"
+    },
+    "staff": {
+      "title": "Staff Members",
+      "total": "{{count}} total",
+      "empty": "No staff members yet"
+    }
+  },
+  "clinicDashboard": {
+    "badge": "Clinic Portal",
+    "defaultName": "My Clinic",
+    "actions": {
+      "requests": "Requests"
+    },
+    "stats": {
+      "activeConsultations": "Active Consultations",
+      "completedToday": "Completed Today"
+    },
+    "info": {
+      "title": "Clinic Info"
+    },
+    "summary": {
+      "title": "Summary",
+      "totalConsultations": "Total consultations",
+      "totalLabRequests": "Total lab requests",
+      "completedCases": "Completed cases",
+      "dispensed": "Dispensed"
+    },
+    "profile": {
+      "yearsExpShort": "{{count}} yrs experience",
+      "fee": "LKR {{amount}} fee"
+    }
+  },
+  "accessRequests": {
+    "pageTitle": "Access Requests",
+    "pageSubtitle": "Requests you have sent to patients for access to their health data",
+    "searchHint": "Search for a patient to view their profile and request access to their data.",
+    "stats": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "declined": "Declined"
+    },
+    "typeMeta": {
+      "labReports": "Lab Reports",
+      "medicalHistory": "Medical History",
+      "personalReports": "Personal Health Reports",
+      "contactInfo": "Contact Information"
+    },
+    "statusMeta": {
+      "pending": "Awaiting Patient",
+      "accepted": "Access Granted",
+      "declined": "Declined"
+    },
+    "empty": {
+      "title": "No requests sent yet",
+      "subtitle": "Use the search above to find a patient and request access to their data."
+    },
+    "listItem": {
+      "patientLabel": "Patient:",
+      "sent": "Sent {{date}}",
+      "responded": "Responded {{date}}",
+      "view": "View"
+    }
+  }
+}

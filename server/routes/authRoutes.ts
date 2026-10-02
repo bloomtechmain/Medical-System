@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { register, login, getMe } from '../controllers/authController';
-import { protect } from '../middleware/auth';
+import { register, login, getMe, impersonate, listImpersonations } from '../controllers/authController';
+import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
 
 const router = Router();
@@ -24,5 +24,8 @@ router.post('/login',
 );
 
 router.get('/me', protect, getMe);
+
+router.post('/impersonate/:userId', protect, authorize('admin'), impersonate);
+router.get('/impersonations',       protect, authorize('admin'), listImpersonations);
 
 export default router;

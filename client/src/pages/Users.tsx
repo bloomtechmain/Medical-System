@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { TFunction } from 'i18next';
 import { userApi, authApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import { Plus, Search, Edit2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ToggleLeft, ToggleRight, Eye } from 'lucide-react';
 
 // ── Profile field definitions per role ────────────────────────────────────────
 
@@ -19,62 +23,64 @@ type FieldDef = {
   half?: boolean;
 };
 
-const PROFILE_FIELDS: Record<string, FieldDef[]> = {
-  doctor: [
-    { field: 'phone',                label: 'Phone',              type: 'tel', half: true },
-    { field: 'specialization',       label: 'Specialization',     required: true, half: true },
-    { field: 'license_number',       label: 'License Number',     half: true },
-    { field: 'hospital_affiliation', label: 'Hospital / Clinic',  half: true },
-    { field: 'consultation_fee',     label: 'Consultation Fee (LKR)', type: 'number', half: true },
-    { field: 'years_experience',     label: 'Years of Experience', type: 'number', half: true },
-    { field: 'medical_school',       label: 'Medical School',     half: false },
-    { field: 'bio',                  label: 'Bio / Notes',        half: false },
-  ],
-  pharmacist: [
-    { field: 'phone',               label: 'Phone',               type: 'tel', half: true },
-    { field: 'license_number',      label: 'License Number',      half: true },
-    { field: 'pharmacy_name',       label: 'Pharmacy Name',       half: true },
-    { field: 'years_experience',    label: 'Years of Experience', type: 'number', half: true },
-    { field: 'pharmacy_address',    label: 'Pharmacy Address',    half: false },
-    { field: 'specialization_area', label: 'Specialization Area', half: false },
-  ],
-  patient: [
-    { field: 'phone',           label: 'Phone',         type: 'tel',  half: true },
-    { field: 'date_of_birth',   label: 'Date of Birth', type: 'date', half: true },
-    {
-      field: 'gender', label: 'Gender', half: true,
-      options: [
-        { value: '', label: 'Select gender' },
-        { value: 'male',   label: 'Male' },
-        { value: 'female', label: 'Female' },
-        { value: 'other',  label: 'Other' },
-      ],
-    },
-    {
-      field: 'blood_type', label: 'Blood Type', half: true,
-      options: [
-        { value: '', label: 'Select' },
-        { value: 'A+', label: 'A+' }, { value: 'A-', label: 'A-' },
-        { value: 'B+', label: 'B+' }, { value: 'B-', label: 'B-' },
-        { value: 'O+', label: 'O+' }, { value: 'O-', label: 'O-' },
-        { value: 'AB+', label: 'AB+' }, { value: 'AB-', label: 'AB-' },
-      ],
-    },
-    { field: 'address',            label: 'Address',           half: false },
-    { field: 'allergies',          label: 'Allergies',         half: true },
-    { field: 'chronic_conditions', label: 'Chronic Conditions', half: true },
-  ],
-  laboratory: [
-    { field: 'phone',            label: 'Phone',            type: 'tel', half: true },
-    { field: 'lab_name',         label: 'Laboratory Name',  required: true, half: true },
-    { field: 'lab_type',         label: 'Lab Type',         half: true },
-    { field: 'license_number',   label: 'License Number',   half: true },
-    { field: 'accreditation',    label: 'Accreditation',    half: true },
-    { field: 'address',          label: 'Address',          half: false },
-    { field: 'services_offered', label: 'Services Offered', half: false },
-    { field: 'operating_hours',  label: 'Operating Hours',  half: true },
-  ],
-};
+function getProfileFields(t: TFunction, tc: TFunction): Record<string, FieldDef[]> {
+  return {
+    doctor: [
+      { field: 'phone',                label: tc('fields.phone'),              type: 'tel', half: true },
+      { field: 'specialization',       label: t('users.fields.specialization'),     required: true, half: true },
+      { field: 'license_number',       label: t('users.fields.licenseNumber'),     half: true },
+      { field: 'hospital_affiliation', label: t('users.fields.hospitalClinic'),  half: true },
+      { field: 'consultation_fee',     label: t('users.fields.consultationFee'), type: 'number', half: true },
+      { field: 'years_experience',     label: t('users.fields.yearsExperience'), type: 'number', half: true },
+      { field: 'medical_school',       label: t('users.fields.medicalSchool'),     half: false },
+      { field: 'bio',                  label: t('users.fields.bioNotes'),        half: false },
+    ],
+    pharmacist: [
+      { field: 'phone',               label: tc('fields.phone'),               type: 'tel', half: true },
+      { field: 'license_number',      label: t('users.fields.licenseNumber'),      half: true },
+      { field: 'pharmacy_name',       label: t('users.fields.pharmacyName'),       half: true },
+      { field: 'years_experience',    label: t('users.fields.yearsExperience'), type: 'number', half: true },
+      { field: 'pharmacy_address',    label: t('users.fields.pharmacyAddress'),    half: false },
+      { field: 'specialization_area', label: t('users.fields.specializationArea'), half: false },
+    ],
+    patient: [
+      { field: 'phone',           label: tc('fields.phone'),         type: 'tel',  half: true },
+      { field: 'date_of_birth',   label: t('users.fields.dateOfBirth'), type: 'date', half: true },
+      {
+        field: 'gender', label: tc('fields.gender'), half: true,
+        options: [
+          { value: '', label: t('users.fields.selectGender') },
+          { value: 'male',   label: tc('fields.male') },
+          { value: 'female', label: tc('fields.female') },
+          { value: 'other',  label: tc('fields.other') },
+        ],
+      },
+      {
+        field: 'blood_type', label: t('users.fields.bloodType'), half: true,
+        options: [
+          { value: '', label: t('users.fields.select') },
+          { value: 'A+', label: 'A+' }, { value: 'A-', label: 'A-' },
+          { value: 'B+', label: 'B+' }, { value: 'B-', label: 'B-' },
+          { value: 'O+', label: 'O+' }, { value: 'O-', label: 'O-' },
+          { value: 'AB+', label: 'AB+' }, { value: 'AB-', label: 'AB-' },
+        ],
+      },
+      { field: 'address',            label: tc('fields.address'),           half: false },
+      { field: 'allergies',          label: t('users.fields.allergies'),         half: true },
+      { field: 'chronic_conditions', label: t('users.fields.chronicConditions'), half: true },
+    ],
+    laboratory: [
+      { field: 'phone',            label: tc('fields.phone'),            type: 'tel', half: true },
+      { field: 'lab_name',         label: t('users.fields.laboratoryName'),  required: true, half: true },
+      { field: 'lab_type',         label: t('users.fields.labType'),         half: true },
+      { field: 'license_number',   label: t('users.fields.licenseNumber'),   half: true },
+      { field: 'accreditation',    label: t('users.fields.accreditation'),   half: true },
+      { field: 'address',          label: tc('fields.address'),          half: false },
+      { field: 'services_offered', label: t('users.fields.servicesOffered'), half: false },
+      { field: 'operating_hours',  label: t('users.fields.operatingHours'),  half: true },
+    ],
+  };
+}
 
 const BASE_KEYS = new Set(['name', 'email', 'password', 'role', 'is_active', 'id', 'created_at', 'updated_at', 'profile']);
 
@@ -124,7 +130,11 @@ function ProfileFields({ fields, register }: { fields: FieldDef[]; register: any
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function Users() {
+  const { t } = useTranslation('admin');
+  const { t: tc } = useTranslation('common');
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { impersonate } = useAuth();
   const [search, setSearch]         = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -135,6 +145,15 @@ export default function Users() {
     queryKey: ['users', roleFilter],
     queryFn: () => userApi.getAll(roleFilter ? { role: roleFilter } : {}),
   });
+
+  const PROFILE_FIELDS = getProfileFields(t, tc);
+  const ROLE_LABELS: Record<string, string> = {
+    patient: t('users.roles.patient'),
+    doctor: t('users.roles.doctor'),
+    pharmacist: t('users.roles.pharmacist'),
+    laboratory: t('users.roles.laboratory'),
+    admin: t('users.roles.admin'),
+  };
 
   // ── Create form ──────────────────────────────────────────────────────────────
   const createForm = useForm<any>({ defaultValues: { role: 'patient' } });
@@ -149,11 +168,11 @@ export default function Users() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
-      toast.success('User created successfully');
+      toast.success(t('users.toast.createSuccess'));
       setCreateOpen(false);
       createForm.reset({ role: 'patient' });
     },
-    onError: (err: any) => toast.error(err.message || 'Failed to create user'),
+    onError: (err: any) => toast.error(err.message || t('users.toast.createFailed')),
   });
 
   // ── Edit form ────────────────────────────────────────────────────────────────
@@ -192,10 +211,10 @@ export default function Users() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
-      toast.success('User updated');
+      toast.success(t('users.toast.updateSuccess'));
       setEditTarget(null);
     },
-    onError: (err: any) => toast.error(err.message || 'Failed to update user'),
+    onError: (err: any) => toast.error(err.message || t('users.toast.updateFailed')),
   });
 
   // ── Toggle & delete ──────────────────────────────────────────────────────────
@@ -205,7 +224,13 @@ export default function Users() {
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
     },
-    onError: () => toast.error('Failed to update status'),
+    onError: () => toast.error(t('users.toast.statusUpdateFailed')),
+  });
+
+  const impersonateMutation = useMutation({
+    mutationFn: (id: number) => authApi.impersonate(id),
+    onSuccess: (res: any) => { impersonate(res.user, res.token); navigate('/'); },
+    onError: (err: any) => toast.error(err.message || t('users.toast.viewAsFailed')),
   });
 
   const deleteMutation = useMutation({
@@ -213,10 +238,10 @@ export default function Users() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
-      toast.success('User removed');
+      toast.success(t('users.toast.removeSuccess'));
       setDeleteTarget(null);
     },
-    onError: () => toast.error('Failed to remove user'),
+    onError: () => toast.error(t('users.toast.removeFailed')),
   });
 
   const filtered = (users as any[]).filter((u) =>
@@ -231,14 +256,14 @@ export default function Users() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Create, edit, and manage all system users</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('users.pageTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('users.pageSubtitle')}</p>
         </div>
         <button
           onClick={() => { createForm.reset({ role: 'patient' }); setCreateOpen(true); }}
           className="btn-primary flex items-center gap-2 self-start sm:self-auto"
         >
-          <Plus size={15} /> Add User
+          <Plus size={15} /> {t('users.addUser')}
         </button>
       </div>
 
@@ -248,7 +273,7 @@ export default function Users() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             className="input pl-9 text-sm"
-            placeholder="Search by name or email..."
+            placeholder={t('users.searchPlaceholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -258,27 +283,27 @@ export default function Users() {
           value={roleFilter}
           onChange={e => setRoleFilter(e.target.value)}
         >
-          <option value="">All Roles</option>
-          <option value="patient">Patients</option>
-          <option value="doctor">Doctors</option>
-          <option value="pharmacist">Pharmacists</option>
-          <option value="laboratory">Laboratories</option>
-          <option value="admin">Admins</option>
+          <option value="">{t('users.allRoles')}</option>
+          <option value="patient">{t('users.rolesPlural.patient')}</option>
+          <option value="doctor">{t('users.rolesPlural.doctor')}</option>
+          <option value="pharmacist">{t('users.rolesPlural.pharmacist')}</option>
+          <option value="laboratory">{t('users.rolesPlural.laboratory')}</option>
+          <option value="admin">{t('users.rolesPlural.admin')}</option>
         </select>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100">
         {isLoading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Loading users...</div>
+          <div className="p-8 text-center text-gray-400 text-sm">{t('users.loadingUsers')}</div>
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">No users found.</div>
+          <div className="p-8 text-center text-gray-400 text-sm">{t('users.noUsersFound')}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {['User', 'Role', 'Status', 'Joined', 'Actions'].map(h => (
+                  {[t('users.table.user'), t('users.table.role'), tc('fields.status'), t('users.table.joined'), t('users.table.actions')].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">{h}</th>
                   ))}
                 </tr>
@@ -299,21 +324,31 @@ export default function Users() {
                     </td>
                     <td className="px-5 py-3">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS[u.role] || 'bg-gray-100 text-gray-600'}`}>
-                        {u.role}
+                        {ROLE_LABELS[u.role] ?? u.role}
                       </span>
                     </td>
                     <td className="px-5 py-3">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {u.is_active ? 'Active' : 'Inactive'}
+                        {u.is_active ? tc('status.active') : t('users.inactive')}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-gray-400 text-xs">{formatDate(u.created_at)}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">
+                        {u.role !== 'admin' && u.is_active && (
+                          <button
+                            onClick={() => impersonateMutation.mutate(u.id)}
+                            disabled={impersonateMutation.isPending}
+                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                            title={t('users.viewAs')}
+                          >
+                            <Eye size={14} />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEditOpen(u)}
                           className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit user"
+                          title={t('users.editUser')}
                         >
                           <Edit2 size={14} />
                         </button>
@@ -325,7 +360,7 @@ export default function Users() {
                               ? 'text-gray-400 hover:text-yellow-600 hover:bg-yellow-50'
                               : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
                           }`}
-                          title={u.is_active ? 'Deactivate' : 'Activate'}
+                          title={u.is_active ? t('users.deactivate') : t('users.activate')}
                         >
                           {u.is_active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
                         </button>
@@ -333,7 +368,7 @@ export default function Users() {
                           <button
                             onClick={() => setDeleteTarget(u)}
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete user"
+                            title={t('users.deleteUser')}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -347,12 +382,12 @@ export default function Users() {
           </div>
         )}
         <div className="p-4 border-t border-gray-50 text-xs text-gray-400">
-          Showing {filtered.length} of {(users as any[]).length} users
+          {t('users.showingCount', { count: filtered.length, total: (users as any[]).length })}
         </div>
       </div>
 
       {/* ── Create User Modal ──────────────────────────────────────────────────── */}
-      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Add New User" size="lg">
+      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title={t('users.addNewUser')} size="lg">
         <form
           onSubmit={createForm.handleSubmit((data) => createMutation.mutate(data))}
           className="space-y-5"
@@ -360,7 +395,7 @@ export default function Users() {
           {/* Base fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Full Name *</label>
+              <label className="label">{t('users.fields.fullName')} *</label>
               <input
                 className="input"
                 placeholder="John Doe"
@@ -368,7 +403,7 @@ export default function Users() {
               />
             </div>
             <div>
-              <label className="label">Email *</label>
+              <label className="label">{tc('fields.email')} *</label>
               <input
                 type="email"
                 className="input"
@@ -377,22 +412,22 @@ export default function Users() {
               />
             </div>
             <div>
-              <label className="label">Password *</label>
+              <label className="label">{t('users.fields.password')} *</label>
               <input
                 type="password"
                 className="input"
-                placeholder="Min. 6 characters"
+                placeholder={t('users.fields.minCharacters')}
                 {...createForm.register('password', { required: true, minLength: 6 })}
               />
             </div>
             <div>
-              <label className="label">Role *</label>
+              <label className="label">{t('users.fields.role')} *</label>
               <select className="input" {...createForm.register('role', { required: true })}>
-                <option value="patient">Patient</option>
-                <option value="doctor">Doctor</option>
-                <option value="pharmacist">Pharmacist</option>
-                <option value="laboratory">Laboratory</option>
-                <option value="admin">Admin</option>
+                <option value="patient">{t('users.roles.patient')}</option>
+                <option value="doctor">{t('users.roles.doctor')}</option>
+                <option value="pharmacist">{t('users.roles.pharmacist')}</option>
+                <option value="laboratory">{t('users.roles.laboratory')}</option>
+                <option value="admin">{t('users.roles.admin')}</option>
               </select>
             </div>
           </div>
@@ -402,7 +437,7 @@ export default function Users() {
             <div>
               <div className="border-t border-gray-100 pt-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                  {selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)} Profile
+                  {t('users.profileHeading', { role: ROLE_LABELS[selectedRole] ?? selectedRole })}
                 </p>
                 <ProfileFields fields={createProfileFields} register={createForm.register} />
               </div>
@@ -410,9 +445,9 @@ export default function Users() {
           )}
 
           <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-            <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>Cancel</button>
+            <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>{tc('actions.cancel')}</button>
             <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Creating...' : 'Create User'}
+              {createMutation.isPending ? t('users.creating') : t('users.createUser')}
             </button>
           </div>
         </form>
@@ -422,7 +457,7 @@ export default function Users() {
       <Modal
         isOpen={!!editTarget}
         onClose={() => setEditTarget(null)}
-        title={editTarget ? `Edit — ${editTarget.name}` : 'Edit User'}
+        title={editTarget ? t('users.editUserTitle', { name: editTarget.name }) : t('users.editUser')}
         size="lg"
       >
         <form
@@ -431,30 +466,30 @@ export default function Users() {
         >
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Full Name *</label>
+              <label className="label">{t('users.fields.fullName')} *</label>
               <input className="input" {...editForm.register('name', { required: true })} />
             </div>
             <div>
-              <label className="label">Email *</label>
+              <label className="label">{tc('fields.email')} *</label>
               <input type="email" className="input" {...editForm.register('email', { required: true })} />
             </div>
             <div>
               <label className="label">
-                New Password
-                <span className="text-gray-400 font-normal text-xs ml-1">(leave blank to keep)</span>
+                {t('users.fields.newPassword')}
+                <span className="text-gray-400 font-normal text-xs ml-1">{t('users.fields.leaveBlankToKeep')}</span>
               </label>
               <input
                 type="password"
                 className="input"
-                placeholder="Leave blank to keep current"
+                placeholder={t('users.fields.leaveBlankToKeepCurrent')}
                 {...editForm.register('password')}
               />
             </div>
             <div>
-              <label className="label">Status</label>
+              <label className="label">{tc('fields.status')}</label>
               <select className="input" {...editForm.register('is_active')}>
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
+                <option value="true">{tc('status.active')}</option>
+                <option value="false">{t('users.inactive')}</option>
               </select>
             </div>
           </div>
@@ -463,7 +498,7 @@ export default function Users() {
             <div>
               <div className="border-t border-gray-100 pt-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                  {editRole.charAt(0).toUpperCase() + editRole.slice(1)} Profile
+                  {t('users.profileHeading', { role: ROLE_LABELS[editRole] ?? editRole })}
                 </p>
                 <ProfileFields fields={editProfileFields} register={editForm.register} />
               </div>
@@ -471,9 +506,9 @@ export default function Users() {
           )}
 
           <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-            <button type="button" className="btn-secondary" onClick={() => setEditTarget(null)}>Cancel</button>
+            <button type="button" className="btn-secondary" onClick={() => setEditTarget(null)}>{tc('actions.cancel')}</button>
             <button type="submit" className="btn-primary" disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {updateMutation.isPending ? t('users.saving') : t('users.saveChanges')}
             </button>
           </div>
         </form>
@@ -484,8 +519,8 @@ export default function Users() {
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
-        title="Remove User"
-        message={`Are you sure you want to remove "${deleteTarget?.name}"? This action cannot be undone.`}
+        title={t('users.removeUser')}
+        message={t('users.removeUserConfirm', { name: deleteTarget?.name })}
         loading={deleteMutation.isPending}
       />
     </div>

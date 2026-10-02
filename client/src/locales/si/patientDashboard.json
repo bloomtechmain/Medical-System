@@ -1,0 +1,165 @@
+{
+  "pdf": {
+    "notProvided": "සපයා නැත",
+    "title": "රෝගී සෞඛ්‍ය වාර්තාව",
+    "generatedLabel": "සකස් කළේ: {{date}}  {{time}}",
+    "patientRole": "රෝගියා",
+    "idLine": "Core Health හැඳුනුම්: #{{id}}",
+    "sections": {
+      "personal": "පුද්ගලික තොරතුරු",
+      "health": "සෞඛ්‍ය තොරතුරු",
+      "emergency": "හදිසි සම්බන්ධතාවය",
+      "history": "රෝග හා ප්‍රතිකාර ඉතිහාසය"
+    },
+    "fields": {
+      "fullName": "සම්පූර්ණ නම",
+      "email": "විද්‍යුත් තැපෑල",
+      "phone": "දුරකථනය",
+      "dob": "උපන් දිනය",
+      "gender": "ලිංගභේදය",
+      "address": "ලිපිනය",
+      "bloodType": "රුධිර වර්ගය",
+      "allergies": "අසාත්මිකතා",
+      "chronicConditions": "දිගුකාලීන රෝග තත්ත්ව",
+      "contactName": "සම්බන්ධතා නම",
+      "contactPhone": "සම්බන්ධතා දුරකථනය"
+    },
+    "visitFallback": "හමුවීම",
+    "treatmentLine": "ප්‍රතිකාරය: {{text}}",
+    "footerConfidential": "රහස්‍ය වෛද්‍ය වාර්තාවකි",
+    "footerAuthorized": "අවසර ලත් භාවිතය සඳහා පමණි"
+  },
+  "welcomeBanner": {
+    "welcomeBack": "නැවත සාදරයෙන් පිළිගනිමු,",
+    "patientFallback": "රෝගියා",
+    "ageBadge": "වයස {{age}}",
+    "activeTreatments": "ක්‍රියාත්මක ප්‍රතිකාර {{count}}",
+    "generating": "සකස් කරමින්…",
+    "healthReportButton": "සෞඛ්‍ය වාර්තාව"
+  },
+  "quickActions": {
+    "vitals": "ජීවී සංඥා",
+    "bookDoctor": "වෛද්‍යවරයා වෙන් කරන්න",
+    "consultations": "හමුවීම්",
+    "labTests": "රසායනාගාර පරීක්ෂණ",
+    "myReports": "මගේ වාර්තා"
+  },
+  "personalDetails": {
+    "title": "පුද්ගලික විස්තර",
+    "editLink": "සැකසුම්වල සංස්කරණය කරන්න",
+    "empty": "තවම පුද්ගලික විස්තර සටහන් වී නැත.",
+    "allergiesLabel": "අසාත්මිකතා",
+    "conditionsLabel": "දිගුකාලීන රෝග තත්ත්ව",
+    "fields": {
+      "phone": "දුරකථනය",
+      "dob": "උපන් දිනය",
+      "gender": "ලිංගභේදය",
+      "bloodType": "රුධිර වර්ගය",
+      "address": "ලිපිනය",
+      "insurance": "රක්ෂණය",
+      "emergencyContact": "හදිසි සම්බන්ධතාවය"
+    }
+  },
+  "quickStats": {
+    "doctorVisits": "වෛද්‍ය හමුවීම්",
+    "activeTreatments": "ක්‍රියාත්මක ප්‍රතිකාර",
+    "labTests": "රසායනාගාර පරීක්ෂණ",
+    "doctorsSeen": "හමුවූ වෛද්‍යවරු"
+  },
+  "vitalsSummary": {
+    "title": "ජීවී සංඥා දළ විශ්ලේෂණය",
+    "noVitals": "තවම ජීවී සංඥා සටහන් වී නැත",
+    "recordedOn": "අවසන් වරට සටහන් කළේ {{date}}",
+    "fieldsRecorded": "අගයන් {{count}}ක් සටහන් වී ඇත",
+    "viewFullButton": "සම්පූර්ණ ජීවී සංඥා බලන්න"
+  },
+  "calendar": {
+    "title": "මගේ කාලසටහන"
+  },
+  "vitalsOverview": {
+    "vitalsDef": {
+      "wbc": "සුදු රුධිර සෛල",
+      "rbc": "රතු රුධිර සෛල",
+      "hemoglobin": "හීමොග්ලොබින්",
+      "hematocrit": "හීමැටොක්‍රිට්",
+      "mcv": "MCV (රතු සෛල ප්‍රමාණය)",
+      "mch": "MCH (සෛලයක හීමොග්ලොබින් ප්‍රමාණය)",
+      "mchc": "MCHC (හීමොග්ලොබින් සාන්ද්‍රණය)",
+      "rdw": "RDW (රතු සෛල ප්‍රමාණ විචලනය)",
+      "platelets": "රුධිර පට්ටිකා ගණන",
+      "mpv": "MPV (රුධිර පට්ටිකා ප්‍රමාණය)",
+      "bloodGlucose": "රුධිර ග්ලූකෝස් (රුධිර සීනි)",
+      "hba1c": "HbA1c (මාස 3ක සාමාන්‍ය රුධිර සීනි)",
+      "creatinine": "ක්‍රියටිනින් (වකුගඩු ක්‍රියාකාරිත්වය)",
+      "cholesterol": "මුළු කොලෙස්ටරෝල්",
+      "hdl": "HDL කොලෙස්ටරෝල් (හොඳ)",
+      "ldl": "LDL කොලෙස්ටරෝල් (නරක)",
+      "triglycerides": "ට්‍රයිග්ලිසරයිඩ් (රුධිර මේදය)",
+      "bpSystolic": "රුධිර පීඩනය (සිස්ටලික්)",
+      "bpDiastolic": "රුධිර පීඩනය (ඩයස්ටලික්)",
+      "heartRate": "හෘද ස්පන්දන වේගය",
+      "temperature": "උෂ්ණත්වය",
+      "oxygenSaturation": "O₂ සන්තෘප්තිය"
+    },
+    "groups": {
+      "cbc": "සම්පූර්ණ රුධිර ගණන් කිරීම",
+      "metabolic": "පරිවෘත්තීය පරීක්ෂණ",
+      "lipid": "මේද පරීක්ෂණ",
+      "vitals": "මූලික ජීවී සංඥා"
+    },
+    "source": {
+      "labReport": "රසායනාගාර වාර්තාව",
+      "yourUpload": "ඔබගේ උඩුගත කිරීම",
+      "manualEntry": "අතින් ඇතුළත් කිරීම"
+    },
+    "vitalCard": {
+      "viewHistory": "{{label}} ඉතිහාසය බලන්න",
+      "sinceLast": "පසුගිය අගයේ සිට ({{value}})",
+      "noChange": "වෙනසක් නැත",
+      "clickForHistory": "ඉතිහාසය සඳහා ක්ලික් කරන්න →"
+    },
+    "historyModal": {
+      "titleSuffix": "{{label}} ඉතිහාසය",
+      "readingsCount": "කියවීම් {{count}}ක් සටහන් වී ඇත",
+      "noReadings": "{{label}} සඳහා තවම කියවීම් සටහන් වී නැත.",
+      "loadingHistory": "ඉතිහාසය පූරණය වෙමින්…",
+      "normalRange": "සාමාන්‍ය පරාසය ({{min}}–{{max}} {{unit}})"
+    },
+    "editModal": {
+      "title": "ජීවී සංඥා යාවත්කාලීන කරන්න",
+      "subtitle": "ඔබගේ නවතම පරීක්ෂණ ප්‍රතිඵල ඇතුළත් කරන්න",
+      "notesLabel": "සටහන් (විකල්ප)",
+      "notesPlaceholder": "උදා: නිරාහාර රුධිර පරීක්ෂණය, උදෑසන කියවීම...",
+      "footerNote": "හිස් තබන ක්ෂේත්‍ර යාවත්කාලීන නොවේ",
+      "saveButton": "ජීවී සංඥා සුරකින්න"
+    },
+    "header": {
+      "title": "ජීවී සංඥා දළ විශ්ලේෂණය",
+      "recordedSummary": "ජීවී සංඥා {{count}}ක් සටහන් වී ඇත · අවසන් යාවත්කාලීන කළේ {{date}}",
+      "noVitals": "තවම ජීවී සංඥා සටහන් වී නැත",
+      "updateVitals": "ජීවී සංඥා යාවත්කාලීන කරන්න"
+    },
+    "badges": {
+      "normal": "සාමාන්‍ය {{count}}",
+      "high": "ඉහළ {{count}}",
+      "low": "පහළ {{count}}",
+      "critical": "බරපතල {{count}}",
+      "fromLabReport": "රසායනාගාර වාර්තාවෙන් {{count}}",
+      "fromUploads": "ඔබගේ උඩුගත කිරීම්වලින් {{count}}",
+      "abnormal": "අසාමාන්‍ය {{count}}"
+    },
+    "emptyState": {
+      "description": "ඔබගේ රසායනාගාර ප්‍රතිඵල අතින් ඇතුළත් කරන්න, නැතහොත් රසායනාගාරයක් වාර්තාවක් උඩුගත කළ විට හෝ ඔබම එකක් උඩුගත කළ විට ඒවා ස්වයංක්‍රීයව යාවත්කාලීන වේ.",
+      "enterVitalsButton": "ජීවී සංඥා ඇතුළත් කරන්න"
+    },
+    "groupHeader": {
+      "valuesRecorded": "අගයන් {{total}}න් {{filled}}ක් සටහන් වී ඇත"
+    }
+  },
+  "setupPrompt": {
+    "title": "Core Health වෙත සාදරයෙන් පිළිගනිමු!",
+    "message": "ඔබේ ප්‍රොෆයිලය සම්පූර්ණ කරන්න — දුරකථන අංකය, උපන් දිනය, රුධිර වර්ගය, හදිසි සම්බන්ධතාව සහ තවත් — වෛද්‍යවරුන්ට සහ රසායනාගාරවලට ඔබව රැකබලා ගැනීමට අවශ්‍ය තොරතුරු ලබා දීම සඳහා.",
+    "completeButton": "සැකසුම සම්පූර්ණ කරන්න",
+    "laterButton": "පසුව"
+  }
+}

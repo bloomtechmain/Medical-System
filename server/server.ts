@@ -36,7 +36,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/lab-reports', express.static(path.join(__dirname, 'uploads/lab-reports')));
 
-import { registerOrganization } from './controllers/organizationController';
+import { registerOrganization, searchOwnerCandidates } from './controllers/organizationController';
 import authRoutes            from './routes/authRoutes';
 import userRoutes            from './routes/userRoutes';
 import consultationRoutes    from './routes/consultationRoutes';
@@ -52,6 +52,8 @@ import accessRequestRoutes   from './routes/accessRequestRoutes';
 import labViewRequestRoutes  from './routes/labViewRequestRoutes';
 import patientVitalsRoutes   from './routes/patientVitalsRoutes';
 import organizationRoutes    from './routes/organizationRoutes';
+import appointmentRoutes     from './routes/appointmentRoutes';
+import labCatalogRoutes      from './routes/labCatalogRoutes';
 
 app.use('/api/auth',              authRoutes);
 app.use('/api/users',             userRoutes);
@@ -67,9 +69,12 @@ app.use('/api/patient-reports',   patientReportRoutes);
 app.use('/api/access-requests',   accessRequestRoutes);
 app.use('/api/lab-view-requests', labViewRequestRoutes);
 app.use('/api/patient-vitals',    patientVitalsRoutes);
+app.use('/api/appointments',      appointmentRoutes);
+app.use('/api/lab-catalog',       labCatalogRoutes);
 // Public self-registration — mounted before the admin-gated organizations router
 // so it is never touched by the protect/authorize middleware.
 app.post('/api/organizations/register', registerOrganization);
+app.get('/api/organizations/search-owner', searchOwnerCandidates);
 app.use('/api/organizations',     organizationRoutes);
 
 app.get('/api/health', (_req, res) =>

@@ -1,22 +1,24 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2, XCircle, FlaskConical, ClipboardList,
   FolderOpen, Phone, Stethoscope, Shield, ArrowUpRight, Microscope, Eye,
 } from 'lucide-react';
 import { accessRequestApi, labViewRequestApi } from '../services/api';
 
-const TYPE_META: Record<string, { label: string; Icon: any; grad: string; light: string; accent: string }> = {
-  lab_reports:      { label:'Lab Reports',              Icon: FlaskConical,  grad:'from-blue-500 to-indigo-600',   light:'bg-blue-50',   accent:'text-blue-600'  },
-  medical_history:  { label:'Medical History',          Icon: ClipboardList, grad:'from-teal-500 to-emerald-600',  light:'bg-teal-50',   accent:'text-teal-600'  },
-  personal_reports: { label:'Personal Health Reports',  Icon: FolderOpen,    grad:'from-violet-500 to-purple-600', light:'bg-violet-50', accent:'text-violet-600'},
-  contact_info:     { label:'Contact Information',      Icon: Phone,         grad:'from-rose-500 to-pink-600',     light:'bg-rose-50',   accent:'text-rose-600'  },
+const TYPE_META: Record<string, { labelKey: string; Icon: any; grad: string; light: string; accent: string }> = {
+  lab_reports:      { labelKey:'labReports',      Icon: FlaskConical,  grad:'from-blue-500 to-indigo-600',   light:'bg-blue-50',   accent:'text-blue-600'  },
+  medical_history:  { labelKey:'medicalHistory',  Icon: ClipboardList, grad:'from-teal-500 to-emerald-600',  light:'bg-teal-50',   accent:'text-teal-600'  },
+  personal_reports: { labelKey:'personalReports', Icon: FolderOpen,    grad:'from-violet-500 to-purple-600', light:'bg-violet-50', accent:'text-violet-600'},
+  contact_info:     { labelKey:'contactInfo',     Icon: Phone,         grad:'from-rose-500 to-pink-600',     light:'bg-rose-50',   accent:'text-rose-600'  },
+  all:              { labelKey:'fullRecord',      Icon: Shield,        grad:'from-primary-600 to-primary-800', light:'bg-primary-50', accent:'text-primary-600' },
 };
 
-const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
-  pending:  { label:'Awaiting Response', cls:'bg-amber-100 text-amber-700',   dot:'bg-amber-400'    },
-  accepted: { label:'Access Granted',    cls:'bg-emerald-100 text-emerald-700', dot:'bg-emerald-400' },
-  declined: { label:'Declined',          cls:'bg-red-100 text-red-600',        dot:'bg-red-400'      },
+const STATUS_STYLE: Record<string, { cls: string; dot: string }> = {
+  pending:  { cls:'bg-amber-100 text-amber-700',      dot:'bg-amber-400'   },
+  accepted: { cls:'bg-emerald-100 text-emerald-700',  dot:'bg-emerald-400' },
+  declined: { cls:'bg-red-100 text-red-600',          dot:'bg-red-400'     },
 };
 
 const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
@@ -30,10 +32,14 @@ interface RequestCardProps {
 }
 
 function RequestCard({ request, onAccept, onDecline, accepting, declining }: RequestCardProps) {
+  const { t } = useTranslation('patientReports');
+  const { t: tc } = useTranslation('common');
   const [confirmDecline, setConfirmDecline] = useState(false);
   const meta   = TYPE_META[request.access_type]   || TYPE_META.lab_reports;
-  const stMeta = STATUS_META[request.status]       || STATUS_META.pending;
+  const stStyle = STATUS_STYLE[request.status]     || STATUS_STYLE.pending;
   const Icon   = meta.Icon;
+  const typeLabel = t(`accessRequests.typeMeta.${meta.labelKey}`);
+  const statusLabel = request.status === 'declined' ? tc('status.declined') : t(`accessRequests.statusMeta.${request.status || 'pending'}`);
 
   return (
     <div className="ios-tile overflow-hidden">
@@ -45,13 +51,13 @@ function RequestCard({ request, onAccept, onDecline, accepting, declining }: Req
               <Icon size={18} strokeWidth={1.8} className="text-white" />
             </div>
             <div>
-              <p className="text-white font-bold text-base">{meta.label}</p>
-              <p className="text-white/70 text-xs">Access requested</p>
+              <p className="text-white font-bold text-base">{typeLabel}</p>
+              <p className="text-white/70 text-xs">{t('accessRequests.card.accessRequested')}</p>
             </div>
           </div>
-          <span className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${stMeta.cls}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${stMeta.dot}`} />
-            {stMeta.label}
+          <span className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${stStyle.cls}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${stStyle.dot}`} />
+            {statusLabel}
           </span>
         </div>
       </div>
@@ -64,31 +70,45 @@ function RequestCard({ request, onAccept, onDecline, accepting, declining }: Req
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-gray-900">Dr. {request.doctor_name}</p>
             <p className="text-xs text-gray-400">
-              {request.doctor_specialization || 'Medical Doctor'}
+              {request.doctor_specialization || t('accessRequests.card.defaultSpecialization')}
               {request.doctor_hospital ? ` · ${request.doctor_hospital}` : ''}
             </p>
           </div>
           <Stethoscope size={16} strokeWidth={1.5} className="text-gray-300 shrink-0" />
         </div>
 
+        {request.access_type === 'all' && (
+          <div className="bg-white rounded-2xl px-4 py-3 border border-gray-100">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{t('accessRequests.card.fullRecordIncludes')}</p>
+            <ul className="text-sm text-gray-600 space-y-1">
+              {['labReports', 'medicalHistory', 'personalReports', 'contactInfo'].map(k => (
+                <li key={k} className="flex items-center gap-2">
+                  <span className="w-1 h-1 rounded-full bg-primary-400 shrink-0" />
+                  {t(`accessRequests.typeMeta.${k}`)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {request.reason && (
           <div className="bg-white rounded-2xl px-4 py-3 border border-gray-100">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Reason from Doctor</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('accessRequests.card.reasonFromDoctor')}</p>
             <p className="text-sm text-gray-700 leading-relaxed">"{request.reason}"</p>
           </div>
         )}
 
         <div className="flex gap-4 text-xs text-gray-400">
-          <span>Requested: <span className="font-semibold text-gray-600">{fmtDate(request.created_at)}</span></span>
+          <span>{t('accessRequests.card.requestedOn', { date: '' })}<span className="font-semibold text-gray-600">{fmtDate(request.created_at)}</span></span>
           {request.responded_at && (
-            <span>Responded: <span className="font-semibold text-gray-600">{fmtDate(request.responded_at)}</span></span>
+            <span>{t('accessRequests.card.respondedOn', { date: '' })}<span className="font-semibold text-gray-600">{fmtDate(request.responded_at)}</span></span>
           )}
         </div>
 
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
           <Shield size={14} strokeWidth={2} className="text-amber-500 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-700 leading-relaxed">
-            If you accept, Dr. {request.doctor_name} will be able to view your <strong>{meta.label}</strong> in their portal.
+            {t('accessRequests.card.acceptWarning', { doctor: request.doctor_name, type: typeLabel })}
           </p>
         </div>
 
@@ -105,30 +125,30 @@ function RequestCard({ request, onAccept, onDecline, accepting, declining }: Req
                     ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                     : <CheckCircle2 size={16} strokeWidth={2.5} />
                   }
-                  Accept Request
+                  {t('accessRequests.card.acceptBtn')}
                 </button>
                 <button
                   onClick={() => setConfirmDecline(true)}
                   className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold text-red-600 bg-red-50 rounded-2xl hover:bg-red-100 transition-colors"
                 >
                   <XCircle size={16} strokeWidth={2.5} />
-                  Decline
+                  {t('accessRequests.card.declineBtn')}
                 </button>
               </>
             ) : (
               <div className="flex-1 space-y-2">
-                <p className="text-xs text-center text-gray-600 font-medium">Are you sure you want to decline?</p>
+                <p className="text-xs text-center text-gray-600 font-medium">{t('accessRequests.card.confirmDeclineQuestion')}</p>
                 <div className="flex gap-2">
                   <button onClick={() => setConfirmDecline(false)}
                     className="flex-1 py-2.5 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">
-                    Cancel
+                    {tc('actions.cancel')}
                   </button>
                   <button
                     onClick={() => { onDecline(request.id); setConfirmDecline(false); }}
                     disabled={declining}
                     className="flex-1 py-2.5 text-sm font-bold text-white bg-red-500 rounded-xl hover:bg-red-600 disabled:opacity-50"
                   >
-                    Yes, Decline
+                    {t('accessRequests.card.yesDecline')}
                   </button>
                 </div>
               </div>
@@ -139,13 +159,13 @@ function RequestCard({ request, onAccept, onDecline, accepting, declining }: Req
         {request.status === 'accepted' && (
           <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3.5 py-2.5">
             <CheckCircle2 size={15} strokeWidth={2.5} className="text-emerald-600 shrink-0" />
-            <p className="text-sm font-semibold text-emerald-700">Access granted — Dr. {request.doctor_name} can now view your {meta.label}</p>
+            <p className="text-sm font-semibold text-emerald-700">{t('accessRequests.card.accessGrantedMsg', { doctor: request.doctor_name, type: typeLabel })}</p>
           </div>
         )}
         {request.status === 'declined' && (
           <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">
             <XCircle size={15} strokeWidth={2.5} className="text-red-500 shrink-0" />
-            <p className="text-sm font-semibold text-red-600">Request declined</p>
+            <p className="text-sm font-semibold text-red-600">{t('accessRequests.card.requestDeclinedMsg')}</p>
           </div>
         )}
       </div>
@@ -162,8 +182,11 @@ interface LabViewRequestCardProps {
 }
 
 function LabViewRequestCard({ request, onAccept, onDecline, accepting, declining }: LabViewRequestCardProps) {
+  const { t } = useTranslation('patientReports');
+  const { t: tc } = useTranslation('common');
   const [confirmDecline, setConfirmDecline] = useState(false);
-  const stMeta = STATUS_META[request.status] || STATUS_META.pending;
+  const stStyle = STATUS_STYLE[request.status] || STATUS_STYLE.pending;
+  const statusLabel = request.status === 'declined' ? tc('status.declined') : t(`accessRequests.statusMeta.${request.status || 'pending'}`);
 
   return (
     <div className="ios-tile overflow-hidden">
@@ -175,13 +198,13 @@ function LabViewRequestCard({ request, onAccept, onDecline, accepting, declining
               <Microscope size={18} strokeWidth={1.8} className="text-white" />
             </div>
             <div>
-              <p className="text-white font-bold text-base">Lab Report Access</p>
-              <p className="text-white/70 text-xs">Doctor wants to view your lab report</p>
+              <p className="text-white font-bold text-base">{t('accessRequests.labCard.title')}</p>
+              <p className="text-white/70 text-xs">{t('accessRequests.labCard.subtitle')}</p>
             </div>
           </div>
-          <span className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${stMeta.cls}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${stMeta.dot}`} />
-            {stMeta.label}
+          <span className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${stStyle.cls}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${stStyle.dot}`} />
+            {statusLabel}
           </span>
         </div>
       </div>
@@ -194,7 +217,7 @@ function LabViewRequestCard({ request, onAccept, onDecline, accepting, declining
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-gray-900">Dr. {request.doctor_name}</p>
             <p className="text-xs text-gray-400">
-              {request.doctor_specialization || 'Medical Doctor'}
+              {request.doctor_specialization || t('accessRequests.card.defaultSpecialization')}
               {request.doctor_hospital ? ` · ${request.doctor_hospital}` : ''}
             </p>
           </div>
@@ -205,12 +228,12 @@ function LabViewRequestCard({ request, onAccept, onDecline, accepting, declining
           {request.lab_name && (
             <div className="flex items-center gap-2">
               <FlaskConical size={13} strokeWidth={2} className="text-cyan-600 shrink-0" />
-              <p className="text-xs text-gray-500">Laboratory: <span className="font-semibold text-gray-800">{request.lab_name}</span></p>
+              <p className="text-xs text-gray-500">{t('accessRequests.labCard.laboratoryLabel')} <span className="font-semibold text-gray-800">{request.lab_name}</span></p>
             </div>
           )}
           {request.test_description && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Tests</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{t('accessRequests.labCard.testsLabel')}</p>
               <p className="text-sm text-gray-700 leading-relaxed">{request.test_description}</p>
             </div>
           )}
@@ -218,22 +241,22 @@ function LabViewRequestCard({ request, onAccept, onDecline, accepting, declining
 
         {request.message && (
           <div className="bg-white rounded-2xl px-4 py-3 border border-gray-100">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Reason from Doctor</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('accessRequests.card.reasonFromDoctor')}</p>
             <p className="text-sm text-gray-700 leading-relaxed">"{request.message}"</p>
           </div>
         )}
 
         <div className="flex gap-4 text-xs text-gray-400 flex-wrap">
-          <span>Requested: <span className="font-semibold text-gray-600">{fmtDate(request.created_at)}</span></span>
+          <span>{t('accessRequests.card.requestedOn', { date: '' })}<span className="font-semibold text-gray-600">{fmtDate(request.created_at)}</span></span>
           {request.responded_at && (
-            <span>Responded: <span className="font-semibold text-gray-600">{fmtDate(request.responded_at)}</span></span>
+            <span>{t('accessRequests.card.respondedOn', { date: '' })}<span className="font-semibold text-gray-600">{fmtDate(request.responded_at)}</span></span>
           )}
         </div>
 
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
           <Shield size={14} strokeWidth={2} className="text-amber-500 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-700 leading-relaxed">
-            If you accept, Dr. {request.doctor_name} will be able to view and download this specific lab report.
+            {t('accessRequests.labCard.acceptWarning', { doctor: request.doctor_name })}
           </p>
         </div>
 
@@ -250,30 +273,30 @@ function LabViewRequestCard({ request, onAccept, onDecline, accepting, declining
                     ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                     : <CheckCircle2 size={16} strokeWidth={2.5} />
                   }
-                  Allow Access
+                  {t('accessRequests.labCard.allowAccessBtn')}
                 </button>
                 <button
                   onClick={() => setConfirmDecline(true)}
                   className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold text-red-600 bg-red-50 rounded-2xl hover:bg-red-100 transition-colors"
                 >
                   <XCircle size={16} strokeWidth={2.5} />
-                  Decline
+                  {t('accessRequests.card.declineBtn')}
                 </button>
               </>
             ) : (
               <div className="flex-1 space-y-2">
-                <p className="text-xs text-center text-gray-600 font-medium">Are you sure you want to decline?</p>
+                <p className="text-xs text-center text-gray-600 font-medium">{t('accessRequests.card.confirmDeclineQuestion')}</p>
                 <div className="flex gap-2">
                   <button onClick={() => setConfirmDecline(false)}
                     className="flex-1 py-2.5 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">
-                    Cancel
+                    {tc('actions.cancel')}
                   </button>
                   <button
                     onClick={() => { onDecline(request.id); setConfirmDecline(false); }}
                     disabled={declining}
                     className="flex-1 py-2.5 text-sm font-bold text-white bg-red-500 rounded-xl hover:bg-red-600 disabled:opacity-50"
                   >
-                    Yes, Decline
+                    {t('accessRequests.card.yesDecline')}
                   </button>
                 </div>
               </div>
@@ -284,13 +307,13 @@ function LabViewRequestCard({ request, onAccept, onDecline, accepting, declining
         {request.status === 'accepted' && (
           <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3.5 py-2.5">
             <Eye size={15} strokeWidth={2.5} className="text-emerald-600 shrink-0" />
-            <p className="text-sm font-semibold text-emerald-700">Access granted — Dr. {request.doctor_name} can now view this lab report</p>
+            <p className="text-sm font-semibold text-emerald-700">{t('accessRequests.labCard.accessGrantedMsg', { doctor: request.doctor_name })}</p>
           </div>
         )}
         {request.status === 'declined' && (
           <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">
             <XCircle size={15} strokeWidth={2.5} className="text-red-500 shrink-0" />
-            <p className="text-sm font-semibold text-red-600">Request declined</p>
+            <p className="text-sm font-semibold text-red-600">{t('accessRequests.card.requestDeclinedMsg')}</p>
           </div>
         )}
       </div>
@@ -299,6 +322,8 @@ function LabViewRequestCard({ request, onAccept, onDecline, accepting, declining
 }
 
 export default function PatientAccessRequests() {
+  const { t } = useTranslation('patientReports');
+  const { t: tc } = useTranslation('common');
   const qc = useQueryClient();
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [activeTab, setActiveTab] = useState('access');
@@ -324,18 +349,18 @@ export default function PatientAccessRequests() {
     mutationFn: ({ id, status }: { id: number; status: string }) => accessRequestApi.respond(id, status),
     onSuccess: (_, { status }) => {
       qc.invalidateQueries({ queryKey: ['access-requests'] });
-      showToast(status === 'accepted' ? 'Access granted! Doctor has been notified.' : 'Request declined.');
+      showToast(status === 'accepted' ? t('accessRequests.toast.accessGranted') : t('accessRequests.toast.requestDeclined'));
     },
-    onError: (err: any) => showToast(err.message || 'Failed to respond', 'error'),
+    onError: (err: any) => showToast(err.message || t('accessRequests.toast.respondFailed'), 'error'),
   });
 
   const labRespondMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => labViewRequestApi.respond(id, status),
     onSuccess: (_, { status }) => {
       qc.invalidateQueries({ queryKey: ['lab-view-requests'] });
-      showToast(status === 'accepted' ? 'Lab report access granted! Doctor has been notified.' : 'Request declined.');
+      showToast(status === 'accepted' ? t('accessRequests.toast.labAccessGranted') : t('accessRequests.toast.requestDeclined'));
     },
-    onError: (err: any) => showToast(err.message || 'Failed to respond', 'error'),
+    onError: (err: any) => showToast(err.message || t('accessRequests.toast.respondFailed'), 'error'),
   });
 
   const accessPending  = (requests as any[]).filter((r: any) => r.status === 'pending').length;
@@ -347,10 +372,17 @@ export default function PatientAccessRequests() {
 
   const isLoading = activeTab === 'access' ? accessLoading : labLoading;
 
+  const FILTER_LABEL: Record<string, string> = {
+    all: t('accessRequests.filters.all'),
+    pending: tc('status.pending'),
+    accepted: t('accessRequests.filters.accepted'),
+    declined: tc('status.declined'),
+  };
+
   if (isLoading && (activeTab === 'access' ? (requests as any[]).length === 0 : (labViewRequests as any[]).length === 0)) return (
     <div className="flex items-center justify-center py-32 text-gray-400">
       <span className="w-5 h-5 border-2 border-gray-200 border-t-primary-500 rounded-full animate-spin mr-3" />
-      Loading requests…
+      {t('accessRequests.loading')}
     </div>
   );
 
@@ -367,17 +399,17 @@ export default function PatientAccessRequests() {
       )}
 
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Doctor Requests</h1>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t('accessRequests.pageTitle')}</h1>
         <p className="text-sm text-gray-400 mt-0.5">
-          Doctors requesting access to your health data — you control what they can see
+          {t('accessRequests.pageSubtitle')}
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3 md:gap-4">
         {[
-          { label:'Pending',        value: totalPending,                                                                         grad:'from-amber-500 to-orange-500',   shadow:'shadow-amber-200/50'  },
-          { label:'Data Access',    value: (requests as any[]).filter((r: any) => r.status==='accepted').length,                 grad:'from-emerald-500 to-teal-500',   shadow:'shadow-emerald-200/50'},
-          { label:'Lab Reports',    value: (labViewRequests as any[]).filter((r: any) => r.status==='accepted').length,          grad:'from-cyan-500 to-teal-600',      shadow:'shadow-cyan-200/50'  },
+          { label: tc('status.pending'),                value: totalPending,                                                                         grad:'from-amber-500 to-orange-500',   shadow:'shadow-amber-200/50'  },
+          { label: t('accessRequests.tabs.healthInfo'), value: (requests as any[]).filter((r: any) => r.status==='accepted').length,                 grad:'from-emerald-500 to-teal-500',   shadow:'shadow-emerald-200/50'},
+          { label: t('accessRequests.tabs.labReports'), value: (labViewRequests as any[]).filter((r: any) => r.status==='accepted').length,          grad:'from-cyan-500 to-teal-600',      shadow:'shadow-cyan-200/50'  },
         ].map(s => (
           <div key={s.label} className="ios-stat-tile relative overflow-hidden">
             <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${s.grad} opacity-10`} />
@@ -398,7 +430,7 @@ export default function PatientAccessRequests() {
           }`}
         >
           <Shield size={14} strokeWidth={2} />
-          Data Access
+          {t('accessRequests.tabs.healthInfo')}
           {accessPending > 0 && (
             <span className="text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
               {accessPending}
@@ -412,7 +444,7 @@ export default function PatientAccessRequests() {
           }`}
         >
           <Microscope size={14} strokeWidth={2} />
-          Lab Reports
+          {t('accessRequests.tabs.labReports')}
           {labPending > 0 && (
             <span className="text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
               {labPending}
@@ -431,7 +463,7 @@ export default function PatientAccessRequests() {
                     ? 'bg-primary-600 text-white border-primary-600'
                     : 'bg-white text-gray-500 border-gray-200 hover:border-primary-300'
                 }`}>
-                {f === 'all' ? `All (${(requests as any[]).length})` : `${f.charAt(0).toUpperCase()+f.slice(1)} (${(requests as any[]).filter((r: any) => r.status===f).length})`}
+                {f === 'all' ? `${FILTER_LABEL.all} (${(requests as any[]).length})` : `${FILTER_LABEL[f]} (${(requests as any[]).filter((r: any) => r.status===f).length})`}
               </button>
             ))}
           </div>
@@ -441,8 +473,12 @@ export default function PatientAccessRequests() {
               <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
                 <Shield size={28} strokeWidth={1.5} className="text-gray-300" />
               </div>
-              <p className="font-bold text-gray-500">No {accessFilter !== 'all' ? accessFilter : ''} data access requests</p>
-              <p className="text-sm text-gray-400 mt-1">When a doctor requests access to your health data, it will appear here.</p>
+              <p className="font-bold text-gray-500">
+                {accessFilter !== 'all'
+                  ? t('accessRequests.emptyHealthInfo.filtered', { status: FILTER_LABEL[accessFilter].toLowerCase() })
+                  : t('accessRequests.emptyHealthInfo.allFilter')}
+              </p>
+              <p className="text-sm text-gray-400 mt-1">{t('accessRequests.emptyHealthInfo.subtitle')}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -471,7 +507,7 @@ export default function PatientAccessRequests() {
                     ? 'bg-primary-600 text-white border-primary-600'
                     : 'bg-white text-gray-500 border-gray-200 hover:border-primary-300'
                 }`}>
-                {f === 'all' ? `All (${(labViewRequests as any[]).length})` : `${f.charAt(0).toUpperCase()+f.slice(1)} (${(labViewRequests as any[]).filter((r: any) => r.status===f).length})`}
+                {f === 'all' ? `${FILTER_LABEL.all} (${(labViewRequests as any[]).length})` : `${FILTER_LABEL[f]} (${(labViewRequests as any[]).filter((r: any) => r.status===f).length})`}
               </button>
             ))}
           </div>
@@ -481,8 +517,12 @@ export default function PatientAccessRequests() {
               <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
                 <Microscope size={28} strokeWidth={1.5} className="text-gray-300" />
               </div>
-              <p className="font-bold text-gray-500">No {labFilter !== 'all' ? labFilter : ''} lab report requests</p>
-              <p className="text-sm text-gray-400 mt-1">When a doctor requests to view one of your lab reports, it will appear here.</p>
+              <p className="font-bold text-gray-500">
+                {labFilter !== 'all'
+                  ? t('accessRequests.emptyLabReports.filtered', { status: FILTER_LABEL[labFilter].toLowerCase() })
+                  : t('accessRequests.emptyLabReports.allFilter')}
+              </p>
+              <p className="text-sm text-gray-400 mt-1">{t('accessRequests.emptyLabReports.subtitle')}</p>
             </div>
           ) : (
             <div className="space-y-4">

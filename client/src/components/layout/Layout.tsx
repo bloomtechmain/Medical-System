@@ -3,10 +3,14 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import MobileHeader from './MobileHeader';
 import MobileBottomNav from './MobileBottomNav';
+import ImpersonationBanner from '../common/ImpersonationBanner';
 
 export default function Layout() {
   return (
     <div className="h-screen bg-slate-50 overflow-hidden">
+
+      {/* ── Admin "View As" banner (fixed, only visible while impersonating) ── */}
+      <ImpersonationBanner />
 
       {/* ── Desktop sidebar (fixed, hidden on mobile) ── */}
       <Sidebar />

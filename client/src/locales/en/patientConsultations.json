@@ -1,0 +1,279 @@
+{
+  "page": {
+    "title": "My Consultations",
+    "subtitle": "Newest visit first — click any visit to expand",
+    "recordVisit": "Record Visit",
+    "loading": "Loading consultations…",
+    "stats": {
+      "totalVisits": "Total Visits",
+      "treatingDoctors": "Treating Doctors",
+      "activeTreatments": "Active Treatments",
+      "labTestsPending": "Lab Tests Pending"
+    },
+    "pendingLabsBanner": {
+      "count": "{{count}} lab test",
+      "text": "requested by your doctor — expand the consultation and choose a laboratory to send them."
+    },
+    "emptyState": {
+      "title": "No consultations yet",
+      "subtitle": "Tap \"Record Visit\" to log your own or wait for your doctor to add one"
+    },
+    "readOnlyNotice": {
+      "prefix": "Consultations added by your doctor are",
+      "readOnly": "read-only",
+      "suffix": "Only your own self-recorded visits can be edited."
+    },
+    "toast": {
+      "updated": "Consultation updated!",
+      "updateFailed": "Update failed",
+      "visitRecorded": "Visit recorded successfully!",
+      "labSent": "Lab request sent! Laboratory has been notified.",
+      "pharmacySent": "Prescription forwarded! Pharmacy has been notified."
+    },
+    "doctorCard": {
+      "selfRecorded": "Self-Recorded",
+      "doctorPrefix": "Dr. {{name}}",
+      "verified": "Verified",
+      "visits": "visits"
+    },
+    "doctorFilter": {
+      "all": "All Doctors ({{count}})"
+    },
+    "commit": {
+      "medicalVisit": "Medical Visit",
+      "labPending": "Lab Pending",
+      "labDone": "Lab Done",
+      "status": {
+        "active": "Active",
+        "preparing": "Preparing",
+        "dispensed": "Ready",
+        "delivered": "Delivered",
+        "completed": "Resolved"
+      }
+    },
+    "wf": {
+      "visit": "Visit",
+      "symptoms": "Symptoms",
+      "diagnosis": "Diagnosis",
+      "treatmentPlan": "Treatment Plan",
+      "medicinesPrescribed": "Medicines Prescribed ({{count}})",
+      "prescription": "Prescription",
+      "pharmacy": "Pharmacy",
+      "pharmacyDispensed": "Dispensed by Pharmacy ✅",
+      "pharmacyNamed": "Pharmacy: {{name}}",
+      "pharmacyPreparingHeading": "{{name}} is Preparing",
+      "pharmacyReadyHeading": "Ready at {{name}}",
+      "pharmacyDeliveredHeading": "Delivered by {{name}}",
+      "pharmacyAssignedFallback": "Assigned",
+      "assignedPharmacyFallback": "Assigned Pharmacy",
+      "labTestsRequested": "Lab Tests Requested",
+      "sentTo": "Sent to: {{name}}",
+      "laboratoryFallback": "Laboratory",
+      "labReportReady": "Lab Report Ready ✅",
+      "body": {
+        "date": "Date:",
+        "location": "Location:",
+        "pharmacy": "Pharmacy:"
+      },
+      "noPharmacyText": "No pharmacy assigned. Forward your prescription to a pharmacy to collect medicines.",
+      "forwardToPharmacyBtn": "Forward to Pharmacy",
+      "noPharmacyAssigned": "No pharmacy assigned.",
+      "medicinesDispensed": "✓ Medicines dispensed",
+      "awaitingDispensing": "Awaiting pharmacist",
+      "stagePreparing": "Preparing",
+      "stageReady": "Ready for pickup",
+      "stageDelivered": "✓ Delivered",
+      "sendToLaboratoryBtn": "Send to Laboratory",
+      "orderedByDoctor": "Ordered by Dr. {{name}}",
+      "labNotesSummary": "Lab Notes / Results Summary",
+      "downloadReport": "Download Report"
+    }
+  },
+  "doctorSearch": {
+    "loading": "Searching doctors…",
+    "namePrefix": "Dr. {{name}}"
+  },
+  "labSearch": {
+    "placeholder": "Tap to see all labs, or type to search…",
+    "loading": "Loading laboratories…",
+    "noResults": "No laboratories found"
+  },
+  "pharmacySearch": {
+    "placeholder": "Tap to see all pharmacies, or type to search…",
+    "loading": "Loading pharmacies…",
+    "noResults": "No pharmacies found"
+  },
+  "sendToLabModal": {
+    "title": "Send to Laboratory",
+    "subtitle": "Choose a lab to process your tests",
+    "testsRequested": "Tests Requested",
+    "selectLaboratory": "Select Laboratory",
+    "errorSelect": "Please select a laboratory",
+    "errorGeneric": "Failed to send request",
+    "sendBtn": "Send to Lab"
+  },
+  "sendToPharmacyModal": {
+    "title": "Forward to Pharmacy",
+    "subtitle": "Choose a pharmacy to dispense your prescription",
+    "prescribedMedicines": "Prescribed Medicines",
+    "selectPharmacy": "Select Pharmacy",
+    "errorSelect": "Please select a pharmacy",
+    "errorGeneric": "Failed to forward prescription",
+    "forwardBtn": "Forward Prescription"
+  },
+  "selfRecordModal": {
+    "title": "Record My Visit",
+    "subtitle": "Log a doctor visit or self-observation",
+    "errors": {
+      "visitDateRequired": "Visit date is required",
+      "symptomsRequired": "Symptoms are required",
+      "saveFailed": "Failed to save"
+    },
+    "fields": {
+      "visitDate": "Visit Date *",
+      "doctorName": "Doctor Name",
+      "doctorNamePlaceholder": "Dr. Perera",
+      "hospitalClinic": "Hospital / Clinic",
+      "hospitalClinicPlaceholder": "e.g., Nawaloka Hospital",
+      "symptoms": "Symptoms *",
+      "symptomsPlaceholder": "What symptoms did you have?",
+      "diagnosis": "Diagnosis",
+      "diagnosisPlaceholder": "What did the doctor diagnose?",
+      "treatmentPlan": "Treatment Plan",
+      "treatmentPlanPlaceholder": "Prescribed medications, etc."
+    },
+    "prescription": {
+      "label": "Prescription",
+      "optional": "(optional)",
+      "uploadBtn": "Upload prescription image"
+    },
+    "medicines": {
+      "label": "Medicines",
+      "none": "No medicines added",
+      "medicine": "Medicine *",
+      "dosage": "Dosage",
+      "frequency": "Frequency",
+      "duration": "Duration"
+    },
+    "saveBtn": "Save Visit"
+  },
+  "editModal": {
+    "title": "Edit Consultation",
+    "fields": {
+      "visitDate": "Visit Date *",
+      "doctorName": "Doctor Name",
+      "hospitalClinic": "Hospital / Clinic",
+      "symptoms": "Symptoms",
+      "symptomsPlaceholder": "Describe symptoms…",
+      "diagnosis": "Diagnosis",
+      "diagnosisPlaceholder": "Medical diagnosis…",
+      "treatmentPlan": "Treatment Plan",
+      "treatmentPlanPlaceholder": "Treatment plan…"
+    },
+    "medicines": {
+      "label": "Medicines",
+      "medicine": "Medicine *",
+      "dosage": "Dosage",
+      "frequency": "Frequency",
+      "duration": "Duration"
+    },
+    "saveBtn": "Save Changes"
+  },
+  "medicalFlow": {
+    "header": {
+      "title": "Medical Flow",
+      "subtitle": "Your complete health journey — every visit, prescription, and lab result in chronological order.",
+      "eventsCount": "{{count}} events",
+      "stats": {
+        "visits": "Visits",
+        "labTests": "Lab Tests",
+        "medicines": "Medicines"
+      }
+    },
+    "search": {
+      "placeholder": "Search doctors, medicines, conditions…",
+      "showingEvents": "Showing {{count}} event",
+      "matching": "matching \"{{search}}\""
+    },
+    "filters": {
+      "all": "All ({{count}})",
+      "visits": "Visits ({{count}})",
+      "medicines": "Medicines ({{count}})",
+      "lab": "Lab Tests ({{count}})"
+    },
+    "sort": {
+      "oldestFirst": "Oldest First",
+      "newestFirst": "Newest First"
+    },
+    "empty": {
+      "title": "No medical events found",
+      "searchMessage": "No events match \"{{search}}\". Try a different search term.",
+      "defaultMessage": "Your medical timeline will appear here as events are recorded."
+    },
+    "dateGroup": {
+      "eventsCount": "{{count}} event"
+    },
+    "legend": {
+      "title": "Event Legend"
+    },
+    "events": {
+      "sick": "Reported Sick",
+      "doctorVisit": "Doctor Visit",
+      "diagnosis": "Diagnosis",
+      "prescriptionPreparing": "Pharmacy Preparing",
+      "prescriptionDispensed": "Ready for Pickup",
+      "prescriptionDelivered": "Medicines Delivered",
+      "treatmentCompleted": "Treatment Completed",
+      "labRequested": "Lab Test Requested",
+      "labInProgress": "Lab Test In Progress",
+      "labReportReady": "Lab Report Ready"
+    },
+    "statusRow": {
+      "active": "Treatment Active",
+      "dispensed": "Prescription Given",
+      "completed": "Treatment Complete"
+    },
+    "card": {
+      "fallback": {
+        "medicalConsultation": "Medical Consultation",
+        "prescriptionDispensed": "Prescription dispensed",
+        "treatment": "Treatment",
+        "laboratoryTest": "Laboratory Test"
+      },
+      "moreMedicines": "+{{count}} more",
+      "resolvedSuffix": "resolved",
+      "doctorPrefix": "Dr. {{name}}"
+    },
+    "detail": {
+      "visitedOn": "Visited {{date}}",
+      "symptomsReported": "Symptoms Reported",
+      "diagnosis": "Diagnosis",
+      "treatmentPlan": "Treatment Plan",
+      "medicinesPrescribed": "Medicines Prescribed",
+      "prescriptionDispensedTitle": "Prescription Dispensed by Pharmacist",
+      "forLabel": "For: {{text}}",
+      "consultationFallback": "consultation",
+      "prescribedByDoctor": "Prescribed by Dr. {{name}}",
+      "medicinesDispensed": "Medicines Dispensed",
+      "treatmentCompletedTitle": "Treatment Successfully Completed",
+      "conditionLabel": "Condition: {{text}}",
+      "treatingDoctor": "Treating doctor: Dr. {{name}}",
+      "laboratoryFallback": "Laboratory",
+      "requestedByDoctor": "Requested by Dr. {{name}}",
+      "requestedOn": "Requested {{date}}",
+      "testDescription": "Test Description",
+      "testDescriptionFallback": "Not specified",
+      "notes": "Notes",
+      "labStatus": {
+        "completed": "Completed",
+        "inProgress": "In Progress",
+        "pending": "Pending"
+      },
+      "labProcessingTitle": "Lab is Processing Your Test",
+      "orderedByDoctor": "Ordered by Dr. {{name}}",
+      "labNotesSummary": "Lab Notes / Results Summary",
+      "downloadReport": "Download Report",
+      "reportNotAttached": "Report file not yet attached"
+    }
+  }
+}

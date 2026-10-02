@@ -33,6 +33,8 @@ export const authApi = {
   login:    (data: unknown): Promise<any> => api.post('/auth/login', data),
   register: (data: unknown): Promise<any> => api.post('/auth/register', data),
   me:       (): Promise<any>              => api.get('/auth/me'),
+  impersonate:       (userId: number): Promise<any> => api.post(`/auth/impersonate/${userId}`),
+  getImpersonations: (): Promise<any>               => api.get('/auth/impersonations'),
 };
 
 export const medicineApi = {
@@ -92,7 +94,19 @@ export const labApi = {
   createDirect: (formData: FormData): Promise<any>             => api.post('/lab-requests/direct', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   uploadReport: (id: number, formData: FormData): Promise<any> => api.patch(`/lab-requests/${id}/report`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   updateStatus: (id: number, status: string, extra?: Record<string, unknown>): Promise<any> => api.patch(`/lab-requests/${id}/status`, { status, ...extra }),
+  reject:       (id: number, message: string): Promise<any>    => api.patch(`/lab-requests/${id}/reject`, { message }),
+  setPrice:     (id: number, data: { amount?: number; test_catalog_id?: number }): Promise<any> => api.patch(`/lab-requests/${id}/price`, data),
   remove:       (id: number): Promise<any>                     => api.delete(`/lab-requests/${id}`),
+  getMessages:  (id: number): Promise<any>                     => api.get(`/lab-requests/${id}/messages`),
+  sendMessage:  (id: number, body: string): Promise<any>       => api.post(`/lab-requests/${id}/messages`, { body }),
+};
+
+export const labCatalogApi = {
+  getMine:      (): Promise<any>                     => api.get('/lab-catalog'),
+  getForLab:    (laboratoryId: number): Promise<any> => api.get(`/lab-catalog/lab/${laboratoryId}`),
+  create:       (data: unknown): Promise<any>        => api.post('/lab-catalog', data),
+  update:       (id: number, data: unknown): Promise<any> => api.put(`/lab-catalog/${id}`, data),
+  toggleActive: (id: number): Promise<any>           => api.patch(`/lab-catalog/${id}/toggle`),
 };
 
 export const labViewRequestApi = {
@@ -111,6 +125,18 @@ export const accessRequestApi = {
   getLabReportFile: (patientId: number, labRequestId: number): Promise<Blob>      => api.get(`/access-requests/patient/${patientId}/lab-report/${labRequestId}/file`, { responseType: 'blob' }),
 };
 
+export const appointmentApi = {
+  getAll:               (): Promise<any>                                            => api.get('/appointments'),
+  create:               (data: unknown): Promise<any>                               => api.post('/appointments', data),
+  updateStatus:         (id: number, status: string, extra?: Record<string, unknown>): Promise<any> => api.patch(`/appointments/${id}/status`, { status, ...extra }),
+  getDoctorSlots:       (doctorId: number, days = 14): Promise<any>                  => api.get(`/appointments/doctor/${doctorId}/slots`, { params: { days } }),
+  getWeeklyAvailability: (): Promise<any>                                           => api.get('/appointments/availability/weekly'),
+  setWeeklyAvailability: (schedule: unknown): Promise<any>                          => api.put('/appointments/availability/weekly', { schedule }),
+  getOverrides:         (from?: string, to?: string): Promise<any>                  => api.get('/appointments/availability/overrides', { params: { from, to } }),
+  setOverride:          (data: unknown): Promise<any>                               => api.post('/appointments/availability/overrides', data),
+  deleteOverride:       (id: number): Promise<any>                                  => api.delete(`/appointments/availability/overrides/${id}`),
+};
+
 export const patientReportApi = {
   getAll:        (): Promise<any>                   => api.get('/patient-reports'),
   getOne:        (id: number): Promise<any>         => api.get(`/patient-reports/${id}`),
@@ -127,15 +153,17 @@ export const notificationApi = {
 };
 
 export const patientVitalsApi = {
-  get:     (): Promise<any>              => api.get('/patient-vitals'),
-  history: (): Promise<any>             => api.get('/patient-vitals/history'),
-  save:    (data: unknown): Promise<any> => api.post('/patient-vitals', data),
+  get:         (): Promise<any>              => api.get('/patient-vitals'),
+  history:     (): Promise<any>             => api.get('/patient-vitals/history'),
+  fieldHistory: (field: string): Promise<any> => api.get(`/patient-vitals/history/${field}`),
+  save:        (data: unknown): Promise<any> => api.post('/patient-vitals', data),
 };
 
 export const orgApi = {
   getAll:       (): Promise<any>                                      => api.get('/organizations'),
   provision:    (data: unknown): Promise<any>                        => api.post('/organizations', data),
   register:     (data: unknown): Promise<any>                        => api.post('/organizations/register', data),
+  searchOwner:  (org_type: string, q: string): Promise<any>          => api.get('/organizations/search-owner', { params: { org_type, q } }),
   getMembers:   (id: number): Promise<any>                          => api.get(`/organizations/${id}/members`),
   addMember:    (id: number, data: unknown): Promise<any>           => api.post(`/organizations/${id}/members`, data),
   removeMember: (id: number, userId: number): Promise<any>          => api.delete(`/organizations/${id}/members/${userId}`),

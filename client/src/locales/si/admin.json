@@ -1,0 +1,247 @@
+{
+  "dashboard": {
+    "toast": {
+      "statusUpdated": "පරිශීලක තත්ත්වය යාවත්කාලීන කරන ලදී",
+      "statusUpdateFailed": "පරිශීලක තත්ත්වය යාවත්කාලීන කිරීම අසාර්ථක විය"
+    },
+    "viewAsActivity": {
+      "title": "මෑත View As ක්‍රියාකාරකම්",
+      "entry": "{{admin}} විසින් {{target}} ({{role}}) ලෙස බැලීය"
+    },
+    "stats": {
+      "totalUsers": "මුළු පරිශීලකයින්",
+      "patients": "රෝගීන්",
+      "doctors": "වෛද්‍යවරු",
+      "pharmacists": "ෆාමසිස්ට්වරු",
+      "laboratories": "රසායනාගාර",
+      "admins": "පරිපාලකයින්",
+      "activeUsers": "ක්‍රියාත්මක පරිශීලකයින්",
+      "newThisWeek": "මෙම සතියේ නව"
+    },
+    "orgStats": {
+      "hospitals": "රෝහල්",
+      "pharmacies": "ෆාමසි",
+      "laboratories": "රසායනාගාර",
+      "clinics": "සායන",
+      "totalOrgs": "මුළු සංවිධාන"
+    },
+    "quickLinks": {
+      "organizations": "සංවිධාන",
+      "users": "පරිශීලකයින්",
+      "medicines": "බෙහෙත්",
+      "suppliers": "සැපයුම්කරුවන්",
+      "orders": "ඇණවුම්",
+      "sales": "විකුණුම්",
+      "inventory": "තොග"
+    },
+    "title": "පද්ධති උපකරණ පුවරුව",
+    "subtitle": "Core Health — බහු-කුලීන පද්ධති දළ විශ්ලේෂණය",
+    "systemAdministrator": "පද්ධති පරිපාලක",
+    "pendingApproval_one": "අනුමැතිය අපේක්ෂාවෙන් සංවිධාන {{count}}ක් ඇත",
+    "pendingApproval_other": "අනුමැතිය අපේක්ෂාවෙන් සංවිධාන {{count}}ක් ඇත",
+    "reviewApprovals": "ස්වයං-ලියාපදිංචි වූ සංවිධාන සමාලෝචනය කර අනුමත කරන්න",
+    "review": "සමාලෝචනය කරන්න",
+    "userOverview": "පරිශීලක දළ විශ්ලේෂණය",
+    "tenantOrganizations": "කුලීන සංවිධාන",
+    "manage": "කළමනාකරණය කරන්න",
+    "systemActivity": "පද්ධති ක්‍රියාකාරකම්",
+    "activity": {
+      "consultations": "උපදේශන",
+      "active": "ක්‍රියාත්මකයි",
+      "completed": "සම්පූර්ණයි",
+      "labRequests": "රසායනාගාර ඉල්ලීම්",
+      "pending": "අපේක්ෂිත",
+      "appointments": "නියමිත වේලාවන්",
+      "upcoming": "ඉදිරි",
+      "pharmacySales": "ෆාමසි විකුණුම්",
+      "revenue": "ආදායම",
+      "thisMonth": "මෙම මාසයේ"
+    },
+    "pharmacyInventoryHealth": "ෆාමසි තොග තත්ත්වය",
+    "inventoryHealth": {
+      "totalMedicines": "මුළු බෙහෙත්",
+      "lowStock": "අඩු තොග",
+      "expired": "කල් ඉකුත් වූ"
+    },
+    "quickNavigation": "ඉක්මන් සංචලනය",
+    "recentRegistrations": "මෑත ලියාපදිංචි කිරීම්",
+    "noUsersYet": "තවම පරිශීලකයින් නැත.",
+    "table": {
+      "role": "භූමිකාව",
+      "joined": "බැඳුණු දිනය",
+      "action": "ක්‍රියාව",
+      "inactive": "අක්‍රියයි",
+      "deactivate": "අක්‍රිය කරන්න",
+      "activate": "සක්‍රිය කරන්න"
+    },
+    "roles": {
+      "patient": "රෝගියා",
+      "doctor": "වෛද්‍යවරයා",
+      "pharmacist": "ෆාමසිස්ට්",
+      "laboratory": "රසායනාගාරය",
+      "admin": "පරිපාලක"
+    }
+  },
+  "users": {
+    "fields": {
+      "specialization": "විශේෂඥතාව",
+      "licenseNumber": "බලපත්‍ර අංකය",
+      "hospitalClinic": "රෝහල / සායනය",
+      "consultationFee": "උපදේශන ගාස්තුව (රු.)",
+      "yearsExperience": "පළපුරුද්ද (වසර)",
+      "medicalSchool": "වෛද්‍ය විද්‍යාලය",
+      "bioNotes": "ජීව දත්ත / සටහන්",
+      "pharmacyName": "ෆාමසියේ නම",
+      "pharmacyAddress": "ෆාමසියේ ලිපිනය",
+      "specializationArea": "විශේෂ ක්ෂේත්‍රය",
+      "dateOfBirth": "උපන් දිනය",
+      "selectGender": "ස්ත්‍රී/පුරුෂ භාවය තෝරන්න",
+      "bloodType": "රුධිර වර්ගය",
+      "select": "තෝරන්න",
+      "allergies": "අසාත්මිකතා",
+      "chronicConditions": "නිදන්ගත රෝග තත්ත්ව",
+      "laboratoryName": "රසායනාගාරයේ නම",
+      "labType": "රසායනාගාර වර්ගය",
+      "accreditation": "පිළිගැනීම් සහතිකය",
+      "servicesOffered": "සපයන සේවා",
+      "operatingHours": "විවෘත වේලාවන්",
+      "fullName": "සම්පූර්ණ නම",
+      "password": "මුරපදය",
+      "minCharacters": "අවම අක්ෂර 6ක්",
+      "role": "භූමිකාව",
+      "newPassword": "නව මුරපදය",
+      "leaveBlankToKeep": "(නොවෙනස්ව තබා ගැනීමට හිස්ව තබන්න)",
+      "leaveBlankToKeepCurrent": "නොවෙනස්ව තබා ගැනීමට හිස්ව තබන්න"
+    },
+    "roles": {
+      "patient": "රෝගියා",
+      "doctor": "වෛද්‍යවරයා",
+      "pharmacist": "ෆාමසිස්ට්",
+      "laboratory": "රසායනාගාරය",
+      "admin": "පරිපාලක"
+    },
+    "rolesPlural": {
+      "patient": "රෝගීන්",
+      "doctor": "වෛද්‍යවරු",
+      "pharmacist": "ෆාමසිස්ට්වරු",
+      "laboratory": "රසායනාගාර",
+      "admin": "පරිපාලකයින්"
+    },
+    "toast": {
+      "createSuccess": "පරිශීලකයා සාර්ථකව සාදන ලදී",
+      "createFailed": "පරිශීලකයා සෑදීම අසාර්ථක විය",
+      "updateSuccess": "පරිශීලකයා යාවත්කාලීන කරන ලදී",
+      "updateFailed": "පරිශීලකයා යාවත්කාලීන කිරීම අසාර්ථක විය",
+      "statusUpdateFailed": "තත්ත්වය යාවත්කාලීන කිරීම අසාර්ථක විය",
+      "removeSuccess": "පරිශීලකයා ඉවත් කරන ලදී",
+      "removeFailed": "පරිශීලකයා ඉවත් කිරීම අසාර්ථක විය",
+      "viewAsFailed": "View As සැසිය ආරම්භ කිරීම අසාර්ථක විය"
+    },
+    "pageTitle": "පරිශීලක කළමනාකරණය",
+    "pageSubtitle": "සියලුම පද්ධති පරිශීලකයින් සෑදීම, සංස්කරණය සහ කළමනාකරණය කරන්න",
+    "addUser": "පරිශීලකයෙකු එක් කරන්න",
+    "searchPlaceholder": "නම හෝ විද්‍යුත් තැපෑල අනුව සොයන්න...",
+    "allRoles": "සියලුම භූමිකා",
+    "loadingUsers": "පරිශීලකයින් පූරණය වෙමින්...",
+    "noUsersFound": "පරිශීලකයින් හමු නොවීය.",
+    "table": {
+      "user": "පරිශීලකයා",
+      "role": "භූමිකාව",
+      "joined": "බැඳුණු දිනය",
+      "actions": "ක්‍රියා"
+    },
+    "inactive": "අක්‍රියයි",
+    "editUser": "පරිශීලකයා සංස්කරණය කරන්න",
+    "viewAs": "View As (මෙම පරිශීලකයා ලෙස බලන්න)",
+    "deactivate": "අක්‍රිය කරන්න",
+    "activate": "සක්‍රිය කරන්න",
+    "deleteUser": "පරිශීලකයා මකන්න",
+    "showingCount": "පරිශීලකයින් {{total}} න් {{count}} ක් පෙන්වමින්",
+    "addNewUser": "නව පරිශීලකයෙකු එක් කරන්න",
+    "creating": "සාදමින්...",
+    "createUser": "පරිශීලකයා සාදන්න",
+    "editUserTitle": "සංස්කරණය — {{name}}",
+    "saving": "සුරකිමින්...",
+    "saveChanges": "වෙනස්කම් සුරකින්න",
+    "removeUser": "පරිශීලකයා ඉවත් කරන්න",
+    "removeUserConfirm": "ඔබට \"{{name}}\" ඉවත් කිරීමට අවශ්‍ය බව විශ්වාසද? මෙම ක්‍රියාව අහෝසි කළ නොහැක.",
+    "profileHeading": "{{role}} පැතිකඩ"
+  },
+  "organizations": {
+    "types": {
+      "hospital": "රෝහල",
+      "pharmacy": "ෆාමසිය",
+      "laboratory": "රසායනාගාරය",
+      "clinic": "සායනය"
+    },
+    "toast": {
+      "provisionSuccess": "සංවිධානය සාර්ථකව සකසන ලදී",
+      "provisionFailed": "සංවිධානය සැකසීම අසාර්ථක විය",
+      "memberAdded": "සාමාජිකයා එක් කරන ලදී",
+      "addMemberFailed": "සාමාජිකයා එක් කිරීම අසාර්ථක විය",
+      "approved": "සංවිධානය අනුමත කරන ලදී",
+      "deactivated": "සංවිධානය අක්‍රිය කරන ලදී",
+      "activated": "සංවිධානය සක්‍රිය කරන ලදී",
+      "updateFailed": "සංවිධානය යාවත්කාලීන කිරීම අසාර්ථක විය",
+      "memberRemoved": "සාමාජිකයා ඉවත් කරන ලදී",
+      "removeMemberFailed": "සාමාජිකයා ඉවත් කිරීම අසාර්ථක විය"
+    },
+    "provisionModal": {
+      "title": "සංවිධානයක් සකසන්න",
+      "subtitle": "දත්ත සමුදායේ නව කුලීන යෝජනා ක්‍රමයක් සාදයි",
+      "orgNameLabel": "සංවිධානයේ නම",
+      "nameRequired": "නම අවශ්‍යයි",
+      "orgNamePlaceholder": "උදා. City General Hospital",
+      "slugLabel": "Slug (යෝජනා ක්‍රම උපසර්ගය)",
+      "slugRequired": "Slug අවශ්‍යයි",
+      "slugPattern": "කුඩා අකුරු, අංක, යටි ඉරි පමණක්",
+      "slugHelper": "යෝජනා ක්‍රමය වන්නේ: tenant_[slug]_[type]",
+      "orgTypeLabel": "සංවිධාන වර්ගය",
+      "ownerUserLabel": "හිමිකරු පරිශීලකයා (විකල්ප)",
+      "noneOption": "— කිසිවක් නැත —",
+      "provisioning": "සකසමින්…",
+      "provision": "සකසන්න"
+    },
+    "addMemberModal": {
+      "title": "{{name}} වෙත සාමාජිකයෙකු එක් කරන්න",
+      "userLabel": "පරිශීලකයා",
+      "userRequired": "පරිශීලකයෙකු තෝරන්න",
+      "selectUserOption": "— පරිශීලකයෙකු තෝරන්න —",
+      "memberRoleLabel": "සාමාජික භූමිකාව",
+      "adding": "එක් කරමින්…",
+      "addMember": "සාමාජිකයෙකු එක් කරන්න"
+    },
+    "memberRoles": {
+      "owner": "හිමිකරු",
+      "doctor": "වෛද්‍යවරයා",
+      "pharmacist": "ෆාමසිස්ට්",
+      "laboratory": "රසායනාගාරය",
+      "staff": "කාර්ය මණ්ඩලය"
+    },
+    "pendingApprovalBadge": "අනුමැතිය අපේක්ෂිතයි",
+    "inactiveBadge": "අක්‍රියයි",
+    "schemaLabel": "යෝජනා ක්‍රමය: {{schema}}",
+    "membersCount_one": "සාමාජිකයින් {{count}}ක්",
+    "membersCount_other": "සාමාජිකයින් {{count}}ක්",
+    "ownerLabel": "හිමිකරු:",
+    "approveOrgTitle": "සංවිධානය අනුමත කරන්න",
+    "approve": "අනුමත කරන්න",
+    "deactivate": "අක්‍රිය කරන්න",
+    "activate": "සක්‍රිය කරන්න",
+    "members": "සාමාජිකයින්",
+    "loadingMembers": "සාමාජිකයින් පූරණය වෙමින්…",
+    "noMembersYet": "තවම සාමාජිකයින් නැත.",
+    "userFallbackName": "පරිශීලක #{{id}}",
+    "pageTitle": "සංවිධාන",
+    "pageSubtitle": "කුලීන සංවිධාන සහ ඔවුන්ගේ සාමාජිකයින් කළමනාකරණය කරන්න",
+    "newOrganization": "නව සංවිධානය",
+    "filters": {
+      "all": "සියල්ල",
+      "pending": "අපේක්ෂිත",
+      "hospitals": "රෝහල්",
+      "pharmacies": "ෆාමසි",
+      "laboratories": "රසායනාගාර",
+      "clinics": "සායන"
+    }
+  }
+}
