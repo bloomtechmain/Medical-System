@@ -262,6 +262,7 @@
       "doctorLabel": "වෛද්‍යවරයා *",
       "doctorSearchPlaceholder": "නම හෝ විශේෂඥතාව අනුව සොයන්න…",
       "noDoctorsFound": "\"{{query}}\" සඳහා වෛද්‍යවරු හමු නොවීය",
+      "selectLocationLabel": "ස්ථානයක් තෝරන්න *",
       "selectDateLabel": "දිනයක් තෝරන්න *",
       "loadingAvailability": "ලබා ගත හැකි වේලාවන් පූරණය වෙමින්…",
       "noAvailability": "මෙම වෛද්‍යවරයාට ඉදිරි සති දෙක තුළ ලබා ගත හැකි වේලාවන් නොමැත.",

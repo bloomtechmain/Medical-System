@@ -356,7 +356,11 @@ function ReportModal({ req: r, onClose }: ReportModalProps) {
           )}
 
           {/* Chat */}
-          <ChatPanel labRequestId={r.id} />
+          <ChatPanel
+            queryKey={['lab-request-messages', r.id]}
+            fetchMessages={() => labApi.getMessages(r.id)}
+            sendMessage={(body) => labApi.sendMessage(r.id, body)}
+          />
 
           {/* Report */}
           {r.report_notes && (

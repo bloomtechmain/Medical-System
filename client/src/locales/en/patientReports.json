@@ -262,6 +262,7 @@
       "doctorLabel": "Doctor *",
       "doctorSearchPlaceholder": "Search by name or specialization…",
       "noDoctorsFound": "No doctors found for \"{{query}}\"",
+      "selectLocationLabel": "Select a Location *",
       "selectDateLabel": "Select a Date *",
       "loadingAvailability": "Loading availability…",
       "noAvailability": "This doctor has no availability in the next two weeks.",

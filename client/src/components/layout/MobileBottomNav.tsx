@@ -234,7 +234,16 @@ export default function MobileBottomNav() {
   const tabKey    = orgType && TABS[orgType] ? orgType : role;
   const tabConf   = TABS[tabKey] || TABS.patient;
   const primary   = tabConf.primary;
-  const moreItems = tabConf.more;
+  // Team (member management) only applies to org dashboards, and only when this
+  // user is the owner — user.organization is already owner-only, so its mere
+  // presence is the owner check (mirrors Sidebar.tsx's desktop nav).
+  const teamRoute: Record<string, string> = {
+    hospital: '/hospital/team', clinic: '/clinic/team',
+    pharmacist: '/pharmacist/team', laboratory: '/laboratory/team',
+  };
+  const moreItems = teamRoute[tabKey] && user?.organization
+    ? [...tabConf.more, { to: teamRoute[tabKey], labelKey: 'navShort.team', icon: Users }]
+    : tabConf.more;
   const hasMore   = moreItems.length > 0;
 
   const isRequestsRole = role === 'patient' || role === 'doctor';

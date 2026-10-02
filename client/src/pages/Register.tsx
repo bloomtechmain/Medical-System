@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
+import HospitalSearchAdd from '../components/common/HospitalSearchAdd';
+import { Building2, X } from 'lucide-react';
 
 interface RoleOption {
   id: string;
@@ -46,6 +48,7 @@ export default function Register() {
   const [selectedRole, setSelectedRole] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
+  const [hospitals, setHospitals] = useState<any[]>([]);
   const { register, handleSubmit, watch, formState: { errors } } = useForm();
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -62,7 +65,8 @@ export default function Register() {
         if (v !== '' && v !== undefined) profile[k] = v;
       });
 
-      const res = await authApi.register({ name, email, password, role: selectedRole, profile }) as unknown as { user: User; token: string };
+      const hospital_organization_ids = selectedRole === 'doctor' ? hospitals.map(h => h.id) : undefined;
+      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids }) as unknown as { user: User; token: string };
       login(res.user, res.token);
       toast.success('Account created successfully!');
       const routes: Record<string, string> = { doctor: '/doctor', patient: '/patient' };
@@ -234,6 +238,29 @@ export default function Register() {
                     <div className="sm:col-span-2">
                       <label className="label">Hospital / Clinic Affiliation</label>
                       <input className="input" placeholder="e.g., Nawaloka Hospital, Colombo" {...register('hospital_affiliation')} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="label">
+                        Registered Hospitals / Clinics <span className="text-gray-400 font-normal">(optional — more can be added later from Settings)</span>
+                      </label>
+                      {hospitals.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {hospitals.map(h => (
+                            <div key={h.id} className="flex items-center gap-1.5 bg-primary-50 border border-primary-100 text-primary-700 text-sm font-medium pl-3 pr-2 py-1.5 rounded-xl">
+                              <Building2 size={13} strokeWidth={2} />
+                              {h.name}
+                              <button type="button" onClick={() => setHospitals(hs => hs.filter(x => x.id !== h.id))} className="text-primary-400 hover:text-red-500 ml-0.5">
+                                <X size={13} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <HospitalSearchAdd
+                        onAdd={(org) => setHospitals(hs => hs.some(x => x.id === org.id) ? hs : [...hs, org])}
+                        excludeIds={hospitals.map(h => h.id)}
+                        placeholder="Search for a hospital or clinic already on Core Health..."
+                      />
                     </div>
                     <div>
                       <label className="label">Consultation Fee (LKR)</label>

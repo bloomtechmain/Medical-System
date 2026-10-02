@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { orgApi } from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import OperatingHoursPicker from '../components/common/OperatingHoursPicker';
+import MultiSelectWithCustom from '../components/common/MultiSelectWithCustom';
 
 interface OwnerCandidate {
   id: number;
@@ -104,6 +105,7 @@ export default function OrgRegister() {
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [orgSpecializations, setOrgSpecializations] = useState<string[]>([]);
   const [showPwd, setShowPwd] = useState(false);
 
   const { register, handleSubmit, watch, setValue, trigger, formState: { errors } } = useForm();
@@ -183,6 +185,8 @@ export default function OrgRegister() {
         owner_email:    ownerUser ? undefined : data.owner_email,
         owner_password: ownerUser ? undefined : data.owner_password,
         profile: Object.keys(profile).length ? profile : undefined,
+        specializations: (selectedType === 'hospital' || selectedType === 'clinic') && orgSpecializations.length
+          ? orgSpecializations : undefined,
       });
 
       setDone(true);
@@ -401,6 +405,19 @@ export default function OrgRegister() {
                     <input type="number" min="0" max="60" className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g., 15" {...register('years_experience')} />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {(selectedType === 'hospital' || selectedType === 'clinic') && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Organization Specializations</h3>
+                <p className="text-xs text-gray-400 mb-4">What medical specialties does your organization offer? Select any that apply, or add your own.</p>
+                <MultiSelectWithCustom
+                  options={SPECIALIZATIONS}
+                  selected={orgSpecializations}
+                  onChange={setOrgSpecializations}
+                  customPlaceholder="e.g., Sports Medicine"
+                />
               </div>
             )}
 

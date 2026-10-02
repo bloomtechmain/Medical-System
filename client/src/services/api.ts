@@ -91,6 +91,8 @@ export const prescriptionAssignmentApi = {
   assign:        (consultation_id: number, pharmacist_id: number): Promise<any> => api.post('/prescription-assignments', { consultation_id, pharmacist_id }),
   updateStatus:  (id: number, status: string): Promise<any>          => api.patch(`/prescription-assignments/${id}/status`, { status }),
   cancel:        (id: number): Promise<any>                          => api.patch(`/prescription-assignments/${id}/cancel`),
+  getMessages:   (id: number): Promise<any>                          => api.get(`/prescription-assignments/${id}/messages`),
+  sendMessage:   (id: number, body: string): Promise<any>            => api.post(`/prescription-assignments/${id}/messages`, { body }),
 };
 
 export const labApi = {
@@ -137,9 +139,9 @@ export const appointmentApi = {
   getAll:               (): Promise<any>                                            => api.get('/appointments'),
   create:               (data: unknown): Promise<any>                               => api.post('/appointments', data),
   updateStatus:         (id: number, status: string, extra?: Record<string, unknown>): Promise<any> => api.patch(`/appointments/${id}/status`, { status, ...extra }),
-  getDoctorSlots:       (doctorId: number, days = 14): Promise<any>                  => api.get(`/appointments/doctor/${doctorId}/slots`, { params: { days } }),
+  getDoctorSlots:       (doctorId: number, days = 14, organizationId?: number | null): Promise<any> => api.get(`/appointments/doctor/${doctorId}/slots`, { params: { days, organization_id: organizationId ?? undefined } }),
   getWeeklyAvailability: (): Promise<any>                                           => api.get('/appointments/availability/weekly'),
-  setWeeklyAvailability: (schedule: unknown): Promise<any>                          => api.put('/appointments/availability/weekly', { schedule }),
+  setWeeklyAvailability: (schedule: unknown, organizationId: number | null): Promise<any> => api.put('/appointments/availability/weekly', { schedule, organization_id: organizationId }),
   getOverrides:         (from?: string, to?: string): Promise<any>                  => api.get('/appointments/availability/overrides', { params: { from, to } }),
   setOverride:          (data: unknown): Promise<any>                               => api.post('/appointments/availability/overrides', data),
   deleteOverride:       (id: number): Promise<any>                                  => api.delete(`/appointments/availability/overrides/${id}`),
@@ -172,10 +174,19 @@ export const orgApi = {
   provision:    (data: unknown): Promise<any>                        => api.post('/organizations', data),
   register:     (data: unknown): Promise<any>                        => api.post('/organizations/register', data),
   searchOwner:  (org_type: string, q: string): Promise<any>          => api.get('/organizations/search-owner', { params: { org_type, q } }),
+  searchHospitalsClinics: (q: string): Promise<any>                  => api.get('/organizations/search-hospitals-clinics', { params: { q } }),
   getMembers:   (id: number): Promise<any>                          => api.get(`/organizations/${id}/members`),
   addMember:    (id: number, data: unknown): Promise<any>           => api.post(`/organizations/${id}/members`, data),
   removeMember: (id: number, userId: number): Promise<any>          => api.delete(`/organizations/${id}/members/${userId}`),
   toggle:       (id: number): Promise<any>                          => api.patch(`/organizations/${id}/toggle`),
+};
+
+// Org-owner-managed team logins — distinct from the admin-only orgApi.addMember
+// (which only attaches an EXISTING user); this creates a brand-new login.
+export const orgTeamApi = {
+  getMembers: (orgId: number): Promise<any>                    => api.get(`/org-team/${orgId}/members`),
+  invite:     (orgId: number, data: unknown): Promise<any>     => api.post(`/org-team/${orgId}/members`, data),
+  remove:     (orgId: number, userId: number): Promise<any>    => api.delete(`/org-team/${orgId}/members/${userId}`),
 };
 
 export const userApi = {
@@ -189,6 +200,9 @@ export const userApi = {
   update:              (id: number, data: unknown): Promise<any> => api.put(`/users/${id}`, data),
   updateProfile:       (id: number, data: unknown): Promise<any> => api.put(`/users/${id}/profile`, data),
   updateMyProfile:     (data: unknown): Promise<any>              => api.put('/users/me/profile', data),
+  getMyOrganizations:  (): Promise<any>                          => api.get('/users/me/organizations'),
+  joinOrganization:    (organizationId: number): Promise<any>    => api.post('/users/me/organizations', { organization_id: organizationId }),
+  leaveOrganization:   (organizationId: number): Promise<any>    => api.delete(`/users/me/organizations/${organizationId}`),
   toggle:              (id: number): Promise<any>                => api.patch(`/users/${id}/toggle`),
   remove:              (id: number): Promise<any>                => api.delete(`/users/${id}`),
   getStats:            (): Promise<any>                          => api.get('/users/stats'),

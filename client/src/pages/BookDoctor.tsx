@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import {
-  Plus, Search, X, Stethoscope, Send, Calendar, Clock, XCircle,
+  Plus, Search, X, Stethoscope, Send, Calendar, Clock, XCircle, Building2,
 } from 'lucide-react';
 import { appointmentApi, userApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
@@ -104,15 +104,21 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
   const { t } = useTranslation('patientReports');
   const { t: tc } = useTranslation('common');
   const [doctor, setDoctor]     = useState<any>(null);
+  const [orgId, setOrgId]       = useState<number | null | undefined>(undefined); // undefined = not yet chosen
   const [selDate, setSelDate]   = useState<string | null>(null);
   const [selSlot, setSelSlot]   = useState<{ start_time: string; end_time: string } | null>(null);
   const [reason, setReason]     = useState('');
   const [error, setError]       = useState('');
 
+  const doctorOrgs: any[] = doctor?.organizations || [];
+  // Only one possible location (or none) — skip the picker and go straight to slots.
+  const orgChosen = doctorOrgs.length <= 1 || orgId !== undefined;
+  const effectiveOrgId = doctorOrgs.length === 0 ? null : doctorOrgs.length === 1 ? doctorOrgs[0].id : orgId ?? null;
+
   const { data: slotData, isLoading: loadingSlots } = useQuery({
-    queryKey: ['doctor-slots', doctor?.id],
-    queryFn:  () => appointmentApi.getDoctorSlots(doctor.id, 14),
-    enabled:  !!doctor,
+    queryKey: ['doctor-slots', doctor?.id, effectiveOrgId],
+    queryFn:  () => appointmentApi.getDoctorSlots(doctor.id, 14, effectiveOrgId),
+    enabled:  !!doctor && orgChosen,
   });
 
   const days: any[] = slotData?.days || [];
@@ -121,6 +127,7 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
   const mutation = useMutation({
     mutationFn: () => appointmentApi.create({
       doctor_id: doctor.id,
+      organization_id: effectiveOrgId,
       appointment_date: selDate,
       start_time: selSlot!.start_time,
       reason: reason.trim() || null,
@@ -165,7 +172,7 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
             fetchFn={userApi.searchDoctors}
             queryKey="patient-search-doctors"
             selected={doctor}
-            onSelect={(d: any) => { setDoctor(d); setSelDate(null); setSelSlot(null); }}
+            onSelect={(d: any) => { setDoctor(d); setOrgId(undefined); setSelDate(null); setSelSlot(null); }}
             renderItem={(d: any) => (
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 bg-primary-100 rounded-xl flex items-center justify-center shrink-0">
@@ -185,7 +192,26 @@ function BookAppointmentModal({ onClose, onBooked }: BookModalProps) {
             )}
           />
 
-          {doctor && (
+          {doctor && doctorOrgs.length > 1 && (
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('bookDoctor.modal.selectLocationLabel')}</label>
+              <div className="flex flex-wrap gap-2">
+                {doctorOrgs.map((org: any) => (
+                  <button
+                    type="button" key={org.id}
+                    onClick={() => { setOrgId(org.id); setSelDate(null); setSelSlot(null); }}
+                    className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-xl border transition-colors ${
+                      orgId === org.id ? 'border-primary-500 bg-primary-600 text-white' : 'border-gray-200 hover:border-primary-300 hover:bg-primary-50 text-gray-700'
+                    }`}
+                  >
+                    <Building2 size={13} strokeWidth={2} /> {org.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {doctor && orgChosen && (
             <div>
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">{t('bookDoctor.modal.selectDateLabel')}</label>
               {loadingSlots ? (
@@ -373,7 +399,12 @@ export default function BookDoctor() {
                         <p className="text-sm font-bold text-gray-900">Dr. {a.doctor_name}</p>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{statusLabel(st.labelKey)}</span>
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{a.doctor_specialization || a.doctor_hospital || ''}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1 flex-wrap">
+                        {a.doctor_specialization}
+                        {a.organization_name && (
+                          <span className="flex items-center gap-1"><Building2 size={10} strokeWidth={2} />{a.organization_name}</span>
+                        )}
+                      </p>
                       <p className="text-sm text-gray-600 mt-1 flex items-center gap-3 flex-wrap">
                         <span className="flex items-center gap-1"><Calendar size={12} strokeWidth={2} />{formatDate(a.appointment_date)}</span>
                         <span className="flex items-center gap-1"><Clock size={12} strokeWidth={2} />{fmtTime(a.start_time.slice(0, 5))}</span>

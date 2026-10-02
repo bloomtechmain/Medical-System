@@ -110,6 +110,7 @@
     "prescriptions": "බෙහෙත් වට්ටෝරු",
     "patientInformation": "රෝගී තොරතුරු",
     "settings": "සැකසුම්",
+    "team": "කණ්ඩායම",
     "signOut": "ඉවත් වන්න"
   },
   "navShort": {
@@ -134,6 +135,7 @@
     "reports": "වාර්තා",
     "more": "තව",
     "settings": "සැකසුම්",
+    "team": "කණ්ඩායම",
     "signOut": "ඉවත් වන්න"
   },
   "roleLabels": {

@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { Package, Plus, X, Send } from 'lucide-react';
+import { Package, Plus, X, Send, MessageCircle } from 'lucide-react';
 import { prescriptionAssignmentApi } from '../../services/api';
 import PharmacySearchDropdown from './PharmacySearchDropdown';
+import ChatPanel from './ChatPanel';
 
 interface Assignment {
   id: number;
@@ -36,6 +37,7 @@ export default function PharmacyAssignmentsPanel({ consultationId, assignments, 
   const [adding, setAdding] = useState(false);
   const [picked, setPicked] = useState<any>(null);
   const [error, setError]   = useState('');
+  const [chatOpenId, setChatOpenId] = useState<number | null>(null);
 
   const assignMutation = useMutation({
     mutationFn: () => prescriptionAssignmentApi.assign(consultationId, picked.id),
@@ -57,22 +59,43 @@ export default function PharmacyAssignmentsPanel({ consultationId, assignments, 
   return (
     <div className="space-y-2">
       {visible.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="space-y-2">
           {visible.map(a => (
-            <div key={a.id} className={`flex items-center gap-1.5 text-xs font-medium pl-2.5 pr-2 py-1.5 rounded-xl border ${STATUS_STYLE[a.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-              <Package size={11} strokeWidth={2} />
-              <span>{a.pharmacy_name}</span>
-              <span className="opacity-60">· {t(`pharmacyAssignments.status.${a.status}`)}</span>
-              {canManage && ['active', 'preparing'].includes(a.status) && (
-                <button
-                  type="button"
-                  onClick={() => cancelMutation.mutate(a.id)}
-                  disabled={cancelMutation.isPending}
-                  title={t('pharmacyAssignments.cancelBtn')}
-                  className="ml-0.5 text-current opacity-60 hover:opacity-100 hover:text-red-600"
-                >
-                  <X size={12} strokeWidth={2.5} />
-                </button>
+            <div key={a.id}>
+              <div className={`flex items-center gap-1.5 text-xs font-medium pl-2.5 pr-2 py-1.5 rounded-xl border w-fit ${STATUS_STYLE[a.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                <Package size={11} strokeWidth={2} />
+                <span>{a.pharmacy_name}</span>
+                <span className="opacity-60">· {t(`pharmacyAssignments.status.${a.status}`)}</span>
+                {a.status !== 'cancelled' && (
+                  <button
+                    type="button"
+                    onClick={() => setChatOpenId(id => id === a.id ? null : a.id)}
+                    title={t('pharmacyAssignments.chatBtn')}
+                    className="ml-0.5 text-current opacity-60 hover:opacity-100"
+                  >
+                    <MessageCircle size={12} strokeWidth={2.5} />
+                  </button>
+                )}
+                {canManage && ['active', 'preparing'].includes(a.status) && (
+                  <button
+                    type="button"
+                    onClick={() => cancelMutation.mutate(a.id)}
+                    disabled={cancelMutation.isPending}
+                    title={t('pharmacyAssignments.cancelBtn')}
+                    className="ml-0.5 text-current opacity-60 hover:opacity-100 hover:text-red-600"
+                  >
+                    <X size={12} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+              {chatOpenId === a.id && (
+                <div className="mt-2">
+                  <ChatPanel
+                    queryKey={['prescription-assignment-messages', a.id]}
+                    fetchMessages={() => prescriptionAssignmentApi.getMessages(a.id)}
+                    sendMessage={(body) => prescriptionAssignmentApi.sendMessage(a.id, body)}
+                  />
+                </div>
               )}
             </div>
           ))}

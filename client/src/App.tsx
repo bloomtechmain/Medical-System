@@ -31,6 +31,7 @@ import PatientSettings from './pages/PatientSettings';
 import DoctorSettings from './pages/DoctorSettings';
 import PharmacistSettings from './pages/PharmacistSettings';
 import LaboratorySettings from './pages/LaboratorySettings';
+import OrgTeamSettings from './pages/OrgTeamSettings';
 import AdminSettings from './pages/AdminSettings';
 import LaboratoryCatalog from './pages/LaboratoryCatalog';
 import Medicines from './pages/Medicines';
@@ -107,6 +108,7 @@ export default function App() {
         <Route path="requests"            element={<DoctorAccessRequests />} />
         <Route path="appointments"        element={<DoctorAppointments />} />
         <Route path="settings"            element={<DoctorSettings />} />
+        <Route path="team"                element={<OrgTeamSettings />} />
       </Route>
 
       {/* Clinic routes */}
@@ -118,6 +120,7 @@ export default function App() {
         <Route path="requests"            element={<DoctorAccessRequests />} />
         <Route path="appointments"        element={<DoctorAppointments />} />
         <Route path="settings"            element={<DoctorSettings />} />
+        <Route path="team"                element={<OrgTeamSettings />} />
       </Route>
 
       {/* Doctor routes */}
@@ -142,6 +145,7 @@ export default function App() {
         <Route path="sales"         element={<Sales />} />
         <Route path="inventory"     element={<Inventory />} />
         <Route path="settings"      element={<PharmacistSettings />} />
+        <Route path="team"          element={<OrgTeamSettings />} />
       </Route>
 
       {/* Patient routes */}
@@ -162,6 +166,7 @@ export default function App() {
         <Route path="reports" element={<LaboratoryReports />} />
         <Route path="catalog" element={<LaboratoryCatalog />} />
         <Route path="settings" element={<LaboratorySettings />} />
+        <Route path="team" element={<OrgTeamSettings />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
