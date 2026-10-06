@@ -6,18 +6,27 @@ import cors from 'cors';
 import path from 'path';
 import { connectDB } from './config/db';
 import { initSocket } from './config/socket';
+import { ALLOWED_ORIGINS } from './config/corsOrigins';
+import { sendStoredFile } from './config/fileStorage';
 import errorHandler from './middleware/errorHandler';
+
+// Fail fast with a clear message instead of starting in a broken state
+// (ARCH-04) — e.g. a missing JWT_SECRET would otherwise only surface later,
+// confusingly, the first time someone tries to log in.
+const requireEnv = (names: string[]): void => {
+  const missing = names.filter(n => !process.env[n]);
+  if (missing.length) {
+    console.error(`Missing required environment variable(s): ${missing.join(', ')}`);
+    process.exit(1);
+  }
+};
+requireEnv(['JWT_SECRET']);
+requireEnv(process.env.DATABASE_URL ? [] : ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']);
+if (process.env.NODE_ENV === 'production') requireEnv(['CLIENT_URL']);
 
 const app    = express();
 const server = http.createServer(app);
 initSocket(server);
-
-const ALLOWED_ORIGINS: (string | undefined)[] = [
-  process.env.CLIENT_URL,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-];
 
 app.use(cors({
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) =>
@@ -27,14 +36,14 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Ensure upload directories exist (Railway has ephemeral FS)
-['uploads', 'uploads/prescriptions', 'uploads/lab-reports', 'uploads/lab-referrals', 'uploads/patient-reports'].forEach(dir => {
-  const p = path.join(__dirname, dir);
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+// Serves uploaded files from S3 (redirect to a short-lived signed URL) or
+// local disk, whichever config/fileStorage is currently configured for
+// (ARCH-06) — same URL shape as the old express.static mounts this replaces,
+// so none of the client's existing /uploads/<subdir>/<file> links needed to
+// change.
+app.get('/uploads/:subdir/:filename', (req, res) => {
+  sendStoredFile(res, req.params.subdir, req.params.filename);
 });
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/uploads/lab-reports', express.static(path.join(__dirname, 'uploads/lab-reports')));
 
 import { registerOrganization, searchOwnerCandidates, searchHospitalsClinics } from './controllers/organizationController';
 import organizationTeamRoutes from './routes/organizationTeamRoutes';

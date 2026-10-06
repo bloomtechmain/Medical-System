@@ -1,9 +1,10 @@
-import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { extractMedicines } from '../utils/ocrParser';
 import { sendNotification } from '../utils/notify';
+import { generateStoredFilename, persistUploadedFile, deleteStoredFile } from '../config/fileStorage';
+
+const PRESCRIPTIONS_DIR = 'prescriptions';
 
 // medical_consultations / consultation_medicines / patient_profiles live in
 // the `clinical` schema and are gated by row-level security — every query
@@ -17,11 +18,11 @@ const setRLSContext = (client: { query: (t: string, v?: unknown[]) => Promise<un
     [a.id != null ? String(a.id) : '', a.role || '']
   );
 
-const runOCR = async (filePath: string): Promise<string> => {
+const runOCR = async (input: string | Buffer): Promise<string> => {
   try {
     const { createWorker } = await import('tesseract.js');
     const worker = await createWorker('eng', 1, { logger: () => {} });
-    const { data: { text } } = await worker.recognize(filePath);
+    const { data: { text } } = await worker.recognize(input as any);
     await worker.terminate();
     return text || '';
   } catch (err) {
@@ -46,12 +47,12 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     if (!patientId) { res.status(400).json({ message: 'Patient is required' }); return; }
 
-    const prescriptionFile = req.file ? req.file.filename : null;
-    const prescriptionPath = req.file ? req.file.path : null;
-
+    let prescriptionFile: string | null = null;
     let ocrText = '', ocrMedicines: ReturnType<typeof extractMedicines> = [];
-    if (prescriptionPath) {
-      ocrText      = await runOCR(prescriptionPath);
+    if (req.file) {
+      prescriptionFile = generateStoredFilename('rx', req.user.id, req.file.originalname);
+      await persistUploadedFile(PRESCRIPTIONS_DIR, prescriptionFile, req.file.buffer, req.file.mimetype);
+      ocrText      = await runOCR(req.file.buffer);
       ocrMedicines = extractMedicines(ocrText);
     }
 
@@ -306,11 +307,11 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
 
     if (req.file) {
       if (prev.prescription_file) {
-        const oldPath = path.join(__dirname, '../uploads/prescriptions', prev.prescription_file);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        await deleteStoredFile(PRESCRIPTIONS_DIR, prev.prescription_file);
       }
-      prescriptionFile = req.file.filename;
-      ocrText          = await runOCR(req.file.path);
+      prescriptionFile = generateStoredFilename('rx', req.user.id, req.file.originalname);
+      await persistUploadedFile(PRESCRIPTIONS_DIR, prescriptionFile, req.file.buffer, req.file.mimetype);
+      ocrText          = await runOCR(req.file.buffer);
       ocrMedicines     = extractMedicines(ocrText);
     }
 
@@ -462,8 +463,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
     if (rows[0].prescription_file) {
-      const fp = path.join(__dirname, '../uploads/prescriptions', rows[0].prescription_file);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      await deleteStoredFile(PRESCRIPTIONS_DIR, rows[0].prescription_file);
     }
 
     await queryAs(actor(req), 'DELETE FROM medical_consultations WHERE id=$1', [req.params.id]);
