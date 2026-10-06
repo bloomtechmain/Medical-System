@@ -1,8 +1,8 @@
 import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
+import { sendStoredFile } from '../config/fileStorage';
 
 // data_access_requests / patient_profiles / medical_consultations /
 // lab_requests / patient_reports / patient_vitals all live in the
@@ -297,17 +297,10 @@ const serveLabReportFile = async (req: Request, res: Response, next: NextFunctio
       res.status(404).json({ message: 'Report file not yet available.' }); return;
     }
 
-    const filePath = path.join(__dirname, '../uploads/lab-reports', labReq.report_file);
-    if (!fs.existsSync(filePath)) {
-      res.status(404).json({ message: 'File not found on disk.' }); return;
-    }
-
-    res.setHeader('Content-Type', labReq.report_mimetype || 'application/octet-stream');
-    res.setHeader(
-      'Content-Disposition',
-      `inline; filename="lab-report-${labRequestId}${path.extname(labReq.report_file)}"`
-    );
-    res.sendFile(filePath);
+    await sendStoredFile(res, 'lab-reports', labReq.report_file, {
+      contentType: labReq.report_mimetype || 'application/octet-stream',
+      inlineFilename: `lab-report-${labRequestId}${path.extname(labReq.report_file)}`,
+    });
   } catch (err) { next(err); }
 };
 

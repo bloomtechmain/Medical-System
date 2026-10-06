@@ -11,6 +11,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Must load before main.tsx — provides window.__APP_CONFIG__.API_URL at
+         runtime so one Docker image can run against any backend (see env.ts). -->
+    <script src="/config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
