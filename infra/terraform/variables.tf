@@ -74,12 +74,25 @@ variable "compute_desired_count" {
   default = 2
 }
 
-variable "client_url" {
-  description = "The frontend's public URL (CloudFront, once modules/edge exists). No default — must be supplied in each environment's .tfvars once that exists; applying before then will fail with a clear 'variable not set' error, which is expected."
+variable "domain_name" {
+  description = "e.g. app.corehealth.lk. No real domain is registered yet — null means CloudFront serves on its own *.cloudfront.net URL, and that's also what CLIENT_URL (and therefore CORS) uses in the meantime. See modules/edge."
+  type        = string
+  default     = null
+}
+
+variable "hosted_zone_id" {
+  description = "Route 53 zone to create the DNS record in. Only used if domain_name is also set."
+  type        = string
+  default     = null
+}
+
+variable "alb_acm_certificate_arn" {
+  description = "ACM cert for the ALB's HTTPS listener, issued in aws_region. No default — must be requested and supplied before this can actually apply; validate still passes without it."
   type        = string
 }
 
-variable "acm_certificate_arn" {
-  description = "ACM cert for the ALB, issued in aws_region (NOT us-east-1 — that's only for the separate CloudFront cert). No default — same as client_url, must be requested and supplied first."
+variable "cloudfront_acm_certificate_arn" {
+  description = "ACM cert for CloudFront — MUST be issued in us-east-1 regardless of aws_region, a CloudFront-specific requirement, so this is a separate cert from alb_acm_certificate_arn. Null is fine (uses CloudFront's default certificate) until a custom domain exists."
   type        = string
+  default     = null
 }

@@ -11,3 +11,9 @@ variable "jwt_secret_arn" {
   description = "From modules/compute's Secrets Manager secret for JWT_SECRET — same scoped-read pattern as db_secret_arn."
   type        = string
 }
+
+variable "uploads_bucket_arn" {
+  description = "From modules/edge — once set, the ECS task role gets scoped read/write on exactly this bucket (ARCH-06). Null until modules/edge exists."
+  type        = string
+  default     = null
+}

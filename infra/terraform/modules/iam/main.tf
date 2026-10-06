@@ -72,10 +72,27 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
 }
 
 # ---- ECS task role: what the APP CODE itself can do, separate from what
-# ECS needs — empty today. Gets scoped S3 read/write the moment the edge
-# module's uploads bucket exists (ARCH-06's S3 migration), not before. -----
+# ECS needs. Scoped S3 read/write on exactly the uploads bucket, nothing
+# else — the app can't touch the frontend bucket, any other project's
+# resources, or anything outside this one bucket (ARCH-06). -----
 
 resource "aws_iam_role" "ecs_task" {
   name               = "${var.environment}-ecs-task-role"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
+}
+
+data "aws_iam_policy_document" "ecs_task_s3" {
+  count = var.uploads_bucket_arn != null ? 1 : 0
+
+  statement {
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = ["${var.uploads_bucket_arn}/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_task_s3" {
+  count  = var.uploads_bucket_arn != null ? 1 : 0
+  name   = "${var.environment}-ecs-task-s3-uploads"
+  role   = aws_iam_role.ecs_task.id
+  policy = data.aws_iam_policy_document.ecs_task_s3[0].json
 }

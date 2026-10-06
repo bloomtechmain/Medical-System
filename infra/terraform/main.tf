@@ -27,12 +27,22 @@ module "data" {
   skip_final_snapshot = var.db_skip_final_snapshot
 }
 
+module "edge" {
+  source = "./modules/edge"
+
+  environment         = var.environment
+  domain_name         = var.domain_name
+  hosted_zone_id      = var.hosted_zone_id
+  acm_certificate_arn = var.cloudfront_acm_certificate_arn
+}
+
 module "iam" {
   source = "./modules/iam"
 
-  environment    = var.environment
-  db_secret_arn  = module.data.master_user_secret_arn
-  jwt_secret_arn = aws_secretsmanager_secret.jwt.arn
+  environment        = var.environment
+  db_secret_arn      = module.data.master_user_secret_arn
+  jwt_secret_arn     = aws_secretsmanager_secret.jwt.arn
+  uploads_bucket_arn = module.edge.uploads_bucket_arn
 }
 
 module "compute" {
@@ -56,8 +66,13 @@ module "compute" {
   db_address            = module.data.db_address
   db_secret_arn         = module.data.master_user_secret_arn
   jwt_secret_arn        = aws_secretsmanager_secret.jwt.arn
+  uploads_bucket_name   = module.edge.uploads_bucket_name
 
-  # No defaults — both must be supplied once they exist. See variables.tf.
-  client_url          = var.client_url
-  acm_certificate_arn = var.acm_certificate_arn
+  # Auto-derived from modules/edge — a custom domain if one's configured,
+  # otherwise CloudFront's own default URL. No manual "fill this in later"
+  # step needed (unlike alb_acm_certificate_arn below, which genuinely can't
+  # be automated — it has to be requested in the AWS account first).
+  client_url = var.domain_name != null ? "https://${var.domain_name}" : "https://${module.edge.cloudfront_domain_name}"
+
+  acm_certificate_arn = var.alb_acm_certificate_arn
 }

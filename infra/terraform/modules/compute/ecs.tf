@@ -66,17 +66,21 @@ resource "aws_ecs_task_definition" "api" {
         { containerPort = 5000, hostPort = 0, protocol = "tcp" } # hostPort 0 = dynamic, bridge mode
       ]
 
-      environment = [
-        { name = "NODE_ENV", value = "production" },
-        { name = "PORT", value = "5000" },
-        { name = "DB_HOST", value = var.db_address },
-        { name = "DB_PORT", value = "5432" },
-        { name = "DB_NAME", value = var.db_name },
-        { name = "CLIENT_URL", value = var.client_url },
-        # AWS_S3_BUCKET / REDIS_URL intentionally absent — see modules/edge
-        # and the Redis note in docs/architecture.md. Falls back to local
-        # disk / in-memory adapter until those exist (ARCH-06, ARCH-05).
-      ]
+      environment = concat(
+        [
+          { name = "NODE_ENV", value = "production" },
+          { name = "PORT", value = "5000" },
+          { name = "DB_HOST", value = var.db_address },
+          { name = "DB_PORT", value = "5432" },
+          { name = "DB_NAME", value = var.db_name },
+          { name = "CLIENT_URL", value = var.client_url },
+          # REDIS_URL intentionally absent — no Redis module yet. Falls back
+          # to Socket.IO's in-memory adapter (ARCH-05) until one exists.
+        ],
+        var.uploads_bucket_name != null ? [
+          { name = "AWS_S3_BUCKET", value = var.uploads_bucket_name }
+        ] : []
+      )
 
       # Pulled directly from Secrets Manager by ECS itself at task start —
       # never pass through Terraform state as plaintext, never typed by a
