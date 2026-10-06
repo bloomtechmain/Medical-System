@@ -31,3 +31,13 @@ output "ecr_repository_url" {
 output "db_endpoint" {
   value = module.data.db_endpoint
 }
+
+output "cloudfront_domain_name" {
+  description = "Point app.* at this via Route 53 (or use it directly before a custom domain exists)."
+  value       = module.edge.cloudfront_domain_name
+}
+
+output "frontend_bucket_name" {
+  description = "Where the frontend deploy pipeline syncs the Vite build."
+  value       = module.edge.frontend_bucket_name
+}

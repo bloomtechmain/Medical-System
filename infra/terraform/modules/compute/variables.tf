@@ -110,3 +110,9 @@ variable "container_image_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "uploads_bucket_name" {
+  description = "From modules/edge — once set, added to the task definition as AWS_S3_BUCKET (ARCH-06). Null means the app falls back to local disk, same as today."
+  type        = string
+  default     = null
+}
