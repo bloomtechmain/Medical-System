@@ -53,3 +53,33 @@ variable "db_deletion_protection" {
 variable "db_skip_final_snapshot" {
   type = bool
 }
+
+variable "compute_instance_type" {
+  type    = string
+  default = "t3.small"
+}
+
+variable "compute_asg_min_size" {
+  type    = number
+  default = 2
+}
+
+variable "compute_asg_max_size" {
+  type    = number
+  default = 4
+}
+
+variable "compute_desired_count" {
+  type    = number
+  default = 2
+}
+
+variable "client_url" {
+  description = "The frontend's public URL (CloudFront, once modules/edge exists). No default — must be supplied in each environment's .tfvars once that exists; applying before then will fail with a clear 'variable not set' error, which is expected."
+  type        = string
+}
+
+variable "acm_certificate_arn" {
+  description = "ACM cert for the ALB, issued in aws_region (NOT us-east-1 — that's only for the separate CloudFront cert). No default — same as client_url, must be requested and supplied first."
+  type        = string
+}
