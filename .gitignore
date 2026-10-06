@@ -31,3 +31,7 @@ Thumbs.db
 
 # Uploads (optional — remove if you want to track sample files)
 server/uploads/
+
+# Load test output (regenerated on every run — narrative results live in
+# docs/capacity-plan.md instead)
+scripts/loadtest/last-result.json
