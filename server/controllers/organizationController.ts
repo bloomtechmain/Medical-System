@@ -135,21 +135,16 @@ const ORG_OWNER_ROLE: Record<string, string> = {
   laboratory: 'laboratory',
 };
 
-// Minimal, non-sensitive columns surfaced to the public owner-search box on
-// the org-register page, per owner role — enough to tell two same-named
-// people apart without exposing the full admin user record.
-const OWNER_SEARCH_PROFILE: Record<string, { table: string; extra: string[] }> = {
-  doctor:     { table: 'public.doctor_profiles',     extra: ['specialization', 'hospital_affiliation'] },
-  pharmacist: { table: 'public.pharmacist_profiles', extra: ['pharmacy_name', 'license_number'] },
-  laboratory: { table: 'public.laboratory_profiles', extra: ['lab_name', 'license_number'] },
-};
-
 // ── Public owner lookup ───────────────────────────────────────────────────
 // Lets the org-register page search for an existing, already-approved user
 // to reuse as the new organization's owner instead of creating a fresh login.
 // Unauthenticated (registration happens before any session exists), so the
-// query is deliberately narrow: requires org_type + a 2+ char query, and
-// returns only active users whose role matches that org type's owner role.
+// query is deliberately narrow: requires org_type + a 2+ char query, returns
+// only active users whose role matches that org type's owner role, and
+// (SEC-17 #5) only name + email — license numbers, specialization, pharmacy/
+// lab name were being returned too even though the UI never displays them
+// (confirmed by checking client/src/pages/OrgRegister.tsx before removing
+// them: it only ever reads .name and .email from these results).
 const searchOwnerCandidates = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { org_type, q } = req.query as { org_type?: string; q?: string };
@@ -157,12 +152,9 @@ const searchOwnerCandidates = async (req: Request, res: Response, next: NextFunc
     if (!role) { res.status(400).json({ message: 'Invalid organization type' }); return; }
     if (!q || q.trim().length < 2) { res.json([]); return; }
 
-    const { table, extra } = OWNER_SEARCH_PROFILE[role];
-    const extraCols = extra.map(c => `p.${c}`).join(', ');
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.email, ${extraCols}
+      `SELECT u.id, u.name, u.email
        FROM public.users u
-       LEFT JOIN ${table} p ON p.user_id = u.id
        WHERE u.role = $1 AND u.is_active = TRUE
          AND (u.name ILIKE $2 OR u.email ILIKE $2)
        ORDER BY u.name LIMIT 10`,
