@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import AuthedImg from '../components/common/AuthedImg';
+import { openAuthedFile } from '../utils/authedFiles';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -827,17 +829,17 @@ function ViewModal({ req: r, onClose }: ViewModalProps) {
             </div>
           )}
           {r.report_file && (
-            <a href={`${API_BASE}/uploads/lab-reports/${r.report_file}`} target="_blank" rel="noreferrer"
-              className="flex items-center gap-3 p-3 bg-primary-50 border border-primary-200 rounded-xl hover:bg-primary-100 transition-colors">
+            <button type="button" onClick={() => openAuthedFile(`${API_BASE}/api/lab-requests/${r.id}/report-file`)}
+              className="w-full flex items-center gap-3 p-3 bg-primary-50 border border-primary-200 rounded-xl hover:bg-primary-100 transition-colors">
               <span className="text-2xl">{isPDF ? '📄' : '🖼️'}</span>
               <div>
                 <p className="text-sm font-semibold text-primary-700">{t('reports.viewModal.openReport')}</p>
                 <p className="text-xs text-gray-500">{r.report_mimetype}</p>
               </div>
-            </a>
+            </button>
           )}
           {!isPDF && r.report_file && (
-            <img src={`${API_BASE}/uploads/lab-reports/${r.report_file}`} alt="Report"
+            <AuthedImg src={`${API_BASE}/api/lab-requests/${r.id}/report-file`} alt="Report"
               className="w-full max-h-56 object-contain rounded-xl border border-gray-200 bg-gray-50" />
           )}
 

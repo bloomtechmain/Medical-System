@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { extractMedicines } from '../utils/ocrParser';
 import { sendNotification } from '../utils/notify';
-import { generateStoredFilename, persistUploadedFile, deleteStoredFile, verifyFileType, IMAGE_MIMES } from '../config/fileStorage';
+import { generateStoredFilename, persistUploadedFile, deleteStoredFile, sendStoredFile, verifyFileType, IMAGE_MIMES } from '../config/fileStorage';
 
 const PRESCRIPTIONS_DIR = 'prescriptions';
 
@@ -566,4 +566,26 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
   }
 };
 
-export { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove };
+// SEC-28: replaces the removed unauthenticated `/uploads/...` static route.
+// Only the patient, the treating doctor, the assigned pharmacist, or an
+// admin can fetch the actual file — everyone else gets 404, same message
+// whether the consultation doesn't exist or the requester just can't see it.
+const servePrescriptionFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await queryAs(actor(req),
+      'SELECT prescription_file, patient_id, doctor_id, assigned_pharmacist_id FROM medical_consultations WHERE id=$1',
+      [req.params.id]
+    );
+    const row = rows[0];
+    const allowed = row && (
+      req.user.role === 'admin' ||
+      row.patient_id === req.user.id ||
+      row.doctor_id === req.user.id ||
+      row.assigned_pharmacist_id === req.user.id
+    );
+    if (!allowed || !row.prescription_file) { res.status(404).json({ message: 'Not found' }); return; }
+    await sendStoredFile(res, PRESCRIPTIONS_DIR, row.prescription_file, { inlineFilename: row.prescription_file });
+  } catch (err) { next(err); }
+};
+
+export { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove, servePrescriptionFile };

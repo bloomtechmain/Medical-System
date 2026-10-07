@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import path from 'path';
 import multer from 'multer';
-import { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove } from '../controllers/consultationController';
+import { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove, servePrescriptionFile } from '../controllers/consultationController';
 import { protect, authorize } from '../middleware/auth';
 
 const router = Router();
@@ -21,6 +21,7 @@ const upload = multer({
 router.get('/patient/:patientId/history', protect, authorize('doctor', 'admin'), getPatientHistory);
 router.get('/',        protect, authorize('patient', 'doctor'), getAll);
 router.get('/:id',     protect, authorize('patient', 'doctor'), getOne);
+router.get('/:id/prescription-file', protect, authorize('patient', 'doctor', 'pharmacist'), servePrescriptionFile);
 router.post('/',       protect, authorize('patient', 'doctor'), upload.single('prescription'), create);
 router.put('/:id',                  protect, authorize('doctor'),      upload.single('prescription'), update);
 router.put('/:id/patient',          protect, authorize('patient'),     updateByPatient);

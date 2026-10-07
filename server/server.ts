@@ -8,7 +8,6 @@ import path from 'path';
 import { connectDB } from './config/db';
 import { initSocket } from './config/socket';
 import { ALLOWED_ORIGINS } from './config/corsOrigins';
-import { sendStoredFile } from './config/fileStorage';
 import { registerLimiter, publicSearchLimiter } from './middleware/rateLimit';
 import errorHandler from './middleware/errorHandler';
 
@@ -74,14 +73,13 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serves uploaded files from S3 (redirect to a short-lived signed URL) or
-// local disk, whichever config/fileStorage is currently configured for
-// (ARCH-06) — same URL shape as the old express.static mounts this replaces,
-// so none of the client's existing /uploads/<subdir>/<file> links needed to
-// change.
-app.get('/uploads/:subdir/:filename', (req, res) => {
-  sendStoredFile(res, req.params.subdir, req.params.filename);
-});
+// SEC-28: the old /uploads/:subdir/:filename route (ARCH-06) served any file
+// to anyone with no login check at all, with guessable filenames. Removed —
+// files are now only reachable through authenticated, ownership-checked
+// routes: GET /api/consultations/:id/prescription-file,
+// GET /api/lab-requests/:id/report-file, GET /api/lab-requests/:id/referral-file,
+// plus the pre-existing patient-reports/access-requests/lab-view-requests
+// equivalents.
 
 import { registerOrganization, searchOwnerCandidates, searchHospitalsClinics } from './controllers/organizationController';
 import organizationTeamRoutes from './routes/organizationTeamRoutes';

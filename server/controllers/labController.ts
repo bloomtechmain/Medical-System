@@ -4,7 +4,7 @@ import { pool, queryAs, getTenantSchema, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
 import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
 import { saveVitalsFromLab } from './patientVitalsController';
-import { generateStoredFilename, persistUploadedFile, deleteStoredFile, verifyFileType, IMAGE_AND_PDF_MIMES } from '../config/fileStorage';
+import { generateStoredFilename, persistUploadedFile, deleteStoredFile, sendStoredFile, verifyFileType, IMAGE_AND_PDF_MIMES } from '../config/fileStorage';
 
 const LAB_REPORTS_DIR = 'lab-reports';
 const LAB_REFERRALS_DIR = 'lab-referrals';
@@ -512,4 +512,29 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
-export { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove };
+// SEC-28: replaces the removed unauthenticated `/uploads/...` static route.
+// Same ownership gate for both file types a lab_requests row can carry.
+const serveFile = (column: 'report_file' | 'referral_file') =>
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { rows } = await queryAs(actor(req),
+        `SELECT ${column}, patient_id, doctor_id, laboratory_id FROM lab_requests WHERE id=$1`,
+        [req.params.id]
+      );
+      const row = rows[0];
+      const allowed = row && (
+        req.user.role === 'admin' ||
+        row.patient_id === req.user.id ||
+        row.doctor_id === req.user.id ||
+        row.laboratory_id === req.user.id
+      );
+      const filename = row?.[column];
+      if (!allowed || !filename) { res.status(404).json({ message: 'Not found' }); return; }
+      const subdir = column === 'report_file' ? LAB_REPORTS_DIR : LAB_REFERRALS_DIR;
+      await sendStoredFile(res, subdir, filename, { inlineFilename: filename });
+    } catch (err) { next(err); }
+  };
+const serveReportFile = serveFile('report_file');
+const serveReferralFile = serveFile('referral_file');
+
+export { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove, serveReportFile, serveReferralFile };

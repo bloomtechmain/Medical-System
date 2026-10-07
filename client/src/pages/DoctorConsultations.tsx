@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import AuthedImg from '../components/common/AuthedImg';
+import { openAuthedFile } from '../utils/authedFiles';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -622,10 +624,10 @@ function DetailModal({ consultation: initialC, onClose, onEdit }: DetailModalPro
           ))}
 
           {c.prescription_file && (
-            <a href={`${API_BASE}/uploads/prescriptions/${c.prescription_file}`} target="_blank" rel="noreferrer">
-              <img src={`${API_BASE}/uploads/prescriptions/${c.prescription_file}`} alt="Prescription"
+            <button type="button" onClick={() => openAuthedFile(`${API_BASE}/api/consultations/${c.id}/prescription-file`)} className="block w-full">
+              <AuthedImg src={`${API_BASE}/api/consultations/${c.id}/prescription-file`} alt="Prescription"
                 className="w-full max-h-48 object-contain rounded-xl border border-gray-200 bg-gray-50 hover:opacity-90 cursor-zoom-in" />
-            </a>
+            </button>
           )}
 
           {c.medicines?.length > 0 && (
