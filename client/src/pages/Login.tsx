@@ -28,13 +28,13 @@ export default function Login() {
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
     try {
-      const res = await authApi.login(data) as unknown as { user: User; token: string; mfaRequired?: boolean; mfaToken?: string };
+      const res = await authApi.login(data) as unknown as { user: User; token: string; refreshToken: string; mfaRequired?: boolean; mfaToken?: string };
       if (res.mfaRequired && res.mfaToken) {
         setMfaToken(res.mfaToken);
         return;
       }
       if (!res?.user?.role) throw new Error('Invalid response from server');
-      login(res.user, res.token);
+      login(res.user, res.token, res.refreshToken);
       goToRoleHome(res.user);
     } catch (err: any) {
       toast.error(err.message || 'Invalid credentials');
@@ -48,9 +48,9 @@ export default function Login() {
     if (!mfaToken) return;
     setLoading(true);
     try {
-      const res = await authApi.mfaLogin({ mfaToken, code: mfaCode }) as unknown as { user: User; token: string };
+      const res = await authApi.mfaLogin({ mfaToken, code: mfaCode }) as unknown as { user: User; token: string; refreshToken: string };
       if (!res?.user?.role) throw new Error('Invalid response from server');
-      login(res.user, res.token);
+      login(res.user, res.token, res.refreshToken);
       goToRoleHome(res.user);
     } catch (err: any) {
       toast.error(err.message || 'Invalid authentication code');

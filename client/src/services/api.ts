@@ -15,13 +15,54 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// SEC-17 (auth): access tokens are now short-lived (15m), so a 401 from an
+// expired-but-otherwise-valid session is the common case, not the exception.
+// One shared in-flight refresh call (not one per failed request) exchanges
+// the stored refresh token for a new pair and retries; if that fails (no
+// refresh token — e.g. an impersonation session, which never gets one on
+// purpose — or it's been revoked/expired) this falls back to the original
+// clear-and-redirect behavior.
+let refreshPromise: Promise<string | null> | null = null;
+
+const clearSessionAndRedirect = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+  window.location.href = '/login';
+};
+
+const doRefresh = async (): Promise<string | null> => {
+  const storedRefresh = localStorage.getItem('refreshToken');
+  if (!storedRefresh) return null;
+  try {
+    const res = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken: storedRefresh });
+    const { token, refreshToken } = res.data as { token: string; refreshToken: string };
+    localStorage.setItem('token', token);
+    localStorage.setItem('refreshToken', refreshToken);
+    return token;
+  } catch {
+    return null;
+  }
+};
+
 api.interceptors.response.use(
   (res) => res.data,
-  (err) => {
-    if (err.response?.status === 401 && localStorage.getItem('token')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+  async (err) => {
+    const original = err.config;
+    const url: string = original?.url || '';
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/mfa/login');
+
+    if (err.response?.status === 401 && localStorage.getItem('token') && !isAuthEndpoint && !original._retry) {
+      original._retry = true;
+      if (!refreshPromise) refreshPromise = doRefresh().finally(() => { refreshPromise = null; });
+      const newToken = await refreshPromise;
+      if (newToken) {
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api.request(original);
+      }
+      clearSessionAndRedirect();
+    } else if (err.response?.status === 401 && localStorage.getItem('token') && !isAuthEndpoint) {
+      clearSessionAndRedirect();
     }
     return Promise.reject(err.response?.data || err);
   }
@@ -39,6 +80,8 @@ export const authApi = {
   mfaSetup:      (): Promise<any>                     => api.post('/auth/mfa/setup'),
   mfaVerifySetup: (code: string): Promise<any>        => api.post('/auth/mfa/verify-setup', { code }),
   mfaDisable:    (code: string): Promise<any>         => api.post('/auth/mfa/disable', { code }),
+  refresh:       (refreshToken: string): Promise<any> => api.post('/auth/refresh', { refreshToken }),
+  logoutSession: (refreshToken: string): Promise<any> => api.post('/auth/logout', { refreshToken }),
 };
 
 export const medicineApi = {

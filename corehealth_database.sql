@@ -78,6 +78,7 @@ END $$;
 DROP SCHEMA IF EXISTS clinical CASCADE;
 
 -- public clinical/operational tables from a previous run
+DROP TABLE IF EXISTS public.refresh_tokens          CASCADE;
 DROP TABLE IF EXISTS public.impersonation_action_log CASCADE;
 DROP TABLE IF EXISTS public.impersonation_log      CASCADE;
 DROP TABLE IF EXISTS public.notifications          CASCADE;
@@ -127,6 +128,27 @@ CREATE TABLE public.users (
 );
 CREATE INDEX idx_users_email ON public.users(email);
 CREATE INDEX idx_users_role  ON public.users(role);
+
+-- SEC-17 (auth): the JWT access token is now short-lived (15m default, see
+-- JWT_EXPIRES_IN) and carries no server-side state, so there's still nothing
+-- to revoke mid-flight — but that's fine, it expires fast. This table is what
+-- makes a *session* revocable: an opaque, randomly-generated refresh token is
+-- handed to the client and only its SHA-256 hash is stored here, so a DB leak
+-- doesn't hand out working tokens. /api/auth/refresh trades a valid one for a
+-- new access token + a new refresh token (rotation — the old row is marked
+-- revoked, not deleted, so reuse of a stolen-but-already-rotated token is
+-- detectable). Deactivating a user (userController/organizationController)
+-- revokes all of their outstanding refresh tokens immediately.
+CREATE TABLE public.refresh_tokens (
+  id         SERIAL       PRIMARY KEY,
+  user_id    INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  token_hash VARCHAR(64)  NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ  NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_refresh_tokens_user ON public.refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_hash ON public.refresh_tokens(token_hash);
 
 -- Admin "View As" session-start audit trail — not per-action logging, just
 -- who viewed as whom and when. Admin-only operational record, not patient

@@ -114,5 +114,16 @@ const connectDB = async (retries = 8, baseDelay = 3000): Promise<void> => {
   }
 };
 
-export { pool, connectDB, queryAs, getTenantSchema };
+// SEC-17 (auth): called wherever a user is deactivated (admin toggle/edit,
+// org suspension) so a revoked account's outstanding refresh tokens die
+// immediately instead of staying silently renewable until their natural
+// 7-day expiry — the thing a short-lived access token alone can't fix.
+const revokeRefreshTokens = async (userId: number): Promise<void> => {
+  await pool.query(
+    'UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
+    [userId]
+  );
+};
+
+export { pool, connectDB, queryAs, getTenantSchema, revokeRefreshTokens };
 export type { RLSActor };
