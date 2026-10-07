@@ -131,10 +131,17 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
 
     await client.query('BEGIN');
 
+    // SEC-17 #2: patients have no credentials to verify, so they're active
+    // immediately. Doctor/pharmacist/laboratory self-registration claims a
+    // professional license/affiliation nothing here checks — same gap the
+    // org-registration flow (organizationController.registerOrganization)
+    // already closes by registering owners inactive pending admin review.
+    // This mirrors that for the individual (no-org) registration path.
+    const requiresApproval = role !== 'patient';
     const hash = await bcrypt.hash(password, 10);
-    const { rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'>>(
-      'INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role',
-      [name, email, hash, role]
+    const { rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'> & { is_active: boolean }>(
+      'INSERT INTO users (name, email, password, role, is_active) VALUES ($1,$2,$3,$4,$5) RETURNING id, name, email, role, is_active',
+      [name, email, hash, role, !requiresApproval]
     );
 
     // patient_profiles lives in the `clinical` schema behind row-level
@@ -166,6 +173,14 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     }
 
     await client.query('COMMIT');
+    if (!user.is_active) {
+      res.status(201).json({
+        user,
+        pending: true,
+        message: 'Your account has been created and is pending admin approval. You will be able to log in once an admin approves it.',
+      });
+      return;
+    }
     res.status(201).json({ user, token: generateToken(user as DbUser) });
   } catch (err) {
     await client.query('ROLLBACK');
