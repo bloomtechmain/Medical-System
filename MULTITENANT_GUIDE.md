@@ -464,7 +464,10 @@ people, not organisations.
 
 ## Seed Data — All Users
 
-Password for every account: **admin123**
+Lives in `corehealth_seed_data.sql` now, not `corehealth_database.sql`
+(SEC-07) — **local development only**, never run against a shared or
+deployed environment. The password for every account below is documented
+in that file's own header comment, not repeated here.
 
 | Role | Name | Email | Org memberships |
 |---|---|---|---|
