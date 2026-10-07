@@ -54,13 +54,30 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     };
     await client.query('BEGIN');
 
-    // Validate stock
+    const medicineIds = items.map(i => i.medicine_id);
+    const quantities  = items.map(i => i.quantity);
+    const unitPrices  = items.map(i => i.unit_price);
+
+    // Same medicine can appear as more than one line item in one sale — sum the
+    // quantities per medicine so stock is checked/decremented by the combined
+    // amount, not just the last line item seen for that medicine.
+    const qtyByMedicine = new Map<number, number>();
     for (const item of items) {
-      const { rows } = await client.query(
-        'SELECT stock_quantity FROM medicines WHERE id = $1 FOR UPDATE', [item.medicine_id]
-      );
-      if (!rows.length || rows[0].stock_quantity < item.quantity) {
-        throw Object.assign(new Error(`Insufficient stock for medicine id ${item.medicine_id}`), { status: 400 });
+      qtyByMedicine.set(item.medicine_id, (qtyByMedicine.get(item.medicine_id) || 0) + item.quantity);
+    }
+    const uniqueMedicineIds = [...qtyByMedicine.keys()];
+    const combinedQuantities = uniqueMedicineIds.map(id => qtyByMedicine.get(id)!);
+
+    // Validate stock — one round trip for every item instead of one per item.
+    const { rows: stockRows } = await client.query(
+      'SELECT id, stock_quantity FROM medicines WHERE id = ANY($1::int[]) FOR UPDATE',
+      [uniqueMedicineIds]
+    );
+    const stockById = new Map<number, number>(stockRows.map(r => [r.id, r.stock_quantity]));
+    for (const [medicineId, qty] of qtyByMedicine) {
+      const available = stockById.get(medicineId);
+      if (available === undefined || available < qty) {
+        throw Object.assign(new Error(`Insufficient stock for medicine id ${medicineId}`), { status: 400 });
       }
     }
 
@@ -72,16 +89,18 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     );
     const saleId = sale.rows[0].id;
 
-    for (const item of items) {
-      await client.query(
-        `INSERT INTO "${schema}".sale_items (sale_id, medicine_id, quantity, unit_price) VALUES ($1,$2,$3,$4)`,
-        [saleId, item.medicine_id, item.quantity, item.unit_price]
-      );
-      await client.query(
-        'UPDATE medicines SET stock_quantity = stock_quantity - $1 WHERE id = $2',
-        [item.quantity, item.medicine_id]
-      );
-    }
+    // One multi-row insert and one batched update instead of two queries per item.
+    await client.query(
+      `INSERT INTO "${schema}".sale_items (sale_id, medicine_id, quantity, unit_price)
+       SELECT $1, * FROM UNNEST($2::int[], $3::int[], $4::numeric[])`,
+      [saleId, medicineIds, quantities, unitPrices]
+    );
+    await client.query(
+      `UPDATE medicines m SET stock_quantity = stock_quantity - v.qty
+       FROM UNNEST($1::int[], $2::int[]) AS v(id, qty)
+       WHERE m.id = v.id`,
+      [uniqueMedicineIds, combinedQuantities]
+    );
     await client.query('COMMIT');
     res.status(201).json(sale.rows[0]);
   } catch (err) {

@@ -29,4 +29,13 @@ RUN npm prune --omit=dev
 
 EXPOSE 5000
 
-CMD ["node", "dist/server.js"]
+# Run pending migrations before starting the server — node-pg-migrate exits
+# non-zero on failure, which fails the container's healthcheck and the
+# deploy (unlike the old migrate*.ts scripts, which logged and still exited
+# 0). DATABASE_MIGRATOR_URL (corehealth_migrator — has CREATE on the
+# database + CREATEROLE) overrides DATABASE_URL only for this one command;
+# node dist/server.js afterwards still runs with the real DATABASE_URL
+# (corehealth_app). Falls back to DATABASE_URL if DATABASE_MIGRATOR_URL is
+# unset. See server/migrations/BASELINE.md before pointing this at the
+# existing production database for the first time.
+CMD ["sh", "-c", "DATABASE_URL=\"${DATABASE_MIGRATOR_URL:-$DATABASE_URL}\" node_modules/.bin/node-pg-migrate up && node dist/server.js"]

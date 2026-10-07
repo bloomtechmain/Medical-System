@@ -156,7 +156,7 @@ const updateStatus = async (req: Request, res: Response, next: NextFunction): Pr
     );
     const assignment = rows[0];
 
-    const { rows: cRows } = await pool.query(
+    const { rows: cRows } = await queryAs(actor(req),
       'SELECT patient_id, doctor_id FROM medical_consultations WHERE id=$1', [assignment.consultation_id]
     );
     const consultation = cRows[0];
