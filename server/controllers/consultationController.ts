@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { extractMedicines } from '../utils/ocrParser';
 import { sendNotification } from '../utils/notify';
-import { generateStoredFilename, persistUploadedFile, deleteStoredFile } from '../config/fileStorage';
+import { generateStoredFilename, persistUploadedFile, deleteStoredFile, verifyFileType, IMAGE_MIMES } from '../config/fileStorage';
 
 const PRESCRIPTIONS_DIR = 'prescriptions';
 
@@ -50,6 +50,9 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     let prescriptionFile: string | null = null;
     let ocrText = '', ocrMedicines: ReturnType<typeof extractMedicines> = [];
     if (req.file) {
+      if (!(await verifyFileType(req.file.buffer, IMAGE_MIMES))) {
+        res.status(400).json({ message: 'File content does not match an accepted image type' }); return;
+      }
       prescriptionFile = generateStoredFilename('rx', req.user.id, req.file.originalname);
       await persistUploadedFile(PRESCRIPTIONS_DIR, prescriptionFile, req.file.buffer, req.file.mimetype);
       ocrText      = await runOCR(req.file.buffer);
@@ -306,6 +309,9 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
     let ocrMedicines: ReturnType<typeof extractMedicines> = [];
 
     if (req.file) {
+      if (!(await verifyFileType(req.file.buffer, IMAGE_MIMES))) {
+        res.status(400).json({ message: 'File content does not match an accepted image type' }); return;
+      }
       if (prev.prescription_file) {
         await deleteStoredFile(PRESCRIPTIONS_DIR, prev.prescription_file);
       }

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { Response } from 'express';
 
 // ARCH-06: uploaded files (prescriptions, lab reports, referrals, patient
@@ -25,14 +26,33 @@ const warnDiskFallback = (): void => {
   );
 };
 
+// Real MIME types matching each route's existing extension allow-list.
+const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/tiff'];
+const IMAGE_AND_PDF_MIMES = [...IMAGE_MIMES, 'application/pdf'];
+
 const UPLOADS_ROOT = path.join(__dirname, '../uploads');
 const localDir = (subdir: string): string => path.join(UPLOADS_ROOT, subdir);
 const localPath = (subdir: string, storedName: string): string => path.join(localDir(subdir), storedName);
 
-/** Same naming convention every upload route already used: `<prefix>_<userId>_<timestamp><ext>`. */
-const generateStoredFilename = (prefix: string, userId: number | string | undefined, originalName: string): string => {
+/** SEC-24: random, unguessable name — the old `<prefix>_<userId>_<timestamp>`
+ *  pattern let anyone construct a plausible URL for another user's file. */
+const generateStoredFilename = (_prefix: string, _userId: number | string | undefined, originalName: string): string => {
   const ext = path.extname(originalName).toLowerCase();
-  return `${prefix}_${userId ?? 'u'}_${Date.now()}${ext}`;
+  return `${crypto.randomUUID()}${ext}`;
+};
+
+/** SEC-24: verifies the file's real content matches an allowed type — a
+ *  renamed .exe with a .jpg extension fools the old extension-only check,
+ *  not this. Returns false (reject) if the content doesn't match anything
+ *  in allowedMimes, including when file-type can't identify it at all. */
+const verifyFileType = async (buffer: Buffer, allowedMimes: string[]): Promise<boolean> => {
+  // file-type is ESM-only; its .d.ts doesn't resolve under this (CJS)
+  // project's moduleResolution — @ts-ignore on the import itself, not just
+  // its result, since that's where resolution fails.
+  // @ts-ignore
+  const { fileTypeFromBuffer } = await import('file-type');
+  const detected = await fileTypeFromBuffer(buffer);
+  return !!detected && allowedMimes.includes(detected.mime);
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,4 +141,4 @@ const deleteStoredFile = async (subdir: string, storedName: string): Promise<voi
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 };
 
-export { isS3Enabled, generateStoredFilename, persistUploadedFile, sendStoredFile, deleteStoredFile };
+export { isS3Enabled, generateStoredFilename, verifyFileType, persistUploadedFile, sendStoredFile, deleteStoredFile, IMAGE_MIMES, IMAGE_AND_PDF_MIMES };
