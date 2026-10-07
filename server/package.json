@@ -24,7 +24,9 @@
     "db:migrate:vitals-access": "node dist/config/migrateVitalsAccessType.js",
     "db:migrate:lab-assignment": "node dist/config/migrateLabAssignment.js",
     "db:migrate:patient-upload-vitals": "node dist/config/migratePatientUploadVitals.js",
-    "db:migrate:appointments": "node dist/config/migrateAppointments.js"
+    "db:migrate:appointments": "node dist/config/migrateAppointments.js",
+    "db:check:version": "node dist/scripts/checkDbVersionSettings.js",
+    "db:check:bloat": "node dist/scripts/checkAutovacuumBloat.js"
   },
   "dependencies": {
     "@types/pdf-parse": "^1.1.5",
