@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import AuthedImg from '../components/common/AuthedImg';
+import { openAuthedFile } from '../utils/authedFiles';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -102,11 +104,11 @@ function DetailModal({ c, onClose, onAdvance }: DetailModalProps) {
           {c.prescription_file && (
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{t('consultations.modal.prescriptionImage')}</p>
-              <a href={`${API_BASE}/uploads/prescriptions/${c.prescription_file}`} target="_blank" rel="noreferrer">
-                <img src={`${API_BASE}/uploads/prescriptions/${c.prescription_file}`} alt="Prescription"
+              <button type="button" className="block w-full" onClick={() => openAuthedFile(`${API_BASE}/api/consultations/${c.consultation_id}/prescription-file`)}>
+                <AuthedImg src={`${API_BASE}/api/consultations/${c.consultation_id}/prescription-file`} alt="Prescription"
                   className="w-full max-h-56 object-contain rounded-xl border border-gray-200 bg-gray-50 hover:opacity-90 cursor-zoom-in" />
                 <p className="text-xs text-primary-600 mt-1 text-center">{t('consultations.modal.clickToOpenFullSize')}</p>
-              </a>
+              </button>
             </div>
           )}
 

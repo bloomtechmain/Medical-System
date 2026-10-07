@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'path';
 import multer from 'multer';
 import { protect, authorize } from '../middleware/auth';
-import { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove } from '../controllers/labController';
+import { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove, serveReportFile, serveReferralFile } from '../controllers/labController';
 import { getAll as getMessages, create as createMessage } from '../controllers/labRequestMessagesController';
 
 const router = Router();
@@ -32,6 +32,8 @@ const uploadReferral = multer({
 
 router.get('/',    protect, authorize('doctor', 'patient', 'laboratory', 'admin'), getAll);
 router.get('/:id', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), getOne);
+router.get('/:id/report-file',   protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReportFile);
+router.get('/:id/referral-file', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReferralFile);
 router.post('/',   protect, authorize('doctor', 'patient'), uploadReferral.single('referral'), create);
 router.post('/direct', protect, authorize('laboratory'), upload.single('report'), createDirect);
 router.patch('/:id/report',  protect, authorize('laboratory'), upload.single('report'), uploadReport);
