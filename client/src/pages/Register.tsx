@@ -66,7 +66,12 @@ export default function Register() {
       });
 
       const hospital_organization_ids = selectedRole === 'doctor' ? hospitals.map(h => h.id) : undefined;
-      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids }) as unknown as { user: User; token: string };
+      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids }) as unknown as { user: User; token?: string; pending?: boolean; message?: string };
+      if (res.pending || !res.token) {
+        toast.success(res.message || 'Account created — pending admin approval.', { duration: 6000 });
+        navigate('/login');
+        return;
+      }
       login(res.user, res.token);
       toast.success('Account created successfully!');
       const routes: Record<string, string> = { doctor: '/doctor', patient: '/patient' };
