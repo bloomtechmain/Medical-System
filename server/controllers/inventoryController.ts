@@ -32,7 +32,8 @@ const getExpiring = async (req: Request, res: Response, next: NextFunction): Pro
   try {
     const days = parseInt(req.query.days as string) || 30;
     const { rows } = await pool.query(
-      `SELECT * FROM medicines WHERE expiry_date BETWEEN NOW() AND NOW() + INTERVAL '${days} days' AND is_active = TRUE ORDER BY expiry_date ASC`
+      `SELECT * FROM medicines WHERE expiry_date BETWEEN NOW() AND NOW() + make_interval(days => $1) AND is_active = TRUE ORDER BY expiry_date ASC`,
+      [days]
     );
     res.json(rows);
   } catch (err) { next(err); }
