@@ -3,10 +3,12 @@ import { body } from 'express-validator';
 import { register, login, getMe, impersonate, listImpersonations } from '../controllers/authController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
+import { loginLimiter, registerLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
 router.post('/register',
+  registerLimiter,
   [
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
@@ -18,6 +20,7 @@ router.post('/register',
 );
 
 router.post('/login',
+  loginLimiter,
   [body('email').isEmail().normalizeEmail(), body('password').notEmpty()],
   validate,
   login
