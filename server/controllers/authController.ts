@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import { Request, Response, NextFunction } from 'express';
@@ -7,6 +8,7 @@ import { pool, queryAs } from '../config/db';
 import { DbUser } from '../types';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
+const REFRESH_TOKEN_DAYS = 7;
 
 const generateToken = (
   user: Pick<DbUser, 'id' | 'email' | 'role'>,
@@ -18,8 +20,28 @@ const generateToken = (
       ...(opts?.impersonatedBy ? { impersonatedBy: opts.impersonatedBy } : {}),
     },
     process.env.JWT_SECRET as string,
-    { expiresIn: (opts?.expiresIn || process.env.JWT_EXPIRES_IN || '7d') as any }
+    // SEC-17 (auth): the access token used to live 7 days with nothing able
+    // to revoke it early. It's now short-lived — the refresh token below is
+    // what actually controls session length, and that one IS revocable.
+    { expiresIn: (opts?.expiresIn || process.env.JWT_EXPIRES_IN || '15m') as any }
   );
+
+const hashRefreshToken = (token: string): string =>
+  crypto.createHash('sha256').update(token).digest('hex');
+
+// Opaque (not JWT) random token — only its hash is ever stored, so a DB leak
+// doesn't hand out working sessions. Not issued for impersonation sessions
+// (those stay hard-capped at their own short expiresIn, by design — no
+// silent renewal of a "View As" session).
+const issueRefreshToken = async (userId: number): Promise<string> => {
+  const token = crypto.randomBytes(40).toString('hex');
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000);
+  await pool.query(
+    'INSERT INTO public.refresh_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+    [userId, hashRefreshToken(token), expiresAt]
+  );
+  return token;
+};
 
 const getOrgForUser = async (userId: number) => {
   const { rows } = await pool.query(`
@@ -185,7 +207,7 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
       });
       return;
     }
-    res.status(201).json({ user, token: generateToken(user as DbUser) });
+    res.status(201).json({ user, token: generateToken(user as DbUser), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
@@ -225,7 +247,7 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
 
     const organization = await getOrgForUser(user.id);
     const { password: _, mfa_secret: __, ...safeUser } = user;
-    res.json({ user: { ...safeUser, organization }, token: generateToken(user) });
+    res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
@@ -260,7 +282,7 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
 
     const organization = await getOrgForUser(user.id);
     const { password: _, mfa_secret: __, ...safeUser } = user;
-    res.json({ user: { ...safeUser, organization }, token: generateToken(user) });
+    res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
@@ -409,4 +431,50 @@ const listImpersonationActions = async (req: Request, res: Response, next: NextF
   } catch (err) { next(err); }
 };
 
-export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions };
+// SEC-17 (auth): exchanges a still-valid refresh token for a new access
+// token. Rotates the refresh token too (old row marked revoked, new one
+// issued) rather than reusing it — a refresh token that's presented twice
+// after being rotated is a sign of theft, not just normal renewal.
+const refreshAccessToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { refreshToken } = req.body as { refreshToken: string };
+    if (!refreshToken) { res.status(401).json({ message: 'Refresh token required' }); return; }
+
+    const hash = hashRefreshToken(refreshToken);
+    const { rows } = await pool.query(
+      `SELECT id, user_id FROM public.refresh_tokens
+       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()`,
+      [hash]
+    );
+    if (!rows.length) { res.status(401).json({ message: 'Invalid or expired refresh token' }); return; }
+
+    const { rows: userRows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [rows[0].user_id]);
+    if (!userRows.length || !userRows[0].is_active) {
+      res.status(401).json({ message: 'Invalid or expired refresh token' });
+      return;
+    }
+    const user = userRows[0];
+
+    await pool.query('UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE id = $1', [rows[0].id]);
+    res.json({ token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+  } catch (err) { next(err); }
+};
+
+// Best-effort session kill: revokes one refresh token (the one this device
+// holds). Not authenticated by Bearer token on purpose — by the time a user
+// hits logout their access token may already be near expiry or gone from
+// memory; the refresh token itself is the credential being revoked.
+const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { refreshToken } = req.body as { refreshToken?: string };
+    if (refreshToken) {
+      await pool.query(
+        'UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL',
+        [hashRefreshToken(refreshToken)]
+      );
+    }
+    res.status(204).end();
+  } catch (err) { next(err); }
+};
+
+export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout };

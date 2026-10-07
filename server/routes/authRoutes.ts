@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions } from '../controllers/authController';
+import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout } from '../controllers/authController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
 import { loginLimiter, registerLimiter } from '../middleware/rateLimit';
@@ -32,6 +32,14 @@ router.post('/mfa/login',
   validate,
   mfaLogin
 );
+
+router.post('/refresh',
+  loginLimiter,
+  [body('refreshToken').notEmpty()],
+  validate,
+  refreshAccessToken
+);
+router.post('/logout', logout);
 
 router.get('/me', protect, getMe);
 

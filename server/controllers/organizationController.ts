@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { pool, revokeRefreshTokens } from '../config/db';
 import { createProfile } from './authController';
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -116,6 +116,7 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
         );
         if (!otherActive.length) {
           await pool.query('UPDATE public.users SET is_active = FALSE WHERE id = $1', [org.owner_user_id]);
+          await revokeRefreshTokens(org.owner_user_id);
         }
       }
     }
