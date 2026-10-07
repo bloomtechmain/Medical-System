@@ -8,6 +8,7 @@ import { connectDB } from './config/db';
 import { initSocket } from './config/socket';
 import { ALLOWED_ORIGINS } from './config/corsOrigins';
 import { sendStoredFile } from './config/fileStorage';
+import { registerLimiter, publicSearchLimiter } from './middleware/rateLimit';
 import errorHandler from './middleware/errorHandler';
 
 // Fail fast with a clear message instead of starting in a broken state
@@ -20,11 +21,26 @@ const requireEnv = (names: string[]): void => {
     process.exit(1);
   }
 };
+// SEC-21: an unset NODE_ENV previously meant stack traces and raw error
+// detail went to the client by default (errorHandler.ts's check only hides
+// them when NODE_ENV === 'production', so "unset" silently behaved like
+// development in production). Require it explicitly instead of assuming.
+const VALID_NODE_ENVS = ['development', 'production', 'test'];
+if (!VALID_NODE_ENVS.includes(process.env.NODE_ENV || '')) {
+  console.error(`NODE_ENV must be one of: ${VALID_NODE_ENVS.join(', ')} (got: ${process.env.NODE_ENV || '<unset>'})`);
+  process.exit(1);
+}
+
 requireEnv(['JWT_SECRET']);
 requireEnv(process.env.DATABASE_URL ? [] : ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']);
 if (process.env.NODE_ENV === 'production') requireEnv(['CLIENT_URL']);
 
 const app    = express();
+app.disable('x-powered-by'); // SEC-21: don't advertise the framework/version
+// SEC-22: trust the first hop's X-Forwarded-For (Railway today, the ALB on
+// AWS later) so rate limiting below counts the real client IP, not the
+// proxy's — without this every request looks like it comes from one IP.
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 initSocket(server);
 
@@ -85,9 +101,9 @@ app.use('/api/lab-catalog',       labCatalogRoutes);
 app.use('/api/prescription-assignments', prescriptionAssignmentRoutes);
 // Public self-registration — mounted before the admin-gated organizations router
 // so it is never touched by the protect/authorize middleware.
-app.post('/api/organizations/register', registerOrganization);
-app.get('/api/organizations/search-owner', searchOwnerCandidates);
-app.get('/api/organizations/search-hospitals-clinics', searchHospitalsClinics);
+app.post('/api/organizations/register', registerLimiter, registerOrganization);
+app.get('/api/organizations/search-owner', publicSearchLimiter, searchOwnerCandidates);
+app.get('/api/organizations/search-hospitals-clinics', publicSearchLimiter, searchHospitalsClinics);
 app.use('/api/org-team', organizationTeamRoutes);
 app.use('/api/organizations',     organizationRoutes);
 
