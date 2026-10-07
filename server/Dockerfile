@@ -2,7 +2,7 @@
 # same context works unchanged for ECR/ECS). Do NOT reference ../client here —
 # the client is a separate deploy (S3/CloudFront).
 
-FROM node:20-slim AS builder
+FROM node:20.18.1-slim AS builder
 
 # Canvas build toolchain + headers (fallback if prebuilt binaries unavailable
 # for this platform/arch) — stays in this stage only, not in the final image.
@@ -28,7 +28,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # ---- runtime image: same canvas libs, but shared runtime .so's only ----
-FROM node:20-slim
+FROM node:20.18.1-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
@@ -41,9 +41,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
+# --chown: the "node" user (uid 1000, built into the official image) owns
+# these from the start — SEC-19, don't run the container as root.
+COPY --from=builder --chown=node:node /app/package*.json ./
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/dist ./dist
+
+USER node
 
 EXPOSE 5000
 

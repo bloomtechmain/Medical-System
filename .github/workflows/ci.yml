@@ -75,3 +75,35 @@ jobs:
         env:
           VITE_API_URL: http://localhost:5000
           VITE_WS_URL: ws://localhost:5000
+
+  # SEC-19: scans the actual built images, not just source dependencies —
+  # catches vulnerable OS packages baked into the base image too.
+  image-scan:
+    name: Docker image scan (Trivy)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: server
+            context: ./server
+          - name: client
+            context: ./client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: false
+          load: true
+          tags: corehealth-${{ matrix.name }}:ci
+
+      - name: Scan ${{ matrix.name }} image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: corehealth-${{ matrix.name }}:ci
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true

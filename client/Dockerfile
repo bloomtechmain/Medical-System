@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM node:20.18.1-slim AS builder
 
 WORKDIR /app
 COPY package*.json ./
@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 # ── Runtime stage ──────────────────────────────────────────────────────────────
-FROM node:20-slim
+FROM node:20.18.1-slim
 
 WORKDIR /app
 
@@ -23,9 +23,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 
-COPY --from=builder /app/dist ./dist
-COPY docker-entrypoint.sh ./
+# --chown: dist/ must stay writable by the non-root "node" user below —
+# docker-entrypoint.sh writes dist/config.js there at container start.
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --chown=node:node docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
+
+USER node
 
 # Railway injects PORT at runtime. serve binds to 0.0.0.0 by default.
 # The entrypoint writes dist/config.js from API_URL before starting serve.
