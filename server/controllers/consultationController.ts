@@ -396,6 +396,13 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
 
     if (!patRows.length) { res.status(404).json({ message: 'Patient not found' }); return; }
 
+    // SEC-17 #6: this WHERE clause is the actual enforcement, not a backstop
+    // — the app connects to Postgres as a superuser (confirmed: rolbypassrls
+    // = true), so clinical.medical_consultations' RLS policy is silently
+    // bypassed and filters nothing in practice (see the database-security
+    // guideline's DB-02 finding). A non-admin doctor only ever sees
+    // consultations where they're literally the treating doctor.
+    const isAdmin = req.user.role === 'admin';
     const { rows: consultations } = await queryAs(actor(req), `
       SELECT c.*,
         u.name  AS doctor_display_name,
@@ -429,10 +436,22 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
       LEFT JOIN users u            ON u.id  = c.doctor_id
       LEFT JOIN doctor_profiles dp ON dp.user_id = c.doctor_id
       LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
-      WHERE c.patient_id = $1
+      WHERE c.patient_id = $1 ${isAdmin ? '' : 'AND c.doctor_id = $2'}
       GROUP BY c.id, u.name, dp.specialization
       ORDER BY c.visit_date DESC, c.created_at DESC
-    `, [patientId]);
+    `, isAdmin ? [patientId] : [patientId, req.user.id]);
+
+    // An empty result now means "this doctor has never treated this
+    // patient" (the WHERE clause above enforces that directly), so the
+    // patient's name/email/demographics fetched earlier shouldn't be
+    // returned either — previously they were, unconditionally, regardless
+    // of any relationship. Same 404 message as "patient not found" so the
+    // two cases aren't distinguishable from the outside (no enumeration
+    // signal).
+    if (!isAdmin && consultations.length === 0) {
+      res.status(404).json({ message: 'Patient not found' });
+      return;
+    }
 
     const allMedicines  = consultations.flatMap((c: any) => c.medicines || []);
     const uniqueMeds    = [...new Set(allMedicines.map((m: any) => m.medicine_name.toLowerCase()))];
