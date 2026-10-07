@@ -78,6 +78,7 @@ END $$;
 DROP SCHEMA IF EXISTS clinical CASCADE;
 
 -- public clinical/operational tables from a previous run
+DROP TABLE IF EXISTS public.impersonation_action_log CASCADE;
 DROP TABLE IF EXISTS public.impersonation_log      CASCADE;
 DROP TABLE IF EXISTS public.notifications          CASCADE;
 DROP TABLE IF EXISTS public.lab_view_requests      CASCADE;
@@ -134,6 +135,21 @@ CREATE TABLE public.impersonation_log (
 );
 CREATE INDEX idx_impersonation_admin ON public.impersonation_log(admin_id);
 CREATE INDEX idx_impersonation_started ON public.impersonation_log(started_at);
+
+-- SEC-17 #7: the row above only records that a session started — nothing
+-- taken *during* it. This logs every mutating request (POST/PUT/PATCH/
+-- DELETE) made while impersonating; reads are deliberately excluded —
+-- high-volume, low audit value, same convention as most access logs.
+CREATE TABLE public.impersonation_action_log (
+  id              SERIAL       PRIMARY KEY,
+  admin_id        INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  target_user_id  INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  method          VARCHAR(10)  NOT NULL,
+  path            TEXT         NOT NULL,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_impersonation_action_admin  ON public.impersonation_action_log(admin_id);
+CREATE INDEX idx_impersonation_action_target ON public.impersonation_action_log(target_user_id);
 
 -- 2.2 organizations  (the TENANT REGISTRY — the thing leaks must not cross)
 --

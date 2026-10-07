@@ -235,8 +235,9 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
  * admin's browser session becomes that user for every subsequent request
  * (REST, RLS actor context, and socket room — see server/middleware/auth.ts
  * and server/config/socket.ts, both of which just trust whatever identity
- * is in the JWT). Session-start only; logged to impersonation_log for a
- * lightweight "who viewed as whom and when" audit trail, not per-action.
+ * is in the JWT). Logged to impersonation_log for "who viewed as whom and
+ * when"; per-action logging (SEC-17 #7) happens separately in
+ * middleware/auth.ts's protect(), the one place that sees every request.
  */
 const impersonate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -276,4 +277,19 @@ const listImpersonations = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-export { register, login, getMe, createProfile, generateToken, impersonate, listImpersonations };
+const listImpersonationActions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT ial.*, a.name AS admin_name, t.name AS target_name
+      FROM impersonation_action_log ial
+      JOIN users a ON a.id = ial.admin_id
+      JOIN users t ON t.id = ial.target_user_id
+      WHERE ($1::int IS NULL OR ial.admin_id = $1)
+      ORDER BY ial.created_at DESC
+      LIMIT 100
+    `, [req.query.admin_id ? parseInt(req.query.admin_id as string, 10) : null]);
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
+export { register, login, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions };
