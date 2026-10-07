@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM node:22.12.0-slim AS builder
 
 WORKDIR /app
 COPY package*.json ./
@@ -9,16 +9,13 @@ RUN npm install --include=dev
 
 COPY . .
 
-# Railway passes service env vars as Docker build args automatically.
-# VITE_API_URL must be the server's public URL (no trailing slash).
-# Vite bakes this into the compiled JS bundle at build time.
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
-
+# The backend URL is no longer baked in at build time (ARCH-04) — it's written
+# to dist/config.js by docker-entrypoint.sh when the container starts, so this
+# same image works in any environment. See client/src/env.ts.
 RUN npm run build
 
 # ── Runtime stage ──────────────────────────────────────────────────────────────
-FROM node:20-slim
+FROM node:22.12.0-slim
 
 WORKDIR /app
 
@@ -26,7 +23,14 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 
-COPY --from=builder /app/dist ./dist
+# --chown: dist/ must stay writable by the non-root "node" user below —
+# docker-entrypoint.sh writes dist/config.js there at container start.
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --chown=node:node docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
+USER node
 
 # Railway injects PORT at runtime. serve binds to 0.0.0.0 by default.
-CMD ["sh", "-c", "node_modules/.bin/serve dist -s -l ${PORT:-3000}"]
+# The entrypoint writes dist/config.js from API_URL before starting serve.
+CMD ["./docker-entrypoint.sh"]

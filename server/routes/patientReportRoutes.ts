@@ -1,26 +1,15 @@
 import { Router } from 'express';
 import path from 'path';
-import fs from 'fs';
 import multer from 'multer';
 import { protect, authorize } from '../middleware/auth';
 import { create, getAll, getOne, serveFile, serveFileForDoctor, remove } from '../controllers/patientReportController';
-import { Request } from 'express';
 
 const router = Router();
 
-const uploadDir = path.join(__dirname, '../uploads/patient-reports');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (req: Request, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `pr_${req.user?.id || 'u'}_${Date.now()}${ext}`);
-  },
-});
-
+// Memory storage: the controller persists the buffer via config/fileStorage
+// (S3 if AWS_S3_BUCKET is set, local disk otherwise) — ARCH-06.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'];

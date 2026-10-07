@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import AuthedImg from '../components/common/AuthedImg';
+import { openAuthedFile } from '../utils/authedFiles';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { consultationApi } from '../services/api';
@@ -382,18 +384,18 @@ function ConsultationDetail({ consultation, onClose, onDelete }: ConsultationDet
           {consultation.prescription_file && (
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Prescription Image</p>
-              <a
-                href={`${API_BASE}/uploads/prescriptions/${consultation.prescription_file}`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                className="block w-full"
+                onClick={() => openAuthedFile(`${API_BASE}/api/consultations/${consultation.id}/prescription-file`)}
               >
-                <img
-                  src={`${API_BASE}/uploads/prescriptions/${consultation.prescription_file}`}
+                <AuthedImg
+                  src={`${API_BASE}/api/consultations/${consultation.id}/prescription-file`}
                   alt="Prescription"
                   className="w-full max-h-64 object-contain rounded-xl border border-gray-200 bg-gray-50 hover:opacity-90 transition-opacity cursor-zoom-in"
                 />
                 <p className="text-xs text-primary-600 mt-1 text-center">Click to open full size</p>
-              </a>
+              </button>
             </div>
           )}
 

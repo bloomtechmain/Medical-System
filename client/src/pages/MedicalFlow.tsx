@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { authApi, consultationApi, labApi } from '../services/api';
+import { openAuthedFile, downloadAuthedFile } from '../utils/authedFiles';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
 
@@ -114,22 +115,8 @@ function humanTime(dateStr: string | null) {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
-async function downloadReport(reportFile: string, labName: string) {
-  try {
-    const token = localStorage.getItem('token');
-    const url   = `${SERVER_BASE}/uploads/lab-reports/${reportFile}`;
-    const res   = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (!res.ok) throw new Error('Fetch failed');
-    const blob  = await res.blob();
-    const href  = URL.createObjectURL(blob);
-    const a     = document.createElement('a');
-    a.href      = href;
-    a.download  = `${(labName || 'lab-report').replace(/\s+/g, '_')}_${reportFile}`;
-    a.click();
-    URL.revokeObjectURL(href);
-  } catch {
-    window.open(`${SERVER_BASE}/uploads/lab-reports/${reportFile}`, '_blank');
-  }
+async function downloadReport(labRequestId: number, reportFile: string, labName: string) {
+  await downloadAuthedFile(`${SERVER_BASE}/api/lab-requests/${labRequestId}/report-file`, `${(labName || 'lab-report').replace(/\s+/g, '_')}_${reportFile}`);
 }
 
 const COLOR_CLASSES: Record<string, string> = {
@@ -420,7 +407,7 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
               {r.report_notes && <InfoBlock icon="📝" label="Lab Notes / Results Summary" color="emerald">{r.report_notes}</InfoBlock>}
               <div className="flex flex-wrap gap-2">
                 {r.report_file && (
-                  <button type="button" onClick={() => downloadReport(r.report_file, r.lab_name)}
+                  <button type="button" onClick={() => downloadReport(r.id, r.report_file, r.lab_name)}
                     className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -429,13 +416,13 @@ function EventCard({ event, expanded, onToggle }: EventCardProps) {
                   </button>
                 )}
                 {r.report_file && (
-                  <a href={`${SERVER_BASE}/uploads/lab-reports/${r.report_file}`} target="_blank" rel="noreferrer"
+                  <button type="button" onClick={() => openAuthedFile(`${SERVER_BASE}/api/lab-requests/${r.id}/report-file`)}
                     className="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-4 py-2 rounded-lg border border-gray-200 transition-colors shadow-sm">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
                     View in Browser
-                  </a>
+                  </button>
                 )}
                 {!r.report_file && <span className="text-xs text-gray-400 italic">Report file not yet attached</span>}
               </div>

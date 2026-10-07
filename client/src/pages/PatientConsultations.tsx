@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import AuthedImg from '../components/common/AuthedImg';
+import { openAuthedFile, downloadAuthedFile } from '../utils/authedFiles';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -581,8 +583,8 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
     hasLabReq   && 'lab',
   ].filter(Boolean);
 
-  const fileUrl = (type: string, name: string) =>
-    `${API_BASE}/uploads/${type === 'rx' ? 'prescriptions' : 'lab-reports'}/${name}`;
+  const rxFileUrl  = (consultationId: number) => `${API_BASE}/api/consultations/${consultationId}/prescription-file`;
+  const labFileUrl = (labRequestId: number)   => `${API_BASE}/api/lab-requests/${labRequestId}/report-file`;
 
   return (
     <div className="flex gap-3">
@@ -712,18 +714,17 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                   <WFNode icon={<FileImage size={12} strokeWidth={2} className="text-violet-600" />} iconBg="bg-violet-100"
                     label={t('page.wf.prescription')} labelColor="text-violet-700" isLast={subSteps[subSteps.length-1] === 'prescription'}>
                     <div className="space-y-2">
-                      <img src={fileUrl('rx', c.prescription_file)} alt="Prescription"
-                        className="w-full max-h-44 object-contain rounded-xl border border-violet-100 bg-white"
-                        onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none'; }} />
+                      <AuthedImg src={rxFileUrl(c.id)} alt="Prescription"
+                        className="w-full max-h-44 object-contain rounded-xl border border-violet-100 bg-white" />
                       <div className="flex gap-2">
-                        <a href={fileUrl('rx', c.prescription_file)} download onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        <button type="button" onClick={(e: React.MouseEvent) => { e.stopPropagation(); downloadAuthedFile(rxFileUrl(c.id), c.prescription_file); }}
                           className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 transition-colors">
                           <Download size={11} strokeWidth={2.5} /> {tc('actions.download')}
-                        </a>
-                        <a href={fileUrl('rx', c.prescription_file)} target="_blank" rel="noreferrer" onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        </button>
+                        <button type="button" onClick={(e: React.MouseEvent) => { e.stopPropagation(); openAuthedFile(rxFileUrl(c.id)); }}
                           className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors">
                           <ExternalLink size={11} strokeWidth={2.5} /> {tc('actions.viewInBrowser')}
-                        </a>
+                        </button>
                       </div>
                     </div>
                   </WFNode>
@@ -808,14 +809,14 @@ function ConsultationCommit({ c, palette, labRequest, isLast, onEdit, onSendToLa
                           )}
                           {labRequest.report_file && (
                             <div className="px-4 py-3 flex gap-2">
-                              <a href={fileUrl('lab', labRequest.report_file)} download onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                              <button type="button" onClick={(e: React.MouseEvent) => { e.stopPropagation(); downloadAuthedFile(labFileUrl(labRequest.id), labRequest.report_file); }}
                                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-colors">
                                 <Download size={12} strokeWidth={2.5} /> {t('page.wf.downloadReport')}
-                              </a>
-                              <a href={fileUrl('lab', labRequest.report_file)} target="_blank" rel="noreferrer" onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                              </button>
+                              <button type="button" onClick={(e: React.MouseEvent) => { e.stopPropagation(); openAuthedFile(labFileUrl(labRequest.id)); }}
                                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors">
                                 <Eye size={12} strokeWidth={2.5} /> {tc('actions.viewInBrowser')}
-                              </a>
+                              </button>
                             </div>
                           )}
                         </div>

@@ -1,8 +1,11 @@
 [build]
 builder = "dockerfile"
 # Dockerfile is auto-detected from the Root Directory (/client) set in Railway dashboard.
-# Build arg VITE_API_URL must be set as a Railway environment variable on this service.
+# API_URL must be set as a Railway environment variable on this service — it's read
+# at container START (docker-entrypoint.sh), not baked in at build time (ARCH-04), so
+# this same image can be redeployed anywhere just by changing the env var.
 # It should be the server service's public URL (e.g. https://server-xxx.up.railway.app).
+# VITE_API_URL is still read as a fallback during the transition, but prefer API_URL.
 
 [deploy]
 healthcheckPath = "/"

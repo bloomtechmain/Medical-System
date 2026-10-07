@@ -1,9 +1,11 @@
 import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { queryAs, RLSActor } from '../config/db';
 import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
 import { saveVitalsFromPatientUpload } from './patientVitalsController';
+import { generateStoredFilename, persistUploadedFile, sendStoredFile, deleteStoredFile, verifyFileType, IMAGE_AND_PDF_MIMES } from '../config/fileStorage';
+
+const PATIENT_REPORTS_DIR = 'patient-reports';
 
 // patient_reports / data_access_requests live in the `clinical` schema
 // behind row-level security — every query against them must carry the
@@ -13,11 +15,17 @@ const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.rol
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.file) { res.status(400).json({ message: 'Report file is required' }); return; }
+    if (!(await verifyFileType(req.file.buffer, IMAGE_AND_PDF_MIMES))) {
+      res.status(400).json({ message: 'File content does not match an accepted type' }); return;
+    }
 
     const {
       title, report_type, laboratory_name,
       doctor_name, hospital_clinic, issued_date, description,
     } = req.body;
+
+    const storedName = generateStoredFilename('pr', req.user.id, req.file.originalname);
+    await persistUploadedFile(PATIENT_REPORTS_DIR, storedName, req.file.buffer, req.file.mimetype);
 
     const { rows: [report] } = await queryAs(actor(req), `
       INSERT INTO patient_reports
@@ -30,7 +38,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       req.user.id, title, report_type,
       laboratory_name || null, doctor_name || null, hospital_clinic || null,
       issued_date, description || null,
-      req.file.filename, req.file.mimetype, req.file.originalname,
+      storedName, req.file.mimetype, req.file.originalname,
     ]);
 
     // ── Respond right away — don't block the upload on OCR/PDF extraction ──
@@ -38,11 +46,12 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     // ── Background: extract vitals from a self-uploaded lab report ─────────
     if (report_type === 'lab_report') {
-      const patientId = req.user.id;
-      const filePath   = path.join(__dirname, '../uploads/patient-reports', req.file.filename);
+      const patientId    = req.user.id;
+      const reportBuffer = req.file.buffer;
+      const reportExt    = path.extname(req.file.originalname).toLowerCase();
       setImmediate(async () => {
         try {
-          const reportText = await extractReportText(filePath);
+          const reportText = await extractReportText(reportBuffer, reportExt);
           if (reportText.trim().length > 20) {
             const extracted = extractVitalsFromText(reportText);
             if (Object.keys(extracted).length > 0) {
@@ -86,13 +95,11 @@ const serveFile = async (req: Request, res: Response, next: NextFunction): Promi
     );
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
-    const report   = rows[0];
-    const filePath = path.join(__dirname, '../uploads/patient-reports', report.file_path);
-    if (!fs.existsSync(filePath)) { res.status(404).json({ message: 'File not found on disk' }); return; }
-
-    res.setHeader('Content-Type', report.file_mimetype || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(report.file_original_name)}"`);
-    res.sendFile(filePath);
+    const report = rows[0];
+    await sendStoredFile(res, PATIENT_REPORTS_DIR, report.file_path, {
+      contentType: report.file_mimetype || 'application/octet-stream',
+      inlineFilename: encodeURIComponent(report.file_original_name),
+    });
   } catch (err) { next(err); }
 };
 
@@ -104,8 +111,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
     );
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
-    const filePath = path.join(__dirname, '../uploads/patient-reports', rows[0].file_path);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    await deleteStoredFile(PATIENT_REPORTS_DIR, rows[0].file_path);
 
     await queryAs(actor(req), 'DELETE FROM patient_reports WHERE id=$1', [req.params.id]);
     res.status(204).end();
@@ -137,12 +143,10 @@ const serveFileForDoctor = async (req: Request, res: Response, next: NextFunctio
     );
     if (!accessRows.length) { res.status(403).json({ message: 'Access not granted for this patient\'s personal reports' }); return; }
 
-    const filePath = path.join(__dirname, '../uploads/patient-reports', report.file_path);
-    if (!fs.existsSync(filePath)) { res.status(404).json({ message: 'File not found on disk' }); return; }
-
-    res.setHeader('Content-Type', report.file_mimetype || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(report.file_original_name)}"`);
-    res.sendFile(filePath);
+    await sendStoredFile(res, PATIENT_REPORTS_DIR, report.file_path, {
+      contentType: report.file_mimetype || 'application/octet-stream',
+      inlineFilename: encodeURIComponent(report.file_original_name),
+    });
   } catch (err) { next(err); }
 };
 

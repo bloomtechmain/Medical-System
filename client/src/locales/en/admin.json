@@ -86,10 +86,27 @@
     "title": "Settings",
     "subtitle": "Update your account details.",
     "sections": {
-      "account": "Account Information"
+      "account": "Account Information",
+      "mfa": "Two-Factor Authentication"
     },
     "toastSuccess": "Profile updated successfully",
-    "toastError": "Failed to update profile"
+    "toastError": "Failed to update profile",
+    "mfa": {
+      "description": "Add an authenticator app code as a second step when signing in.",
+      "enabled": "Two-factor authentication is enabled.",
+      "disabled": "Two-factor authentication is not enabled.",
+      "enable": "Enable 2FA",
+      "disable": "Disable 2FA",
+      "scanInstructions": "Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.), then enter the 6-digit code it shows to confirm.",
+      "manualEntry": "Or enter this code manually:",
+      "codePlaceholder": "6-digit code",
+      "confirm": "Confirm & Enable",
+      "cancel": "Cancel",
+      "disablePrompt": "Enter your current 6-digit code to disable 2FA:",
+      "setupSuccess": "Two-factor authentication enabled",
+      "disableSuccess": "Two-factor authentication disabled",
+      "invalidCode": "Invalid authentication code"
+    }
   },
   "users": {
     "fields": {

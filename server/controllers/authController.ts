@@ -1,8 +1,14 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { authenticator } from 'otplib';
+import QRCode from 'qrcode';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs } from '../config/db';
 import { DbUser } from '../types';
+
+const MFA_PENDING_PURPOSE = 'mfa_pending';
+const REFRESH_TOKEN_DAYS = 7;
 
 const generateToken = (
   user: Pick<DbUser, 'id' | 'email' | 'role'>,
@@ -14,8 +20,28 @@ const generateToken = (
       ...(opts?.impersonatedBy ? { impersonatedBy: opts.impersonatedBy } : {}),
     },
     process.env.JWT_SECRET as string,
-    { expiresIn: (opts?.expiresIn || process.env.JWT_EXPIRES_IN || '7d') as any }
+    // SEC-17 (auth): the access token used to live 7 days with nothing able
+    // to revoke it early. It's now short-lived — the refresh token below is
+    // what actually controls session length, and that one IS revocable.
+    { expiresIn: (opts?.expiresIn || process.env.JWT_EXPIRES_IN || '15m') as any }
   );
+
+const hashRefreshToken = (token: string): string =>
+  crypto.createHash('sha256').update(token).digest('hex');
+
+// Opaque (not JWT) random token — only its hash is ever stored, so a DB leak
+// doesn't hand out working sessions. Not issued for impersonation sessions
+// (those stay hard-capped at their own short expiresIn, by design — no
+// silent renewal of a "View As" session).
+const issueRefreshToken = async (userId: number): Promise<string> => {
+  const token = crypto.randomBytes(40).toString('hex');
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000);
+  await pool.query(
+    'INSERT INTO public.refresh_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+    [userId, hashRefreshToken(token), expiresAt]
+  );
+  return token;
+};
 
 const getOrgForUser = async (userId: number) => {
   const { rows } = await pool.query(`
@@ -131,10 +157,17 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
 
     await client.query('BEGIN');
 
+    // SEC-17 #2: patients have no credentials to verify, so they're active
+    // immediately. Doctor/pharmacist/laboratory self-registration claims a
+    // professional license/affiliation nothing here checks — same gap the
+    // org-registration flow (organizationController.registerOrganization)
+    // already closes by registering owners inactive pending admin review.
+    // This mirrors that for the individual (no-org) registration path.
+    const requiresApproval = role !== 'patient';
     const hash = await bcrypt.hash(password, 10);
-    const { rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'>>(
-      'INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role',
-      [name, email, hash, role]
+    const { rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'> & { is_active: boolean }>(
+      'INSERT INTO users (name, email, password, role, is_active) VALUES ($1,$2,$3,$4,$5) RETURNING id, name, email, role, is_active',
+      [name, email, hash, role, !requiresApproval]
     );
 
     // patient_profiles lives in the `clinical` schema behind row-level
@@ -166,7 +199,15 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     }
 
     await client.query('COMMIT');
-    res.status(201).json({ user, token: generateToken(user as DbUser) });
+    if (!user.is_active) {
+      res.status(201).json({
+        user,
+        pending: true,
+        message: 'Your account has been created and is pending admin approval. You will be able to log in once an admin approves it.',
+      });
+      return;
+    }
+    res.status(201).json({ user, token: generateToken(user as DbUser), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
@@ -190,18 +231,116 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
       return;
     }
 
+    // SEC-14: password alone isn't enough for an MFA-enrolled account — hand
+    // back a short-lived pre-auth token (not a real session) that only proves
+    // "this request already knows the password"; mfaLogin exchanges it + a
+    // valid TOTP code for the actual session token.
+    if (user.mfa_enabled) {
+      const mfaToken = jwt.sign(
+        { id: user.id, purpose: MFA_PENDING_PURPOSE },
+        process.env.JWT_SECRET as string,
+        { expiresIn: '5m' }
+      );
+      res.json({ mfaRequired: true, mfaToken });
+      return;
+    }
+
     const organization = await getOrgForUser(user.id);
-    const { password: _, ...safeUser } = user;
-    res.json({ user: { ...safeUser, organization }, token: generateToken(user) });
+    const { password: _, mfa_secret: __, ...safeUser } = user;
+    res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
 };
 
+const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { mfaToken, code } = req.body as { mfaToken: string; code: string };
+    let payload: { id: number; purpose: string };
+    try {
+      payload = jwt.verify(mfaToken, process.env.JWT_SECRET as string) as typeof payload;
+    } catch {
+      res.status(401).json({ message: 'MFA session expired, please log in again' });
+      return;
+    }
+    if (payload.purpose !== MFA_PENDING_PURPOSE) {
+      res.status(401).json({ message: 'Invalid MFA session' });
+      return;
+    }
+
+    const { rows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [payload.id]);
+    if (!rows.length || !rows[0].is_active || !rows[0].mfa_enabled || !rows[0].mfa_secret) {
+      res.status(401).json({ message: 'Invalid MFA session' });
+      return;
+    }
+    const user = rows[0];
+
+    if (!code || !authenticator.verify({ token: String(code), secret: user.mfa_secret })) {
+      res.status(401).json({ message: 'Invalid authentication code' });
+      return;
+    }
+
+    const organization = await getOrgForUser(user.id);
+    const { password: _, mfa_secret: __, ...safeUser } = user;
+    res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// SEC-14 — admin-only TOTP MFA. Two-step enrollment: mfaSetup generates and
+// stores a secret but leaves mfa_enabled false; mfaVerifySetup only flips it
+// to true once the admin proves (by entering a live code) their authenticator
+// app actually has that secret, so a setup call that's never completed can't
+// accidentally lock an account out.
+const mfaSetup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const secret = authenticator.generateSecret();
+    await pool.query('UPDATE users SET mfa_secret = $1 WHERE id = $2', [secret, req.user.id]);
+    const uri = authenticator.keyuri(req.user.email, 'Core Health', secret);
+    const qrCodeDataUrl = await QRCode.toDataURL(uri);
+    res.json({ secret, qrCodeDataUrl });
+  } catch (err) { next(err); }
+};
+
+const mfaVerifySetup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { code } = req.body as { code: string };
+    const { rows } = await pool.query<DbUser>('SELECT mfa_secret FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length || !rows[0].mfa_secret) {
+      res.status(400).json({ message: 'Start MFA setup first' });
+      return;
+    }
+    if (!code || !authenticator.verify({ token: String(code), secret: rows[0].mfa_secret })) {
+      res.status(400).json({ message: 'Invalid authentication code' });
+      return;
+    }
+    await pool.query('UPDATE users SET mfa_enabled = TRUE WHERE id = $1', [req.user.id]);
+    res.json({ mfa_enabled: true });
+  } catch (err) { next(err); }
+};
+
+const mfaDisable = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { code } = req.body as { code: string };
+    const { rows } = await pool.query<DbUser>('SELECT mfa_secret, mfa_enabled FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length || !rows[0].mfa_enabled || !rows[0].mfa_secret) {
+      res.status(400).json({ message: 'MFA is not enabled' });
+      return;
+    }
+    if (!code || !authenticator.verify({ token: String(code), secret: rows[0].mfa_secret })) {
+      res.status(400).json({ message: 'Invalid authentication code' });
+      return;
+    }
+    await pool.query('UPDATE users SET mfa_enabled = FALSE, mfa_secret = NULL WHERE id = $1', [req.user.id]);
+    res.json({ mfa_enabled: false });
+  } catch (err) { next(err); }
+};
+
 const getMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query<Omit<DbUser, 'password'>>(
-      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, role, is_active, mfa_enabled, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
@@ -235,8 +374,9 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
  * admin's browser session becomes that user for every subsequent request
  * (REST, RLS actor context, and socket room — see server/middleware/auth.ts
  * and server/config/socket.ts, both of which just trust whatever identity
- * is in the JWT). Session-start only; logged to impersonation_log for a
- * lightweight "who viewed as whom and when" audit trail, not per-action.
+ * is in the JWT). Logged to impersonation_log for "who viewed as whom and
+ * when"; per-action logging (SEC-17 #7) happens separately in
+ * middleware/auth.ts's protect(), the one place that sees every request.
  */
 const impersonate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -276,4 +416,65 @@ const listImpersonations = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-export { register, login, getMe, createProfile, generateToken, impersonate, listImpersonations };
+const listImpersonationActions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT ial.*, a.name AS admin_name, t.name AS target_name
+      FROM impersonation_action_log ial
+      JOIN users a ON a.id = ial.admin_id
+      JOIN users t ON t.id = ial.target_user_id
+      WHERE ($1::int IS NULL OR ial.admin_id = $1)
+      ORDER BY ial.created_at DESC
+      LIMIT 100
+    `, [req.query.admin_id ? parseInt(req.query.admin_id as string, 10) : null]);
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
+// SEC-17 (auth): exchanges a still-valid refresh token for a new access
+// token. Rotates the refresh token too (old row marked revoked, new one
+// issued) rather than reusing it — a refresh token that's presented twice
+// after being rotated is a sign of theft, not just normal renewal.
+const refreshAccessToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { refreshToken } = req.body as { refreshToken: string };
+    if (!refreshToken) { res.status(401).json({ message: 'Refresh token required' }); return; }
+
+    const hash = hashRefreshToken(refreshToken);
+    const { rows } = await pool.query(
+      `SELECT id, user_id FROM public.refresh_tokens
+       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()`,
+      [hash]
+    );
+    if (!rows.length) { res.status(401).json({ message: 'Invalid or expired refresh token' }); return; }
+
+    const { rows: userRows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [rows[0].user_id]);
+    if (!userRows.length || !userRows[0].is_active) {
+      res.status(401).json({ message: 'Invalid or expired refresh token' });
+      return;
+    }
+    const user = userRows[0];
+
+    await pool.query('UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE id = $1', [rows[0].id]);
+    res.json({ token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+  } catch (err) { next(err); }
+};
+
+// Best-effort session kill: revokes one refresh token (the one this device
+// holds). Not authenticated by Bearer token on purpose — by the time a user
+// hits logout their access token may already be near expiry or gone from
+// memory; the refresh token itself is the credential being revoked.
+const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { refreshToken } = req.body as { refreshToken?: string };
+    if (refreshToken) {
+      await pool.query(
+        'UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL',
+        [hashRefreshToken(refreshToken)]
+      );
+    }
+    res.status(204).end();
+  } catch (err) { next(err); }
+};
+
+export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout };

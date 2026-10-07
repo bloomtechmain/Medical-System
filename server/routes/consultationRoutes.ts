@@ -1,26 +1,15 @@
 import { Router } from 'express';
 import path from 'path';
-import fs from 'fs';
 import multer from 'multer';
-import { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove } from '../controllers/consultationController';
+import { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove, servePrescriptionFile } from '../controllers/consultationController';
 import { protect, authorize } from '../middleware/auth';
-import { Request } from 'express';
 
 const router = Router();
 
-const prescriptionsDir = path.join(__dirname, '../uploads/prescriptions');
-if (!fs.existsSync(prescriptionsDir)) fs.mkdirSync(prescriptionsDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: prescriptionsDir,
-  filename: (req: Request, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `rx_${req.user?.id || 'u'}_${Date.now()}${ext}`);
-  },
-});
-
+// Memory storage: the controller persists the buffer via config/fileStorage
+// (S3 if AWS_S3_BUCKET is set, local disk otherwise) — ARCH-06.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'];
@@ -32,6 +21,7 @@ const upload = multer({
 router.get('/patient/:patientId/history', protect, authorize('doctor', 'admin'), getPatientHistory);
 router.get('/',        protect, authorize('patient', 'doctor'), getAll);
 router.get('/:id',     protect, authorize('patient', 'doctor'), getOne);
+router.get('/:id/prescription-file', protect, authorize('patient', 'doctor', 'pharmacist'), servePrescriptionFile);
 router.post('/',       protect, authorize('patient', 'doctor'), upload.single('prescription'), create);
 router.put('/:id',                  protect, authorize('doctor'),      upload.single('prescription'), update);
 router.put('/:id/patient',          protect, authorize('patient'),     updateByPatient);

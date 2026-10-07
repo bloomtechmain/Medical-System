@@ -1,9 +1,10 @@
-import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { extractMedicines } from '../utils/ocrParser';
 import { sendNotification } from '../utils/notify';
+import { generateStoredFilename, persistUploadedFile, deleteStoredFile, sendStoredFile, verifyFileType, IMAGE_MIMES } from '../config/fileStorage';
+
+const PRESCRIPTIONS_DIR = 'prescriptions';
 
 // medical_consultations / consultation_medicines / patient_profiles live in
 // the `clinical` schema and are gated by row-level security — every query
@@ -17,11 +18,11 @@ const setRLSContext = (client: { query: (t: string, v?: unknown[]) => Promise<un
     [a.id != null ? String(a.id) : '', a.role || '']
   );
 
-const runOCR = async (filePath: string): Promise<string> => {
+const runOCR = async (input: string | Buffer): Promise<string> => {
   try {
     const { createWorker } = await import('tesseract.js');
     const worker = await createWorker('eng', 1, { logger: () => {} });
-    const { data: { text } } = await worker.recognize(filePath);
+    const { data: { text } } = await worker.recognize(input as any);
     await worker.terminate();
     return text || '';
   } catch (err) {
@@ -46,12 +47,15 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     if (!patientId) { res.status(400).json({ message: 'Patient is required' }); return; }
 
-    const prescriptionFile = req.file ? req.file.filename : null;
-    const prescriptionPath = req.file ? req.file.path : null;
-
+    let prescriptionFile: string | null = null;
     let ocrText = '', ocrMedicines: ReturnType<typeof extractMedicines> = [];
-    if (prescriptionPath) {
-      ocrText      = await runOCR(prescriptionPath);
+    if (req.file) {
+      if (!(await verifyFileType(req.file.buffer, IMAGE_MIMES))) {
+        res.status(400).json({ message: 'File content does not match an accepted image type' }); return;
+      }
+      prescriptionFile = generateStoredFilename('rx', req.user.id, req.file.originalname);
+      await persistUploadedFile(PRESCRIPTIONS_DIR, prescriptionFile, req.file.buffer, req.file.mimetype);
+      ocrText      = await runOCR(req.file.buffer);
       ocrMedicines = extractMedicines(ocrText);
     }
 
@@ -305,12 +309,15 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
     let ocrMedicines: ReturnType<typeof extractMedicines> = [];
 
     if (req.file) {
-      if (prev.prescription_file) {
-        const oldPath = path.join(__dirname, '../uploads/prescriptions', prev.prescription_file);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      if (!(await verifyFileType(req.file.buffer, IMAGE_MIMES))) {
+        res.status(400).json({ message: 'File content does not match an accepted image type' }); return;
       }
-      prescriptionFile = req.file.filename;
-      ocrText          = await runOCR(req.file.path);
+      if (prev.prescription_file) {
+        await deleteStoredFile(PRESCRIPTIONS_DIR, prev.prescription_file);
+      }
+      prescriptionFile = generateStoredFilename('rx', req.user.id, req.file.originalname);
+      await persistUploadedFile(PRESCRIPTIONS_DIR, prescriptionFile, req.file.buffer, req.file.mimetype);
+      ocrText          = await runOCR(req.file.buffer);
       ocrMedicines     = extractMedicines(ocrText);
     }
 
@@ -395,6 +402,13 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
 
     if (!patRows.length) { res.status(404).json({ message: 'Patient not found' }); return; }
 
+    // SEC-17 #6: this WHERE clause is the actual enforcement, not a backstop
+    // — the app connects to Postgres as a superuser (confirmed: rolbypassrls
+    // = true), so clinical.medical_consultations' RLS policy is silently
+    // bypassed and filters nothing in practice (see the database-security
+    // guideline's DB-02 finding). A non-admin doctor only ever sees
+    // consultations where they're literally the treating doctor.
+    const isAdmin = req.user.role === 'admin';
     const { rows: consultations } = await queryAs(actor(req), `
       SELECT c.*,
         u.name  AS doctor_display_name,
@@ -428,10 +442,22 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
       LEFT JOIN users u            ON u.id  = c.doctor_id
       LEFT JOIN doctor_profiles dp ON dp.user_id = c.doctor_id
       LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
-      WHERE c.patient_id = $1
+      WHERE c.patient_id = $1 ${isAdmin ? '' : 'AND c.doctor_id = $2'}
       GROUP BY c.id, u.name, dp.specialization
       ORDER BY c.visit_date DESC, c.created_at DESC
-    `, [patientId]);
+    `, isAdmin ? [patientId] : [patientId, req.user.id]);
+
+    // An empty result now means "this doctor has never treated this
+    // patient" (the WHERE clause above enforces that directly), so the
+    // patient's name/email/demographics fetched earlier shouldn't be
+    // returned either — previously they were, unconditionally, regardless
+    // of any relationship. Same 404 message as "patient not found" so the
+    // two cases aren't distinguishable from the outside (no enumeration
+    // signal).
+    if (!isAdmin && consultations.length === 0) {
+      res.status(404).json({ message: 'Patient not found' });
+      return;
+    }
 
     const allMedicines  = consultations.flatMap((c: any) => c.medicines || []);
     const uniqueMeds    = [...new Set(allMedicines.map((m: any) => m.medicine_name.toLowerCase()))];
@@ -462,8 +488,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
     if (rows[0].prescription_file) {
-      const fp = path.join(__dirname, '../uploads/prescriptions', rows[0].prescription_file);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      await deleteStoredFile(PRESCRIPTIONS_DIR, rows[0].prescription_file);
     }
 
     await queryAs(actor(req), 'DELETE FROM medical_consultations WHERE id=$1', [req.params.id]);
@@ -541,4 +566,26 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
   }
 };
 
-export { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove };
+// SEC-28: replaces the removed unauthenticated `/uploads/...` static route.
+// Only the patient, the treating doctor, the assigned pharmacist, or an
+// admin can fetch the actual file — everyone else gets 404, same message
+// whether the consultation doesn't exist or the requester just can't see it.
+const servePrescriptionFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await queryAs(actor(req),
+      'SELECT prescription_file, patient_id, doctor_id, assigned_pharmacist_id FROM medical_consultations WHERE id=$1',
+      [req.params.id]
+    );
+    const row = rows[0];
+    const allowed = row && (
+      req.user.role === 'admin' ||
+      row.patient_id === req.user.id ||
+      row.doctor_id === req.user.id ||
+      row.assigned_pharmacist_id === req.user.id
+    );
+    if (!allowed || !row.prescription_file) { res.status(404).json({ message: 'Not found' }); return; }
+    await sendStoredFile(res, PRESCRIPTIONS_DIR, row.prescription_file, { inlineFilename: row.prescription_file });
+  } catch (err) { next(err); }
+};
+
+export { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove, servePrescriptionFile };

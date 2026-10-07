@@ -40,11 +40,12 @@ describe('authController.login', () => {
     expect(res.json).toHaveBeenCalledWith({ message: 'Invalid credentials' });
   });
 
-  it('returns the user (without password) and a token on success', async () => {
+  it('returns the user (without password), an access token, and a refresh token on success', async () => {
     const user = { id: 1, email: 'x@x.com', password: 'hashed', role: 'patient', is_active: true };
     query
       .mockResolvedValueOnce({ rows: [user] })  // SELECT * FROM users WHERE email = ?
-      .mockResolvedValueOnce({ rows: [] });      // getOrgForUser → no org membership
+      .mockResolvedValueOnce({ rows: [] })      // getOrgForUser → no org membership
+      .mockResolvedValueOnce({ rows: [] });     // issueRefreshToken → INSERT INTO refresh_tokens
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
     (jwt.sign as jest.Mock).mockReturnValue('fake-token');
 
@@ -54,6 +55,7 @@ describe('authController.login', () => {
     expect(res.json).toHaveBeenCalledWith({
       user: { id: 1, email: 'x@x.com', role: 'patient', is_active: true, organization: null },
       token: 'fake-token',
+      refreshToken: expect.any(String),
     });
   });
 

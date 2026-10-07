@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
-import { pool, queryAs, RLSActor } from '../config/db';
+import { pool, queryAs, RLSActor, revokeRefreshTokens } from '../config/db';
 
 // clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
 // live behind row-level security — queries against them must carry the
@@ -67,6 +67,7 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
       [name, email, role, is_active, req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+    if (!rows[0].is_active) await revokeRefreshTokens(rows[0].id);
     res.json(rows[0]);
   } catch (err) { next(err); }
 };
@@ -183,6 +184,7 @@ const updateWithProfile = async (req: Request, res: Response, next: NextFunction
     const updatedProfile = await fetchRoleProfile(client, user.id, user.role);
 
     await client.query('COMMIT');
+    if (!user.is_active) await revokeRefreshTokens(user.id);
     res.json({ ...user, profile: updatedProfile });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -290,6 +292,7 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
       [req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+    if (!rows[0].is_active) await revokeRefreshTokens(rows[0].id);
     res.json(rows[0]);
   } catch (err) { next(err); }
 };

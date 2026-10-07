@@ -7,6 +7,7 @@ import {
   Search, FolderOpen, Plus, Calendar, Clock, Filter,
 } from 'lucide-react';
 import { patientReportApi, labApi } from '../services/api';
+import { openAuthedFile } from '../utils/authedFiles';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
 
@@ -70,14 +71,14 @@ function LabReportModal({ r, onClose }: { r: any; onClose: () => void }) {
             </div>
           )}
           {r.report_file && (
-            <a href={`${API_BASE}/uploads/lab-reports/${r.report_file}`} target="_blank" rel="noreferrer"
-              className="flex items-center gap-3 p-3.5 bg-primary-50 border border-primary-200 rounded-xl hover:bg-primary-100 transition-colors">
+            <button type="button" onClick={() => openAuthedFile(`${API_BASE}/api/lab-requests/${r.id}/report-file`)}
+              className="w-full flex items-center gap-3 p-3.5 bg-primary-50 border border-primary-200 rounded-xl hover:bg-primary-100 transition-colors">
               <span className="text-2xl">{isPDF ? '📄' : '🖼️'}</span>
-              <div>
+              <div className="text-left">
                 <p className="text-sm font-bold text-primary-700">{isPDF ? t('myReports.modal.openPdf') : t('myReports.modal.viewImage')}</p>
                 <p className="text-xs text-gray-500">{t('myReports.modal.clickToOpen')}</p>
               </div>
-            </a>
+            </button>
           )}
           {!r.report_file && (
             <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 text-sm text-amber-700">

@@ -18,6 +18,7 @@ export interface User {
   email: string;
   role: UserRole;
   is_active: boolean;
+  mfa_enabled?: boolean;
   created_at: string;
   updated_at: string;
   profile?: DoctorProfile | PatientProfile | PharmacistProfile | LaboratoryProfile | null;

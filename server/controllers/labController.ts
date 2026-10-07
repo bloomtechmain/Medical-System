@@ -1,10 +1,13 @@
 import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, getTenantSchema, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
 import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
 import { saveVitalsFromLab } from './patientVitalsController';
+import { generateStoredFilename, persistUploadedFile, deleteStoredFile, sendStoredFile, verifyFileType, IMAGE_AND_PDF_MIMES } from '../config/fileStorage';
+
+const LAB_REPORTS_DIR = 'lab-reports';
+const LAB_REFERRALS_DIR = 'lab-referrals';
 
 // lab_requests lives in the `clinical` schema behind row-level security —
 // every query against it must carry the acting user's identity. See
@@ -97,6 +100,15 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       if (dup.length) { res.status(409).json({ message: 'Lab request already sent for this consultation' }); return; }
     }
 
+    let referralFile: string | null = null;
+    if (req.file) {
+      if (!(await verifyFileType(req.file.buffer, IMAGE_AND_PDF_MIMES))) {
+        res.status(400).json({ message: 'File content does not match an accepted type' }); return;
+      }
+      referralFile = generateStoredFilename('referral', req.user.id, req.file.originalname);
+      await persistUploadedFile(LAB_REFERRALS_DIR, referralFile, req.file.buffer, req.file.mimetype);
+    }
+
     const { rows: [request] } = await queryAs(actor(req), `
       INSERT INTO lab_requests
         (doctor_id, patient_id, laboratory_id, consultation_id, test_description, notes,
@@ -105,7 +117,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       RETURNING *
     `, [doctorId, patientId, laboratory_id, consultation_id || null, testDesc, notes || null,
         report_type || null, scheduled_at || null,
-        req.file?.filename || null, req.file?.mimetype || null]);
+        referralFile, req.file?.mimetype || null]);
 
     // Catalog-backed bookings are priced immediately — the chosen test's
     // price is copied into the lab's own tenant invoices table right away,
@@ -222,7 +234,8 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 const finalizeReport = (
   labId: number,
   request: { id: number; patient_id: number; doctor_id: number | null },
-  reportFilename: string,
+  reportBuffer: Buffer,
+  reportExt: string,
   report_notes: string | undefined,
   vitals_data: string | undefined
 ): void => {
@@ -247,8 +260,7 @@ const finalizeReport = (
 
       // Priority 2: PDF text extraction (pdfjs) OR image OCR (tesseract)
       if (Object.keys(vitalsToSave).length === 0) {
-        const filePath   = path.join(__dirname, '../uploads/lab-reports', reportFilename);
-        const reportText = await extractReportText(filePath);
+        const reportText = await extractReportText(reportBuffer, reportExt);
         if (reportText.trim().length > 20) {
           const extracted = extractVitalsFromText(reportText);
           if (Object.keys(extracted).length > 0) {
@@ -309,12 +321,17 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
     );
     if (!existing.length) { res.status(404).json({ message: 'Not found' }); return; }
     if (!req.file)        { res.status(400).json({ message: 'Report file is required' }); return; }
+    if (!(await verifyFileType(req.file.buffer, IMAGE_AND_PDF_MIMES))) {
+      res.status(400).json({ message: 'File content does not match an accepted type' }); return;
+    }
 
     // Delete previous file if replacing
     if (existing[0].report_file) {
-      const oldPath = path.join(__dirname, '../uploads/lab-reports', existing[0].report_file);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      await deleteStoredFile(LAB_REPORTS_DIR, existing[0].report_file);
     }
+
+    const reportFilename = generateStoredFilename('lab', labId, req.file.originalname);
+    await persistUploadedFile(LAB_REPORTS_DIR, reportFilename, req.file.buffer, req.file.mimetype);
 
     // Save the report record immediately
     const { rows: [request] } = await queryAs(actor(req), `
@@ -323,12 +340,12 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
           status='completed', updated_at=NOW()
       WHERE id=$4
       RETURNING *
-    `, [req.file.filename, req.file.mimetype, report_notes || null, req.params.id]);
+    `, [reportFilename, req.file.mimetype, report_notes || null, req.params.id]);
 
     // Respond right away — don't block on OCR
     res.json(request);
 
-    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data);
+    finalizeReport(labId, request, req.file.buffer, path.extname(req.file.originalname).toLowerCase(), report_notes, vitals_data);
   } catch (err) { next(err); }
 };
 
@@ -353,6 +370,12 @@ const createDirect = async (req: Request, res: Response, next: NextFunction): Pr
     if (!doctor_id)        { res.status(400).json({ message: 'Doctor is required' }); return; }
     if (!test_description) { res.status(400).json({ message: 'Test description is required' }); return; }
     if (!req.file)         { res.status(400).json({ message: 'Report file is required' }); return; }
+    if (!(await verifyFileType(req.file.buffer, IMAGE_AND_PDF_MIMES))) {
+      res.status(400).json({ message: 'File content does not match an accepted type' }); return;
+    }
+
+    const reportFilename = generateStoredFilename('lab', labId, req.file.originalname);
+    await persistUploadedFile(LAB_REPORTS_DIR, reportFilename, req.file.buffer, req.file.mimetype);
 
     const { rows: [request] } = await queryAs(actor(req), `
       INSERT INTO lab_requests
@@ -362,12 +385,12 @@ const createDirect = async (req: Request, res: Response, next: NextFunction): Pr
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'completed',$10,$11)
       RETURNING *
     `, [doctor_id, patient_id, labId, test_description, report_type || null, notes || null,
-        req.file.filename, req.file.mimetype, report_notes || null,
+        reportFilename, req.file.mimetype, report_notes || null,
         sample_id || null, sample_collected_at || null]);
 
     res.status(201).json(request);
 
-    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data);
+    finalizeReport(labId, request, req.file.buffer, path.extname(req.file.originalname).toLowerCase(), report_notes, vitals_data);
   } catch (err) { next(err); }
 };
 
@@ -481,8 +504,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
     if (rows[0].report_file) {
-      const fp = path.join(__dirname, '../uploads/lab-reports', rows[0].report_file);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      await deleteStoredFile(LAB_REPORTS_DIR, rows[0].report_file);
     }
 
     await queryAs(actor(req), 'DELETE FROM lab_requests WHERE id=$1', [req.params.id]);
@@ -490,4 +512,29 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
-export { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove };
+// SEC-28: replaces the removed unauthenticated `/uploads/...` static route.
+// Same ownership gate for both file types a lab_requests row can carry.
+const serveFile = (column: 'report_file' | 'referral_file') =>
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { rows } = await queryAs(actor(req),
+        `SELECT ${column}, patient_id, doctor_id, laboratory_id FROM lab_requests WHERE id=$1`,
+        [req.params.id]
+      );
+      const row = rows[0];
+      const allowed = row && (
+        req.user.role === 'admin' ||
+        row.patient_id === req.user.id ||
+        row.doctor_id === req.user.id ||
+        row.laboratory_id === req.user.id
+      );
+      const filename = row?.[column];
+      if (!allowed || !filename) { res.status(404).json({ message: 'Not found' }); return; }
+      const subdir = column === 'report_file' ? LAB_REPORTS_DIR : LAB_REFERRALS_DIR;
+      await sendStoredFile(res, subdir, filename, { inlineFilename: filename });
+    } catch (err) { next(err); }
+  };
+const serveReportFile = serveFile('report_file');
+const serveReferralFile = serveFile('referral_file');
+
+export { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove, serveReportFile, serveReferralFile };

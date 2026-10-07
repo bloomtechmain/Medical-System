@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import AuthedImg from '../components/common/AuthedImg';
+import { openAuthedFile } from '../utils/authedFiles';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -372,19 +374,19 @@ function ReportModal({ req: r, onClose }: ReportModalProps) {
 
           {r.report_file && (
             <div>
-              <a href={`${API_BASE}/uploads/lab-reports/${r.report_file}`} target="_blank" rel="noreferrer"
-                className="flex items-center gap-3 p-4 bg-primary-50 border-2 border-primary-200 rounded-xl hover:bg-primary-100 transition-colors group">
+              <button type="button" onClick={() => openAuthedFile(`${API_BASE}/api/lab-requests/${r.id}/report-file`)}
+                className="w-full flex items-center gap-3 p-4 bg-primary-50 border-2 border-primary-200 rounded-xl hover:bg-primary-100 transition-colors group">
                 <span className="text-3xl">{isPDF ? '📄' : '🖼️'}</span>
-                <div className="flex-1">
+                <div className="flex-1 text-left">
                   <p className="text-sm font-bold text-primary-700">{isPDF ? t('labTests.reportModal.openPdf') : t('labTests.reportModal.viewImage')}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{t('labTests.reportModal.clickToView')}</p>
                 </div>
                 <svg className="w-5 h-5 text-primary-500 group-hover:text-primary-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
-              </a>
+              </button>
               {!isPDF && (
-                <img src={`${API_BASE}/uploads/lab-reports/${r.report_file}`} alt="Lab Report"
+                <AuthedImg src={`${API_BASE}/api/lab-requests/${r.id}/report-file`} alt="Lab Report"
                   className="mt-3 w-full max-h-72 object-contain rounded-xl border border-gray-200 bg-gray-50" />
               )}
             </div>

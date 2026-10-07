@@ -2,22 +2,68 @@ import 'dotenv/config';
 import http from 'http';
 import fs from 'fs';
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import path from 'path';
 import { connectDB } from './config/db';
 import { initSocket } from './config/socket';
+import { ALLOWED_ORIGINS } from './config/corsOrigins';
+import { registerLimiter, publicSearchLimiter } from './middleware/rateLimit';
 import errorHandler from './middleware/errorHandler';
 
+// Fail fast with a clear message instead of starting in a broken state
+// (ARCH-04) — e.g. a missing JWT_SECRET would otherwise only surface later,
+// confusingly, the first time someone tries to log in.
+const requireEnv = (names: string[]): void => {
+  const missing = names.filter(n => !process.env[n]);
+  if (missing.length) {
+    console.error(`Missing required environment variable(s): ${missing.join(', ')}`);
+    process.exit(1);
+  }
+};
+// SEC-21: an unset NODE_ENV previously meant stack traces and raw error
+// detail went to the client by default (errorHandler.ts's check only hides
+// them when NODE_ENV === 'production', so "unset" silently behaved like
+// development in production). Require it explicitly instead of assuming.
+const VALID_NODE_ENVS = ['development', 'production', 'test'];
+if (!VALID_NODE_ENVS.includes(process.env.NODE_ENV || '')) {
+  console.error(`NODE_ENV must be one of: ${VALID_NODE_ENVS.join(', ')} (got: ${process.env.NODE_ENV || '<unset>'})`);
+  process.exit(1);
+}
+
+requireEnv(['JWT_SECRET']);
+requireEnv(process.env.DATABASE_URL ? [] : ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']);
+if (process.env.NODE_ENV === 'production') requireEnv(['CLIENT_URL']);
+
 const app    = express();
+app.disable('x-powered-by'); // SEC-21: don't advertise the framework/version
+// SEC-22: trust the first hop's X-Forwarded-For (Railway today, the ALB on
+// AWS later) so rate limiting below counts the real client IP, not the
+// proxy's — without this every request looks like it comes from one IP.
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 initSocket(server);
 
-const ALLOWED_ORIGINS: (string | undefined)[] = [
-  process.env.CLIENT_URL,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-];
+// SEC-20: no security headers at all previously (HSTS, nosniff, frame
+// options, CSP). This server is mostly a JSON API — CSP has no real effect
+// there — but it also serves the built client as a fallback (see
+// `clientDist` below), where it matters for real. The CSP intentionally
+// stays broad on connect-src/img-src rather than pinning this build to one
+// backend domain, matching the same "one image, any environment" goal as
+// the runtime config.js (ARCH-04) — a stricter, environment-specific CSP
+// is set on the client's own static hosting instead (client/public/serve.json).
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https:', 'wss:'],
+    },
+  },
+}));
 
 app.use(cors({
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) =>
@@ -27,14 +73,13 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Ensure upload directories exist (Railway has ephemeral FS)
-['uploads', 'uploads/prescriptions', 'uploads/lab-reports', 'uploads/lab-referrals', 'uploads/patient-reports'].forEach(dir => {
-  const p = path.join(__dirname, dir);
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
-});
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/uploads/lab-reports', express.static(path.join(__dirname, 'uploads/lab-reports')));
+// SEC-28: the old /uploads/:subdir/:filename route (ARCH-06) served any file
+// to anyone with no login check at all, with guessable filenames. Removed —
+// files are now only reachable through authenticated, ownership-checked
+// routes: GET /api/consultations/:id/prescription-file,
+// GET /api/lab-requests/:id/report-file, GET /api/lab-requests/:id/referral-file,
+// plus the pre-existing patient-reports/access-requests/lab-view-requests
+// equivalents.
 
 import { registerOrganization, searchOwnerCandidates, searchHospitalsClinics } from './controllers/organizationController';
 import organizationTeamRoutes from './routes/organizationTeamRoutes';
@@ -76,9 +121,9 @@ app.use('/api/lab-catalog',       labCatalogRoutes);
 app.use('/api/prescription-assignments', prescriptionAssignmentRoutes);
 // Public self-registration — mounted before the admin-gated organizations router
 // so it is never touched by the protect/authorize middleware.
-app.post('/api/organizations/register', registerOrganization);
-app.get('/api/organizations/search-owner', searchOwnerCandidates);
-app.get('/api/organizations/search-hospitals-clinics', searchHospitalsClinics);
+app.post('/api/organizations/register', registerLimiter, registerOrganization);
+app.get('/api/organizations/search-owner', publicSearchLimiter, searchOwnerCandidates);
+app.get('/api/organizations/search-hospitals-clinics', publicSearchLimiter, searchHospitalsClinics);
 app.use('/api/org-team', organizationTeamRoutes);
 app.use('/api/organizations',     organizationRoutes);
 

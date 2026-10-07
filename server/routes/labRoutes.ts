@@ -1,27 +1,16 @@
 import { Router } from 'express';
 import path from 'path';
-import fs from 'fs';
 import multer from 'multer';
 import { protect, authorize } from '../middleware/auth';
-import { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove } from '../controllers/labController';
+import { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove, serveReportFile, serveReferralFile } from '../controllers/labController';
 import { getAll as getMessages, create as createMessage } from '../controllers/labRequestMessagesController';
-import { Request } from 'express';
 
 const router = Router();
 
-const labReportsDir = path.join(__dirname, '../uploads/lab-reports');
-if (!fs.existsSync(labReportsDir)) fs.mkdirSync(labReportsDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: labReportsDir,
-  filename: (req: Request, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `lab_${req.user?.id || 'u'}_${Date.now()}${ext}`);
-  },
-});
-
+// Memory storage: the controller persists the buffer via config/fileStorage
+// (S3 if AWS_S3_BUCKET is set, local disk otherwise) — ARCH-06.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
   fileFilter: (_req, file, cb) => {
     const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'];
@@ -31,19 +20,8 @@ const upload = multer({
 });
 
 // Optional doctor's prescription/referral slip, attached when a patient self-books a test
-const labReferralsDir = path.join(__dirname, '../uploads/lab-referrals');
-if (!fs.existsSync(labReferralsDir)) fs.mkdirSync(labReferralsDir, { recursive: true });
-
-const referralStorage = multer.diskStorage({
-  destination: labReferralsDir,
-  filename: (req: Request, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `referral_${req.user?.id || 'u'}_${Date.now()}${ext}`);
-  },
-});
-
 const uploadReferral = multer({
-  storage: referralStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
   fileFilter: (_req, file, cb) => {
     const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'];
@@ -54,6 +32,8 @@ const uploadReferral = multer({
 
 router.get('/',    protect, authorize('doctor', 'patient', 'laboratory', 'admin'), getAll);
 router.get('/:id', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), getOne);
+router.get('/:id/report-file',   protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReportFile);
+router.get('/:id/referral-file', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReferralFile);
 router.post('/',   protect, authorize('doctor', 'patient'), uploadReferral.single('referral'), create);
 router.post('/direct', protect, authorize('laboratory'), upload.single('report'), createDirect);
 router.patch('/:id/report',  protect, authorize('laboratory'), upload.single('report'), uploadReport);
