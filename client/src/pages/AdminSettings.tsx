@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
@@ -30,6 +30,39 @@ export default function AdminSettings() {
     onError: (err: any) => toast.error(err.message || t('settings.toastError')),
   });
 
+  const [mfaSetupData, setMfaSetupData] = useState<{ secret: string; qrCodeDataUrl: string } | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [showDisablePrompt, setShowDisablePrompt] = useState(false);
+  const [disableCode, setDisableCode] = useState('');
+
+  const setupMutation = useMutation({
+    mutationFn: () => authApi.mfaSetup(),
+    onSuccess: (data: any) => setMfaSetupData(data),
+    onError: (err: any) => toast.error(err.message || t('settings.mfa.invalidCode')),
+  });
+
+  const verifySetupMutation = useMutation({
+    mutationFn: (code: string) => authApi.mfaVerifySetup(code),
+    onSuccess: () => {
+      toast.success(t('settings.mfa.setupSuccess'));
+      setMfaSetupData(null);
+      setMfaCode('');
+      qc.invalidateQueries({ queryKey: ['me'] });
+    },
+    onError: (err: any) => toast.error(err.message || t('settings.mfa.invalidCode')),
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: (code: string) => authApi.mfaDisable(code),
+    onSuccess: () => {
+      toast.success(t('settings.mfa.disableSuccess'));
+      setShowDisablePrompt(false);
+      setDisableCode('');
+      qc.invalidateQueries({ queryKey: ['me'] });
+    },
+    onError: (err: any) => toast.error(err.message || t('settings.mfa.invalidCode')),
+  });
+
   if (isLoading) {
     return <div className="text-sm text-gray-400">{tc('actions.loading')}</div>;
   }
@@ -59,6 +92,79 @@ export default function AdminSettings() {
           </button>
         </div>
       </form>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4 max-w-3xl mt-6">
+        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">{t('settings.sections.mfa')}</h3>
+        <p className="text-sm text-gray-500">{t('settings.mfa.description')}</p>
+
+        {me?.mfa_enabled ? (
+          <>
+            <p className="text-sm font-medium text-green-700">{t('settings.mfa.enabled')}</p>
+            {!showDisablePrompt ? (
+              <button type="button" onClick={() => setShowDisablePrompt(true)} className="btn-secondary px-4 py-2">
+                {t('settings.mfa.disable')}
+              </button>
+            ) : (
+              <div className="space-y-2 max-w-xs">
+                <label className="label">{t('settings.mfa.disablePrompt')}</label>
+                <input
+                  type="text" inputMode="numeric" maxLength={6}
+                  className="input text-center tracking-widest"
+                  placeholder={t('settings.mfa.codePlaceholder')}
+                  value={disableCode}
+                  onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ''))}
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => disableMutation.mutate(disableCode)}
+                    disabled={disableCode.length !== 6 || disableMutation.isPending}
+                    className="btn-primary px-4 py-2"
+                  >
+                    {t('settings.mfa.disable')}
+                  </button>
+                  <button type="button" onClick={() => { setShowDisablePrompt(false); setDisableCode(''); }} className="btn-secondary px-4 py-2">
+                    {t('settings.mfa.cancel')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : mfaSetupData ? (
+          <div className="space-y-3 max-w-xs">
+            <p className="text-sm text-gray-500">{t('settings.mfa.scanInstructions')}</p>
+            <img src={mfaSetupData.qrCodeDataUrl} alt="MFA QR code" className="w-40 h-40 border border-gray-100 rounded-lg" />
+            <p className="text-xs text-gray-400 break-all">{t('settings.mfa.manualEntry')} <span className="font-mono">{mfaSetupData.secret}</span></p>
+            <input
+              type="text" inputMode="numeric" maxLength={6}
+              className="input text-center tracking-widest"
+              placeholder={t('settings.mfa.codePlaceholder')}
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => verifySetupMutation.mutate(mfaCode)}
+                disabled={mfaCode.length !== 6 || verifySetupMutation.isPending}
+                className="btn-primary px-4 py-2"
+              >
+                {t('settings.mfa.confirm')}
+              </button>
+              <button type="button" onClick={() => { setMfaSetupData(null); setMfaCode(''); }} className="btn-secondary px-4 py-2">
+                {t('settings.mfa.cancel')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500">{t('settings.mfa.disabled')}</p>
+            <button type="button" onClick={() => setupMutation.mutate()} disabled={setupMutation.isPending} className="btn-primary px-4 py-2">
+              {t('settings.mfa.enable')}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

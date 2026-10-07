@@ -1,8 +1,12 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { authenticator } from 'otplib';
+import QRCode from 'qrcode';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs } from '../config/db';
 import { DbUser } from '../types';
+
+const MFA_PENDING_PURPOSE = 'mfa_pending';
 
 const generateToken = (
   user: Pick<DbUser, 'id' | 'email' | 'role'>,
@@ -205,18 +209,116 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
       return;
     }
 
+    // SEC-14: password alone isn't enough for an MFA-enrolled account — hand
+    // back a short-lived pre-auth token (not a real session) that only proves
+    // "this request already knows the password"; mfaLogin exchanges it + a
+    // valid TOTP code for the actual session token.
+    if (user.mfa_enabled) {
+      const mfaToken = jwt.sign(
+        { id: user.id, purpose: MFA_PENDING_PURPOSE },
+        process.env.JWT_SECRET as string,
+        { expiresIn: '5m' }
+      );
+      res.json({ mfaRequired: true, mfaToken });
+      return;
+    }
+
     const organization = await getOrgForUser(user.id);
-    const { password: _, ...safeUser } = user;
+    const { password: _, mfa_secret: __, ...safeUser } = user;
     res.json({ user: { ...safeUser, organization }, token: generateToken(user) });
   } catch (err) {
     next(err);
   }
 };
 
+const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { mfaToken, code } = req.body as { mfaToken: string; code: string };
+    let payload: { id: number; purpose: string };
+    try {
+      payload = jwt.verify(mfaToken, process.env.JWT_SECRET as string) as typeof payload;
+    } catch {
+      res.status(401).json({ message: 'MFA session expired, please log in again' });
+      return;
+    }
+    if (payload.purpose !== MFA_PENDING_PURPOSE) {
+      res.status(401).json({ message: 'Invalid MFA session' });
+      return;
+    }
+
+    const { rows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [payload.id]);
+    if (!rows.length || !rows[0].is_active || !rows[0].mfa_enabled || !rows[0].mfa_secret) {
+      res.status(401).json({ message: 'Invalid MFA session' });
+      return;
+    }
+    const user = rows[0];
+
+    if (!code || !authenticator.verify({ token: String(code), secret: user.mfa_secret })) {
+      res.status(401).json({ message: 'Invalid authentication code' });
+      return;
+    }
+
+    const organization = await getOrgForUser(user.id);
+    const { password: _, mfa_secret: __, ...safeUser } = user;
+    res.json({ user: { ...safeUser, organization }, token: generateToken(user) });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// SEC-14 — admin-only TOTP MFA. Two-step enrollment: mfaSetup generates and
+// stores a secret but leaves mfa_enabled false; mfaVerifySetup only flips it
+// to true once the admin proves (by entering a live code) their authenticator
+// app actually has that secret, so a setup call that's never completed can't
+// accidentally lock an account out.
+const mfaSetup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const secret = authenticator.generateSecret();
+    await pool.query('UPDATE users SET mfa_secret = $1 WHERE id = $2', [secret, req.user.id]);
+    const uri = authenticator.keyuri(req.user.email, 'Core Health', secret);
+    const qrCodeDataUrl = await QRCode.toDataURL(uri);
+    res.json({ secret, qrCodeDataUrl });
+  } catch (err) { next(err); }
+};
+
+const mfaVerifySetup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { code } = req.body as { code: string };
+    const { rows } = await pool.query<DbUser>('SELECT mfa_secret FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length || !rows[0].mfa_secret) {
+      res.status(400).json({ message: 'Start MFA setup first' });
+      return;
+    }
+    if (!code || !authenticator.verify({ token: String(code), secret: rows[0].mfa_secret })) {
+      res.status(400).json({ message: 'Invalid authentication code' });
+      return;
+    }
+    await pool.query('UPDATE users SET mfa_enabled = TRUE WHERE id = $1', [req.user.id]);
+    res.json({ mfa_enabled: true });
+  } catch (err) { next(err); }
+};
+
+const mfaDisable = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { code } = req.body as { code: string };
+    const { rows } = await pool.query<DbUser>('SELECT mfa_secret, mfa_enabled FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length || !rows[0].mfa_enabled || !rows[0].mfa_secret) {
+      res.status(400).json({ message: 'MFA is not enabled' });
+      return;
+    }
+    if (!code || !authenticator.verify({ token: String(code), secret: rows[0].mfa_secret })) {
+      res.status(400).json({ message: 'Invalid authentication code' });
+      return;
+    }
+    await pool.query('UPDATE users SET mfa_enabled = FALSE, mfa_secret = NULL WHERE id = $1', [req.user.id]);
+    res.json({ mfa_enabled: false });
+  } catch (err) { next(err); }
+};
+
 const getMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query<Omit<DbUser, 'password'>>(
-      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, role, is_active, mfa_enabled, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
@@ -307,4 +409,4 @@ const listImpersonationActions = async (req: Request, res: Response, next: NextF
   } catch (err) { next(err); }
 };
 
-export { register, login, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions };
+export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions };
