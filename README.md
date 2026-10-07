@@ -54,7 +54,10 @@ cd server
 cp .env.example .env      # fill in your DB credentials and JWT_SECRET
 npm install
 npm run db:migrate        # create tables
-npm run db:seed           # seed admin user (admin@pharmacy.com / admin123)
+
+# Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD in .env first, then:
+npm run db:seed           # creates that one admin account — skipped if unset
+
 npm run dev
 ```
 
@@ -69,12 +72,13 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173)
 
-## Default Admin Credentials
+## Admin Account
 
-| Field    | Value                 |
-|----------|-----------------------|
-| Email    | admin@pharmacy.com    |
-| Password | admin123              |
+No default admin account exists (SEC-07) — `npm run db:seed` creates exactly
+one, from `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` in your own `.env`. For
+a full local demo dataset (sample doctors, patients, pharmacies, lab
+results), see `corehealth_seed_data.sql` — **local development only**,
+never run it against a shared or deployed environment.
 
 ## API Endpoints
 
