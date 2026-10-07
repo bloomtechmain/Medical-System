@@ -4,7 +4,7 @@ import { pool, queryAs, getTenantSchema, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
 import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
 import { saveVitalsFromLab } from './patientVitalsController';
-import { generateStoredFilename, persistUploadedFile, deleteStoredFile } from '../config/fileStorage';
+import { generateStoredFilename, persistUploadedFile, deleteStoredFile, verifyFileType, IMAGE_AND_PDF_MIMES } from '../config/fileStorage';
 
 const LAB_REPORTS_DIR = 'lab-reports';
 const LAB_REFERRALS_DIR = 'lab-referrals';
@@ -102,6 +102,9 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     let referralFile: string | null = null;
     if (req.file) {
+      if (!(await verifyFileType(req.file.buffer, IMAGE_AND_PDF_MIMES))) {
+        res.status(400).json({ message: 'File content does not match an accepted type' }); return;
+      }
       referralFile = generateStoredFilename('referral', req.user.id, req.file.originalname);
       await persistUploadedFile(LAB_REFERRALS_DIR, referralFile, req.file.buffer, req.file.mimetype);
     }
@@ -318,6 +321,9 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
     );
     if (!existing.length) { res.status(404).json({ message: 'Not found' }); return; }
     if (!req.file)        { res.status(400).json({ message: 'Report file is required' }); return; }
+    if (!(await verifyFileType(req.file.buffer, IMAGE_AND_PDF_MIMES))) {
+      res.status(400).json({ message: 'File content does not match an accepted type' }); return;
+    }
 
     // Delete previous file if replacing
     if (existing[0].report_file) {
@@ -364,6 +370,9 @@ const createDirect = async (req: Request, res: Response, next: NextFunction): Pr
     if (!doctor_id)        { res.status(400).json({ message: 'Doctor is required' }); return; }
     if (!test_description) { res.status(400).json({ message: 'Test description is required' }); return; }
     if (!req.file)         { res.status(400).json({ message: 'Report file is required' }); return; }
+    if (!(await verifyFileType(req.file.buffer, IMAGE_AND_PDF_MIMES))) {
+      res.status(400).json({ message: 'File content does not match an accepted type' }); return;
+    }
 
     const reportFilename = generateStoredFilename('lab', labId, req.file.originalname);
     await persistUploadedFile(LAB_REPORTS_DIR, reportFilename, req.file.buffer, req.file.mimetype);

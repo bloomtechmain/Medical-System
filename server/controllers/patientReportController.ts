@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { queryAs, RLSActor } from '../config/db';
 import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
 import { saveVitalsFromPatientUpload } from './patientVitalsController';
-import { generateStoredFilename, persistUploadedFile, sendStoredFile, deleteStoredFile } from '../config/fileStorage';
+import { generateStoredFilename, persistUploadedFile, sendStoredFile, deleteStoredFile, verifyFileType, IMAGE_AND_PDF_MIMES } from '../config/fileStorage';
 
 const PATIENT_REPORTS_DIR = 'patient-reports';
 
@@ -15,6 +15,9 @@ const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.rol
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.file) { res.status(400).json({ message: 'Report file is required' }); return; }
+    if (!(await verifyFileType(req.file.buffer, IMAGE_AND_PDF_MIMES))) {
+      res.status(400).json({ message: 'File content does not match an accepted type' }); return;
+    }
 
     const {
       title, report_type, laboratory_name,
