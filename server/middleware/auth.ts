@@ -25,6 +25,20 @@ const protect = async (req: Request, res: Response, next: NextFunction): Promise
     }
 
     req.user = decoded;
+
+    // SEC-17 #7: impersonation_log only recorded that a session started —
+    // nothing taken during it. Mutating requests (not reads — high-volume,
+    // low audit value) made while impersonating are logged here, in the
+    // one place that already sees every request and already knows
+    // impersonatedBy from the JWT. Fire-and-forget: a logging failure
+    // must never block the actual request.
+    if (decoded.impersonatedBy && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      pool.query(
+        'INSERT INTO public.impersonation_action_log (admin_id, target_user_id, method, path) VALUES ($1,$2,$3,$4)',
+        [decoded.impersonatedBy, decoded.id, req.method, req.originalUrl]
+      ).catch(err => console.error('[impersonation_action_log]', (err as Error).message));
+    }
+
     next();
   } catch {
     res.status(401).json({ message: 'Not authorized, invalid token' });

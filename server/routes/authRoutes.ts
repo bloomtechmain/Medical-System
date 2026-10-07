@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { register, login, getMe, impersonate, listImpersonations } from '../controllers/authController';
+import { register, login, getMe, impersonate, listImpersonations, listImpersonationActions } from '../controllers/authController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
 import { loginLimiter, registerLimiter } from '../middleware/rateLimit';
@@ -30,5 +30,6 @@ router.get('/me', protect, getMe);
 
 router.post('/impersonate/:userId', protect, authorize('admin'), impersonate);
 router.get('/impersonations',       protect, authorize('admin'), listImpersonations);
+router.get('/impersonation-actions', protect, authorize('admin'), listImpersonationActions);
 
 export default router;
