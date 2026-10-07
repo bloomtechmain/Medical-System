@@ -2,6 +2,7 @@ import 'dotenv/config';
 import http from 'http';
 import fs from 'fs';
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import path from 'path';
 import { connectDB } from './config/db';
@@ -43,6 +44,27 @@ app.disable('x-powered-by'); // SEC-21: don't advertise the framework/version
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 initSocket(server);
+
+// SEC-20: no security headers at all previously (HSTS, nosniff, frame
+// options, CSP). This server is mostly a JSON API — CSP has no real effect
+// there — but it also serves the built client as a fallback (see
+// `clientDist` below), where it matters for real. The CSP intentionally
+// stays broad on connect-src/img-src rather than pinning this build to one
+// backend domain, matching the same "one image, any environment" goal as
+// the runtime config.js (ARCH-04) — a stricter, environment-specific CSP
+// is set on the client's own static hosting instead (client/public/serve.json).
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https:', 'wss:'],
+    },
+  },
+}));
 
 app.use(cors({
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) =>
