@@ -7,6 +7,20 @@ on:
     branches: [main]
 
 jobs:
+  # SEC-07: catches secrets committed anywhere in history, not just the
+  # current tree — a .env accidentally added-then-removed still leaks via
+  # `git log`/`git show` otherwise.
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   check-server:
     name: Server — Lint & Build
     runs-on: ubuntu-latest
