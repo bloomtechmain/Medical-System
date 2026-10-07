@@ -1,4 +1,4 @@
-FROM node:20.18.1-slim AS builder
+FROM node:22.12.0-slim AS builder
 
 WORKDIR /app
 COPY package*.json ./
@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 # ── Runtime stage ──────────────────────────────────────────────────────────────
-FROM node:20.18.1-slim
+FROM node:22.12.0-slim
 
 WORKDIR /app
 

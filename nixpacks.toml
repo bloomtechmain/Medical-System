@@ -2,7 +2,7 @@
 # so nodejs must be listed here or npm will not be found.
 [phases.setup]
 nixPkgs = [
-  "nodejs_20",
+  "nodejs_22",
   "cairo",
   "pango",
   "libpng",
