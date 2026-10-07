@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { useNavigate, Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, FormEvent } from 'react';
 import toast from 'react-hot-toast';
 import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -15,19 +15,45 @@ export default function Login() {
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>();
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const goToRoleHome = (user: User) => {
+    const routes: Record<string, string> = { admin: '/admin', doctor: '/doctor', pharmacist: '/pharmacist', patient: '/patient', laboratory: '/laboratory' };
+    navigate(routes[user.role] || '/');
+  };
 
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
     try {
-      const res = await authApi.login(data) as unknown as { user: User; token: string };
+      const res = await authApi.login(data) as unknown as { user: User; token: string; mfaRequired?: boolean; mfaToken?: string };
+      if (res.mfaRequired && res.mfaToken) {
+        setMfaToken(res.mfaToken);
+        return;
+      }
       if (!res?.user?.role) throw new Error('Invalid response from server');
       login(res.user, res.token);
-      const routes: Record<string, string> = { admin: '/admin', doctor: '/doctor', pharmacist: '/pharmacist', patient: '/patient', laboratory: '/laboratory' };
-      navigate(routes[res.user.role] || '/');
+      goToRoleHome(res.user);
     } catch (err: any) {
       toast.error(err.message || 'Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onSubmitMfa = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!mfaToken) return;
+    setLoading(true);
+    try {
+      const res = await authApi.mfaLogin({ mfaToken, code: mfaCode }) as unknown as { user: User; token: string };
+      if (!res?.user?.role) throw new Error('Invalid response from server');
+      login(res.user, res.token);
+      goToRoleHome(res.user);
+    } catch (err: any) {
+      toast.error(err.message || 'Invalid authentication code');
     } finally {
       setLoading(false);
     }
@@ -94,6 +120,40 @@ export default function Login() {
           </Link>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+            {mfaToken ? (
+              <>
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold text-gray-900">Two-factor authentication</h1>
+                  <p className="text-gray-500 text-sm mt-1">Enter the 6-digit code from your authenticator app</p>
+                </div>
+                <form onSubmit={onSubmitMfa} className="space-y-4">
+                  <div>
+                    <label className="label">Authentication code</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoFocus
+                      maxLength={6}
+                      className="input text-center text-lg tracking-widest"
+                      placeholder="000000"
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                    />
+                  </div>
+                  <button type="submit" className="btn-primary w-full mt-2 py-2.5" disabled={loading || mfaCode.length !== 6}>
+                    {loading ? 'Verifying...' : 'Verify'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMfaToken(null); setMfaCode(''); }}
+                    className="w-full text-sm text-gray-500 hover:text-gray-700 text-center"
+                  >
+                    ← Back to sign in
+                  </button>
+                </form>
+              </>
+            ) : (
+            <>
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
               <p className="text-gray-500 text-sm mt-1">Sign in to your Core Health account</p>
@@ -160,6 +220,8 @@ export default function Login() {
                 Register here
               </Link>
             </p>
+            </>
+            )}
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">

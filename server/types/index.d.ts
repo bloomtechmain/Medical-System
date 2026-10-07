@@ -23,6 +23,8 @@ export interface DbUser {
   password: string;
   role: UserRole;
   is_active: boolean;
+  mfa_secret: string | null;
+  mfa_enabled: boolean;
   created_at: Date;
   updated_at: Date;
 }

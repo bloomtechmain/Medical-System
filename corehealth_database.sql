@@ -116,6 +116,12 @@ CREATE TABLE public.users (
   role       VARCHAR(20)  NOT NULL DEFAULT 'patient'
              CHECK (role IN ('admin','doctor','pharmacist','patient','laboratory')),
   is_active  BOOLEAN      NOT NULL DEFAULT TRUE,
+  -- SEC-14: TOTP MFA, admin accounts only (enforced in app code, not here).
+  -- mfa_secret is written as soon as setup starts but mfa_enabled only flips
+  -- to TRUE once the admin proves they can generate a valid code with it —
+  -- see authController's mfaSetup/mfaVerifySetup.
+  mfa_secret   VARCHAR(64),
+  mfa_enabled  BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

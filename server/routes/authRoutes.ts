@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { register, login, getMe, impersonate, listImpersonations, listImpersonationActions } from '../controllers/authController';
+import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions } from '../controllers/authController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
 import { loginLimiter, registerLimiter } from '../middleware/rateLimit';
@@ -26,7 +26,18 @@ router.post('/login',
   login
 );
 
+router.post('/mfa/login',
+  loginLimiter,
+  [body('mfaToken').notEmpty(), body('code').notEmpty()],
+  validate,
+  mfaLogin
+);
+
 router.get('/me', protect, getMe);
+
+router.post('/mfa/setup',        protect, authorize('admin'), mfaSetup);
+router.post('/mfa/verify-setup', protect, authorize('admin'), mfaVerifySetup);
+router.post('/mfa/disable',      protect, authorize('admin'), mfaDisable);
 
 router.post('/impersonate/:userId', protect, authorize('admin'), impersonate);
 router.get('/impersonations',       protect, authorize('admin'), listImpersonations);

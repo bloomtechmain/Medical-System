@@ -35,6 +35,10 @@ export const authApi = {
   me:       (): Promise<any>              => api.get('/auth/me'),
   impersonate:       (userId: number): Promise<any> => api.post(`/auth/impersonate/${userId}`),
   getImpersonations: (): Promise<any>               => api.get('/auth/impersonations'),
+  mfaLogin:      (data: { mfaToken: string; code: string }): Promise<any> => api.post('/auth/mfa/login', data),
+  mfaSetup:      (): Promise<any>                     => api.post('/auth/mfa/setup'),
+  mfaVerifySetup: (code: string): Promise<any>        => api.post('/auth/mfa/verify-setup', { code }),
+  mfaDisable:    (code: string): Promise<any>         => api.post('/auth/mfa/disable', { code }),
 };
 
 export const medicineApi = {
