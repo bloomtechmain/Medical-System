@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword } from '../controllers/authController';
+import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword } from '../controllers/authController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
 import { loginLimiter, registerLimiter } from '../middleware/rateLimit';
@@ -40,6 +40,19 @@ router.post('/refresh',
   refreshAccessToken
 );
 router.post('/logout', logout);
+
+router.post('/forgot-password',
+  registerLimiter,
+  [body('email').isEmail().normalizeEmail()],
+  validate,
+  forgotPassword
+);
+router.post('/reset-password',
+  loginLimiter,
+  [body('token').notEmpty(), body('newPassword').isLength({ min: 10 }).withMessage('Password must be at least 10 characters')],
+  validate,
+  resetPassword
+);
 
 router.get('/me', protect, getMe);
 

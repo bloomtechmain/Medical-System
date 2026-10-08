@@ -78,6 +78,7 @@ END $$;
 DROP SCHEMA IF EXISTS clinical CASCADE;
 
 -- public clinical/operational tables from a previous run
+DROP TABLE IF EXISTS public.password_reset_tokens   CASCADE;
 DROP TABLE IF EXISTS public.refresh_tokens          CASCADE;
 DROP TABLE IF EXISTS public.impersonation_action_log CASCADE;
 DROP TABLE IF EXISTS public.impersonation_log      CASCADE;
@@ -149,6 +150,22 @@ CREATE TABLE public.refresh_tokens (
 );
 CREATE INDEX idx_refresh_tokens_user ON public.refresh_tokens(user_id);
 CREATE INDEX idx_refresh_tokens_hash ON public.refresh_tokens(token_hash);
+
+-- SEC-17 (auth): forgot-password flow. Same opaque-token-hashed-at-rest
+-- pattern as refresh_tokens — only the SHA-256 hash is stored, so a DB leak
+-- doesn't hand out working reset links. used_at (not a DELETE) keeps a
+-- record that a given token was already redeemed, so a replay of an old
+-- emailed link is rejected rather than silently accepted.
+CREATE TABLE public.password_reset_tokens (
+  id         SERIAL       PRIMARY KEY,
+  user_id    INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  token_hash VARCHAR(64)  NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ  NOT NULL,
+  used_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_password_reset_tokens_user ON public.password_reset_tokens(user_id);
+CREATE INDEX idx_password_reset_tokens_hash ON public.password_reset_tokens(token_hash);
 
 -- Admin "View As" session-start audit trail — not per-action logging, just
 -- who viewed as whom and when. Admin-only operational record, not patient
