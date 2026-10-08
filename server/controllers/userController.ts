@@ -1,24 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool, queryAs, RLSActor } from '../config/db';
+import { parsePaging } from '../utils/pagination';
 
 // clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
 // live behind row-level security — queries against them must carry the
 // acting user's identity. See config/db.ts (queryAs).
 const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
-// PRO-03: admin's user list was never paginated. See medicineController.ts
-// for why the default is generous rather than "a page" — no page-through UI
-// exists client-side yet, so this bounds unbounded growth without silently
-// truncating what the admin list shows today.
-const DEFAULT_LIMIT = 500;
-const MAX_LIMIT = 1000;
-
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { role, limit: limitQ, offset: offsetQ } = req.query as Record<string, string | undefined>;
-    const limit  = Math.min(Math.max(parseInt(limitQ as string, 10) || DEFAULT_LIMIT, 1), MAX_LIMIT);
-    const offset = Math.max(parseInt(offsetQ as string, 10) || 0, 0);
+    const { role } = req.query as Record<string, string | undefined>;
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
 
     let query = 'SELECT id, name, email, role, is_active, created_at FROM users WHERE deleted_at IS NULL';
     const params: unknown[] = [];

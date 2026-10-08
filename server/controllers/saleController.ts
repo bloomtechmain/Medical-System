@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool, getTenantSchema } from '../config/db';
+import { parsePaging } from '../utils/pagination';
 
 const requireSchema = async (req: Request, res: Response): Promise<string | null> => {
   const schema = await getTenantSchema(req.user.id);
@@ -10,21 +11,12 @@ const requireSchema = async (req: Request, res: Response): Promise<string | null
   return schema;
 };
 
-// PRO-03: the sales list was never paginated. See medicineController.ts for
-// why the default is generous rather than "a page" — no page-through UI
-// exists client-side yet, so this bounds unbounded growth without silently
-// truncating what the sales list shows today.
-const DEFAULT_LIMIT = 500;
-const MAX_LIMIT = 1000;
-
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const schema = await requireSchema(req, res);
     if (!schema) return;
 
-    const { limit: limitQ, offset: offsetQ } = req.query as Record<string, string | undefined>;
-    const limit  = Math.min(Math.max(parseInt(limitQ as string, 10) || DEFAULT_LIMIT, 1), MAX_LIMIT);
-    const offset = Math.max(parseInt(offsetQ as string, 10) || 0, 0);
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
 
     const { rows } = await pool.query(`
       SELECT s.*, u.name AS sold_by_name

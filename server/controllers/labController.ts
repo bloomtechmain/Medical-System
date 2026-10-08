@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, getTenantSchema, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
-import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
-import { saveVitalsFromLab } from './patientVitalsController';
-import { readUploadToTempFile, deleteUpload } from '../utils/fileStorage';
+import { deleteUpload } from '../utils/fileStorage';
+import { parsePaging } from '../utils/pagination';
+import { enqueue as enqueueLabReportVitals } from '../queue/jobs/extractLabReportVitals';
 
 // lab_requests lives in the `clinical` schema behind row-level security —
 // every query against it must carry the acting user's identity. See
@@ -152,6 +152,8 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
+// PERF-04: never paginated. See utils/pagination.ts for why the default is
+// generous rather than "a page."
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { role, id } = req.user;
@@ -163,6 +165,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
     const cond = condMap[role];
     if (!cond) { res.json([]); return; }
 
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
     const { rows } = await queryAs(actor(req), `
       SELECT lr.*,
         dr.name  AS doctor_name,
@@ -177,7 +180,8 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       LEFT JOIN laboratory_profiles lp ON lp.user_id = lr.laboratory_id
       WHERE ${cond}
       ORDER BY lr.created_at DESC
-    `, [id]);
+      LIMIT $2 OFFSET $3
+    `, [id, limit, offset]);
 
     res.json(await attachPrices(rows));
   } catch (err) { next(err); }
@@ -214,88 +218,49 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 };
 
 /**
- * Runs after the HTTP response is sent so OCR/PDF parsing never blocks the
- * upload: extracts vitals (manual entry > PDF/OCR text > notes text) and
- * notifies the doctor and patient at the same time.
+ * Notifies the doctor and patient that the report is ready, and queues the
+ * vitals extraction (PERF-06: previously both ran inline via setImmediate —
+ * OCR/PDF parsing is slow, uncancellable work with no retry and no record
+ * of failure if the process restarted mid-job). Notifications don't depend
+ * on OCR succeeding and must never fire twice, so they run here — once,
+ * awaited — rather than inside the retryable job; only the actually
+ * idempotent vitals-extraction work (see queue/jobs/extractLabReportVitals.ts)
+ * is queued.
  */
-const finalizeReport = (
+const finalizeReport = async (
   labId: number,
   request: { id: number; patient_id: number; doctor_id: number | null },
   reportFilename: string,
   report_notes: string | undefined,
   vitals_data: string | undefined
-): void => {
-  setImmediate(async () => {
-    try {
-      const lName  = await labName(labId);
-      const ptName = await userName(request.patient_id);
+): Promise<void> => {
+  const lName  = await labName(labId);
+  const ptName = await userName(request.patient_id);
 
-      // Priority 1: manually entered values from the lab upload form
-      let vitalsToSave: Record<string, number | undefined | null> = {};
+  await Promise.all([
+    request.doctor_id && sendNotification(
+      request.doctor_id,
+      'lab_report_ready',
+      'Lab Report Ready 🔬',
+      `Lab report for patient ${ptName} is ready. ${lName} has uploaded the results.`,
+      { lab_request_id: request.id }
+    ),
+    sendNotification(
+      request.patient_id,
+      'lab_report_ready',
+      'Your Lab Report is Ready 🔬',
+      `Your lab report from ${lName} is now available. View and download it from your portal.`,
+      { lab_request_id: request.id }
+    ),
+  ]);
 
-      if (vitals_data) {
-        try {
-          const parsed = JSON.parse(vitals_data) as Record<string, number>;
-          const valid  = Object.entries(parsed).filter(([, v]) => typeof v === 'number' && isFinite(v) && v > 0);
-          if (valid.length > 0) {
-            vitalsToSave = Object.fromEntries(valid);
-            console.log(`[Vitals] ${valid.length} manual values saved for report #${request.id}`);
-          }
-        } catch { /* ignore bad JSON */ }
-      }
-
-      // Priority 2: PDF text extraction (pdfjs) OR image OCR (tesseract)
-      if (Object.keys(vitalsToSave).length === 0) {
-        const { filePath, cleanup } = await readUploadToTempFile('lab-reports', reportFilename);
-        let reportText: string;
-        try {
-          reportText = await extractReportText(filePath);
-        } finally {
-          cleanup();
-        }
-        if (reportText.trim().length > 20) {
-          const extracted = extractVitalsFromText(reportText);
-          if (Object.keys(extracted).length > 0) {
-            vitalsToSave = extracted as Record<string, number | undefined>;
-            console.log(`[Vitals] ${Object.keys(extracted).length} auto-extracted values for report #${request.id}`);
-          }
-        }
-      }
-
-      // Priority 3: parse report_notes text
-      if (Object.keys(vitalsToSave).length === 0 && report_notes) {
-        const extracted = extractVitalsFromText(report_notes);
-        if (Object.keys(extracted).length > 0) {
-          vitalsToSave = extracted as Record<string, number | undefined>;
-          console.log(`[Vitals] ${Object.keys(extracted).length} notes values for report #${request.id}`);
-        }
-      }
-
-      if (Object.keys(vitalsToSave).length > 0) {
-        await saveVitalsFromLab(request.patient_id, vitalsToSave, request.id);
-        await queryAs({ id: labId, role: 'laboratory' }, `UPDATE lab_requests SET vitals_extracted=true WHERE id=$1`, [request.id]);
-      }
-
-      // Notify doctor and patient at the same time
-      await Promise.all([
-        request.doctor_id && sendNotification(
-          request.doctor_id,
-          'lab_report_ready',
-          'Lab Report Ready 🔬',
-          `Lab report for patient ${ptName} is ready. ${lName} has uploaded the results.`,
-          { lab_request_id: request.id }
-        ),
-        sendNotification(
-          request.patient_id,
-          'lab_report_ready',
-          'Your Lab Report is Ready 🔬',
-          `Your lab report from ${lName} is now available. View and download it from your portal.`,
-          { lab_request_id: request.id }
-        ),
-      ]);
-    } catch (bgErr) {
-      console.error('[finalizeReport]', (bgErr as Error).message);
-    }
+  await enqueueLabReportVitals({
+    labRequestId: request.id,
+    laboratoryId: labId,
+    patientId: request.patient_id,
+    reportFilename,
+    reportNotes: report_notes,
+    vitalsData: vitals_data,
   });
 };
 
@@ -331,7 +296,8 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
     // Respond right away — don't block on OCR
     res.json(request);
 
-    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data);
+    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data)
+      .catch(err => console.error('[finalizeReport]', (err as Error).message));
   } catch (err) { next(err); }
 };
 
@@ -370,7 +336,8 @@ const createDirect = async (req: Request, res: Response, next: NextFunction): Pr
 
     res.status(201).json(request);
 
-    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data);
+    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data)
+      .catch(err => console.error('[finalizeReport]', (err as Error).message));
   } catch (err) { next(err); }
 };
 

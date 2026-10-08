@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { queryAs, RLSActor } from '../config/db';
-import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
-import { saveVitalsFromPatientUpload } from './patientVitalsController';
-import { readUploadToTempFile, streamUploadToResponse } from '../utils/fileStorage';
+import { streamUploadToResponse } from '../utils/fileStorage';
+import { parsePaging } from '../utils/pagination';
+import { enqueue as enqueuePatientReportVitals } from '../queue/jobs/extractPatientReportVitals';
 
 // patient_reports / data_access_requests live in the `clinical` schema
 // behind row-level security — every query against them must carry the
@@ -35,35 +35,27 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     // ── Respond right away — don't block the upload on OCR/PDF extraction ──
     res.status(201).json(report);
 
-    // ── Background: extract vitals from a self-uploaded lab report ─────────
+    // PERF-06: queue vitals extraction instead of running OCR/PDF parsing
+    // inline (setImmediate — no retry, lost on restart). See
+    // queue/jobs/extractPatientReportVitals.ts.
     if (report_type === 'lab_report') {
-      const patientId = req.user.id;
-      const uploadedFilename = req.file.filename;
-      setImmediate(async () => {
-        const { filePath, cleanup } = await readUploadToTempFile('patient-reports', uploadedFilename);
-        try {
-          const reportText = await extractReportText(filePath);
-          if (reportText.trim().length > 20) {
-            const extracted = extractVitalsFromText(reportText);
-            if (Object.keys(extracted).length > 0) {
-              await saveVitalsFromPatientUpload(patientId, extracted as Record<string, number | undefined>, report.id);
-            }
-          }
-        } catch (bgErr) {
-          console.error('[patientReport background]', (bgErr as Error).message);
-        } finally {
-          cleanup();
-        }
+      await enqueuePatientReportVitals({
+        patientId: req.user.id,
+        patientReportId: report.id,
+        filename: req.file.filename,
       });
     }
   } catch (err) { next(err); }
 };
 
+// PERF-04: never paginated. See utils/pagination.ts for why the default is
+// generous rather than "a page."
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
     const { rows } = await queryAs(actor(req),
-      'SELECT * FROM patient_reports WHERE patient_id=$1 AND deleted_at IS NULL ORDER BY issued_date DESC, created_at DESC',
-      [req.user.id]
+      'SELECT * FROM patient_reports WHERE patient_id=$1 AND deleted_at IS NULL ORDER BY issued_date DESC, created_at DESC LIMIT $2 OFFSET $3',
+      [req.user.id, limit, offset]
     );
     res.json(rows);
   } catch (err) { next(err); }

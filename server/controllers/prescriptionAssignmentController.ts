@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
+import { parsePaging } from '../utils/pagination';
 
 const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
@@ -103,6 +104,12 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 
     if (req.user.role !== 'pharmacist') { res.json([]); return; }
 
+    // PERF-04: the pharmacist's own assignment list (across every
+    // consultation ever sent to them) was never paginated. See
+    // utils/pagination.ts for why the default is generous rather than "a
+    // page." The consultation-scoped branch above stays unpaginated — it's
+    // one visit's pharmacy assignments, inherently small.
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
     const { rows } = await queryAs(actor(req), `
       SELECT pa.*, c.visit_date, c.diagnosis, c.sick_description, c.treatment_description,
              c.prescription_file, c.lab_tests_requested,
@@ -114,7 +121,8 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       LEFT JOIN users dr ON dr.id = c.doctor_id
       WHERE pa.pharmacist_id = $1
       ORDER BY pa.status ASC, c.visit_date DESC
-    `, [req.user.id]);
+      LIMIT $2 OFFSET $3
+    `, [req.user.id, limit, offset]);
 
     const ids = rows.map((r: any) => r.consultation_id);
     const medsByConsultation: Record<number, any[]> = {};

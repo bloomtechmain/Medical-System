@@ -1,21 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/db';
-
-// PRO-03: nothing was paginated — a list query grew as large as the table,
-// forever. The default is deliberately generous (not the same as "a page" in
-// the UI sense) so it doesn't silently truncate any list this app realistically
-// has today — the client has no page-through controls yet, so a hard cap at
-// a small number would just look like data went missing. It still bounds the
-// actual failure mode (unbounded growth over months/years), and the limit/
-// offset params are there for whenever paging controls are added client-side.
-const DEFAULT_LIMIT = 500;
-const MAX_LIMIT = 1000;
-
-const parsePaging = (q: Record<string, string | undefined>): { limit: number; offset: number } => {
-  const limit  = Math.min(Math.max(parseInt(q.limit as string, 10) || DEFAULT_LIMIT, 1), MAX_LIMIT);
-  const offset = Math.max(parseInt(q.offset as string, 10) || 0, 0);
-  return { limit, offset };
-};
+import { parsePaging } from '../utils/pagination';
 
 // PRO-25: medicines were hard-deleted. remove() below now soft-deletes
 // (deleted_at) instead; every read here excludes rows with deleted_at set.

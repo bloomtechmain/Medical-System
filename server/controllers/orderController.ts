@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool, getTenantSchema } from '../config/db';
+import { parsePaging } from '../utils/pagination';
 
 const requireSchema = async (req: Request, res: Response): Promise<string | null> => {
   const schema = await getTenantSchema(req.user.id);
@@ -10,10 +11,14 @@ const requireSchema = async (req: Request, res: Response): Promise<string | null
   return schema;
 };
 
+// PERF-04: the orders list was never paginated. See utils/pagination.ts for
+// why the default is generous rather than "a page."
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const schema = await requireSchema(req, res);
     if (!schema) return;
+
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
 
     const { rows } = await pool.query(`
       SELECT o.*, s.name AS supplier_name, u.name AS ordered_by_name
@@ -21,7 +26,8 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       LEFT JOIN suppliers s ON o.supplier_id = s.id
       LEFT JOIN users u ON o.ordered_by = u.id
       ORDER BY o.ordered_at DESC
-    `);
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
     res.json(rows);
   } catch (err) { next(err); }
 };

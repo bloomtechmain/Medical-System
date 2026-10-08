@@ -69,6 +69,17 @@ jobs:
           DATABASE_URL: postgresql://corehealth_app:change_me_in_prod@localhost:5432/corehealth_ci
           DB_SSL: "false" # the postgres:16 service container has no TLS configured
 
+      # PERF-06: proves pg-boss can actually migrate its own schema (CREATE
+      # TABLE inside `pgboss`) under corehealth_app's limited privileges —
+      # the unit tests mock pg-boss entirely, so nothing else catches a
+      # missing/wrong grant from 003_job_queue_schema.sql before production does.
+      - name: Smoke-test the job queue as the app's own (non-superuser) role
+        working-directory: ./server
+        run: npx tsx scripts/smokeTestQueue.ts
+        env:
+          DATABASE_URL: postgresql://corehealth_app:change_me_in_prod@localhost:5432/corehealth_ci
+          DB_SSL: "false"
+
   check-client:
     name: Client — Lint & Build
     runs-on: ubuntu-latest

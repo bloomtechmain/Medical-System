@@ -3,6 +3,7 @@ import http from 'http';
 import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import path from 'path';
 import { body } from 'express-validator';
 import { connectDB } from './config/db';
@@ -11,6 +12,10 @@ import errorHandler from './middleware/errorHandler';
 import validate from './middleware/validate';
 import { generalApiLimiter, publicFormLimiter, searchLimiter } from './middleware/rateLimiter';
 import { isS3Enabled, streamUploadToResponse } from './utils/fileStorage';
+import { startQueue, stopQueue } from './queue/boss';
+import { register as registerLabReportVitalsWorker } from './queue/jobs/extractLabReportVitals';
+import { register as registerPatientReportVitalsWorker } from './queue/jobs/extractPatientReportVitals';
+import { register as registerConsultationOcrWorker } from './queue/jobs/extractConsultationMedicines';
 
 const app    = express();
 const server = http.createServer(app);
@@ -35,6 +40,10 @@ app.use(cors({
     cb(null, !origin || ALLOWED_ORIGINS.includes(origin)),
   credentials: true,
 }));
+// PERF-03: the API had no response compression at all — every JSON payload
+// (a sales/consultations/lab-requests list, especially once PERF-04's
+// generous pagination defaults are in play) went over the wire uncompressed.
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -181,6 +190,26 @@ const start = async (): Promise<void> => {
   await new Promise<void>(resolve => server.listen(PORT, resolve));
   console.log(`Core Health API + Socket.IO running on port ${PORT} [${process.env.NODE_ENV}]`);
   await connectDB();
+
+  // PERF-06: start the job queue and register this process as a worker for
+  // the OCR/PDF-extraction jobs. Running the worker in the same process as
+  // the API is a reasonable first step — it already gets real retries and a
+  // queryable failed state instead of setImmediate's "lost on restart, no
+  // retry" — and can move to a separate worker process later with no job
+  // code changes, since pg-boss doesn't care which process calls boss.work().
+  await startQueue();
+  await registerLabReportVitalsWorker();
+  await registerPatientReportVitalsWorker();
+  await registerConsultationOcrWorker();
 };
 
 start();
+
+// Let in-flight jobs finish and the queue disconnect cleanly instead of
+// being killed mid-job on every deploy/restart.
+const shutdown = async (): Promise<void> => {
+  await stopQueue();
+  process.exit(0);
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

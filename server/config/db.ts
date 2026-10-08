@@ -157,5 +157,5 @@ const connectDB = async (retries = 8, baseDelay = 3000): Promise<void> => {
   }
 };
 
-export { pool, connectDB, queryAs, getTenantSchema };
+export { pool, connectDB, queryAs, getTenantSchema, ssl as dbSsl };
 export type { RLSActor };
