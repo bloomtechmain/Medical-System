@@ -183,8 +183,8 @@ export default function Register() {
                   <div>
                     <label className="label">Password</label>
                     <div className="relative">
-                      <input type={showPwd ? 'text' : 'password'} className="input pr-10" placeholder="Min. 6 characters"
-                        {...register('password', { required: 'Password required', minLength: { value: 6, message: 'Min 6 characters' } })} />
+                      <input type={showPwd ? 'text' : 'password'} className="input pr-10" placeholder="Min. 10 characters"
+                        {...register('password', { required: 'Password required', minLength: { value: 10, message: 'Min 10 characters' } })} />
                       <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                         {showPwd ? '🙈' : '👁️'}
                       </button>

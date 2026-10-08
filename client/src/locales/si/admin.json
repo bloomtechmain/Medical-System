@@ -133,7 +133,7 @@
       "operatingHours": "විවෘත වේලාවන්",
       "fullName": "සම්පූර්ණ නම",
       "password": "මුරපදය",
-      "minCharacters": "අවම අක්ෂර 6ක්",
+      "minCharacters": "අවම අක්ෂර 10ක්",
       "role": "භූමිකාව",
       "newPassword": "නව මුරපදය",
       "leaveBlankToKeep": "(නොවෙනස්ව තබා ගැනීමට හිස්ව තබන්න)",

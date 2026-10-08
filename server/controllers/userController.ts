@@ -155,6 +155,10 @@ const updateWithProfile = async (req: Request, res: Response, next: NextFunction
     const params: unknown[] = [name, email, is_active === true || (is_active as unknown as string) === 'true'];
 
     if (password && password.trim()) {
+      if (password.length < 10) {
+        res.status(400).json({ message: 'Password must be at least 10 characters' });
+        return;
+      }
       const hash = await bcrypt.hash(password, 10);
       setClauses.push(`password=$${params.length + 1}`);
       params.push(hash);

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { authApi, userApi } from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import ChangePasswordPanel from '../components/common/ChangePasswordPanel';
 import OperatingHoursPicker from '../components/common/OperatingHoursPicker';
 
 export default function LaboratorySettings() {
@@ -110,6 +111,8 @@ export default function LaboratorySettings() {
           </button>
         </div>
       </form>
+
+      <ChangePasswordPanel />
     </div>
   );
 }

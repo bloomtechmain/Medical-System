@@ -4,11 +4,12 @@ import crypto from 'crypto';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import { Request, Response, NextFunction } from 'express';
-import { pool, queryAs } from '../config/db';
+import { pool, queryAs, revokeRefreshTokens } from '../config/db';
 import { DbUser } from '../types';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
 const REFRESH_TOKEN_DAYS = 7;
+const MIN_PASSWORD_LENGTH = 10;
 
 const generateToken = (
   user: Pick<DbUser, 'id' | 'email' | 'role'>,
@@ -477,4 +478,39 @@ const logout = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
-export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout };
+// SEC-17 (auth): self-service password change — any logged-in user, not
+// just admin-edits-someone-else (userController.updateWithProfile already
+// covered that path). Requires the current password so a hijacked but
+// still-live access token can't silently lock the real owner out by
+// changing it to something only the attacker knows. Revokes every refresh
+// token for the account afterward — including the one this session is
+// using — same as GitHub/Google's "change password → signed out
+// everywhere" behavior, so the new password is required to get back in.
+const changePassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ message: 'Current and new password are required' });
+      return;
+    }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      res.status(400).json({ message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+      return;
+    }
+
+    const { rows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+    const user = rows[0];
+
+    const match = await bcrypt.compare(currentPassword, user.password);
+    if (!match) { res.status(401).json({ message: 'Current password is incorrect' }); return; }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hash, user.id]);
+    await revokeRefreshTokens(user.id);
+
+    res.json({ message: 'Password changed. Please log in again.' });
+  } catch (err) { next(err); }
+};
+
+export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword };

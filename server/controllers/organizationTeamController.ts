@@ -34,7 +34,7 @@ const inviteMember = async (req: Request, res: Response, next: NextFunction): Pr
       name?: string; email?: string; password?: string; is_owner?: boolean;
     };
     if (!name || !email || !password) { res.status(400).json({ message: 'Name, email, and password are required' }); return; }
-    if (password.length < 6) { res.status(400).json({ message: 'Password must be at least 6 characters' }); return; }
+    if (password.length < 10) { res.status(400).json({ message: 'Password must be at least 10 characters' }); return; }
 
     const { rows: [org] } = await client.query('SELECT org_type FROM public.organizations WHERE id=$1', [orgId]);
     if (!org) { res.status(404).json({ message: 'Organization not found' }); return; }

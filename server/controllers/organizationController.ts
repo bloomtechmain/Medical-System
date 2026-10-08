@@ -224,6 +224,10 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
         res.status(400).json({ message: 'Owner name, email, and password are required' });
         return;
       }
+      if (owner_password.length < 10) {
+        res.status(400).json({ message: 'Password must be at least 10 characters' });
+        return;
+      }
       const existingEmail = await client.query('SELECT id FROM public.users WHERE email = $1', [owner_email]);
       if (existingEmail.rows.length) { res.status(409).json({ message: 'Email already in use' }); return; }
     }

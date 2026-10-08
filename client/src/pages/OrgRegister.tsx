@@ -583,8 +583,8 @@ export default function OrgRegister() {
                       <input
                         type={showPwd ? 'text' : 'password'}
                         className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
-                        placeholder="Min. 6 characters"
-                        {...register('owner_password', { required: 'Password is required', minLength: { value: 6, message: 'Min 6 characters' } })}
+                        placeholder="Min. 10 characters"
+                        {...register('owner_password', { required: 'Password is required', minLength: { value: 10, message: 'Min 10 characters' } })}
                       />
                       <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                         {showPwd ? '🙈' : '👁️'}

@@ -26,7 +26,7 @@ function InviteMemberModal({ orgId, onClose }: { orgId: number; onClose: () => v
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || form.password.length < 6) {
+    if (!form.name.trim() || !form.email.trim() || form.password.length < 10) {
       setError(t('errors.formInvalid')); return;
     }
     setError('');

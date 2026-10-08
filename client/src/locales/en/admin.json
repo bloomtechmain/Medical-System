@@ -133,7 +133,7 @@
       "operatingHours": "Operating Hours",
       "fullName": "Full Name",
       "password": "Password",
-      "minCharacters": "Min. 6 characters",
+      "minCharacters": "Min. 10 characters",
       "role": "Role",
       "newPassword": "New Password",
       "leaveBlankToKeep": "(leave blank to keep)",

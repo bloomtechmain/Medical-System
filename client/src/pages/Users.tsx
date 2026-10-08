@@ -417,7 +417,7 @@ export default function Users() {
                 type="password"
                 className="input"
                 placeholder={t('users.fields.minCharacters')}
-                {...createForm.register('password', { required: true, minLength: 6 })}
+                {...createForm.register('password', { required: true, minLength: 10 })}
               />
             </div>
             <div>
