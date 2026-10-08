@@ -269,11 +269,11 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
     }
 
     const { rows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [payload.id]);
-    if (!rows.length || !rows[0].is_active || !rows[0].mfa_enabled || !rows[0].mfa_secret) {
+    const user = rows[0];
+    if (!user || !user.is_active || !user.mfa_enabled || !user.mfa_secret) {
       res.status(401).json({ message: 'Invalid MFA session' });
       return;
     }
-    const user = rows[0];
 
     if (!code || !authenticator.verify({ token: String(code), secret: user.mfa_secret })) {
       res.status(401).json({ message: 'Invalid authentication code' });

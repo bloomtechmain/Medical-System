@@ -5,6 +5,7 @@ import { Bell, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Act
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { notificationApi } from '../../services/api';
+import { Notification } from '../../types';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 
@@ -62,7 +63,7 @@ export default function MobileHeader() {
   const dropRef   = useRef<HTMLDivElement>(null);
   const prevPulse = useRef(0);
 
-  const { data: notifications = [] } = useQuery({
+  const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['notifications'],
     queryFn:  notificationApi.getAll,
     enabled:  !!user,
