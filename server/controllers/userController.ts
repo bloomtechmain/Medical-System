@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool, queryAs, RLSActor } from '../config/db';
+import { parsePaging } from '../utils/pagination';
 
 // clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
 // live behind row-level security — queries against them must carry the
@@ -9,11 +10,14 @@ const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.rol
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { role } = req.query as { role?: string };
-    let query = 'SELECT id, name, email, role, is_active, created_at FROM users';
-    const params: string[] = [];
-    if (role) { query += ' WHERE role = $1'; params.push(role); }
-    query += ' ORDER BY created_at DESC';
+    const { role } = req.query as Record<string, string | undefined>;
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
+
+    let query = 'SELECT id, name, email, role, is_active, created_at FROM users WHERE deleted_at IS NULL';
+    const params: unknown[] = [];
+    if (role) { params.push(role); query += ` AND role = $${params.length}`; }
+    params.push(limit, offset);
+    query += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) { next(err); }
@@ -22,7 +26,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 const getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1 AND deleted_at IS NULL',
       [req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
@@ -294,46 +298,104 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
   } catch (err) { next(err); }
 };
 
+// PRO-25: users were hard-deleted. Soft-delete (deleted_at) instead, and
+// deactivate the login at the same time; a separate, ops-run purge script
+// removes rows for real after a retention window (see
+// server/scripts/purgeSoftDeleted.ts) rather than this doing it immediately.
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    const { rowCount } = await pool.query(
+      'UPDATE users SET deleted_at = NOW(), is_active = FALSE WHERE id = $1 AND deleted_at IS NULL',
+      [req.params.id]
+    );
     if (!rowCount) { res.status(404).json({ message: 'User not found' }); return; }
     res.status(204).end();
   } catch (err) { next(err); }
 };
 
+// userController.getStats() used to run a UNION ALL across every tenant
+// schema's sales/appointments tables on every single request, so the query
+// grew with the number of organisations. Instead it reads this cache and
+// only pays for the cross-tenant scan once per PLATFORM_STATS_TTL_MS, no
+// matter how many admins load the dashboard in between.
+const PLATFORM_STATS_TTL_MS = parseInt(process.env.PLATFORM_STATS_TTL_MS || '300000', 10); // 5 min
+
+const computePlatformStats = async (): Promise<{
+  total_sales: number; total_revenue: number; sales_this_month: number;
+  total_appointments: number; upcoming_appointments: number; completed_appointments: number;
+}> => {
+  const [pharmacyRes, hospitalRes] = await Promise.all([
+    pool.query(
+      "SELECT schema_name FROM public.organizations WHERE org_type='pharmacy' AND schema_name IS NOT NULL AND is_active=TRUE"
+    ),
+    pool.query(
+      "SELECT schema_name FROM public.organizations WHERE org_type IN ('hospital','clinic') AND schema_name IS NOT NULL AND is_active=TRUE"
+    ),
+  ]);
+
+  const pharmacySchemas: string[] = pharmacyRes.rows.map((r: any) => r.schema_name);
+  const hospitalSchemas: string[] = hospitalRes.rows.map((r: any) => r.schema_name);
+
+  // Build cross-tenant SQL (schema names come from DB, not user input)
+  const salesSQL = pharmacySchemas.length
+    ? `SELECT COUNT(*)::bigint AS total_sales,
+              COALESCE(SUM(total_amount),0)::numeric AS total_revenue,
+              COUNT(*) FILTER (WHERE sold_at >= NOW() - INTERVAL '30 days')::bigint AS sales_this_month
+       FROM (${pharmacySchemas.map(s => `SELECT total_amount, sold_at FROM "${s}".sales`).join(' UNION ALL ')}) _s`
+    : `SELECT 0::bigint AS total_sales, 0::numeric AS total_revenue, 0::bigint AS sales_this_month`;
+
+  const apptSQL = hospitalSchemas.length
+    ? `SELECT COUNT(*)::bigint AS total_appointments,
+              COUNT(*) FILTER (WHERE status='scheduled')::bigint AS upcoming_appointments,
+              COUNT(*) FILTER (WHERE status='completed')::bigint AS completed_appointments
+       FROM (${hospitalSchemas.map(s => `SELECT status FROM "${s}".appointments`).join(' UNION ALL ')}) _a`
+    : `SELECT 0::bigint AS total_appointments, 0::bigint AS upcoming_appointments, 0::bigint AS completed_appointments`;
+
+  const [salesRow, apptRow] = await Promise.all([pool.query(salesSQL), pool.query(apptSQL)]);
+  return {
+    total_sales: salesRow.rows[0].total_sales,
+    total_revenue: salesRow.rows[0].total_revenue,
+    sales_this_month: salesRow.rows[0].sales_this_month,
+    total_appointments: apptRow.rows[0].total_appointments,
+    upcoming_appointments: apptRow.rows[0].upcoming_appointments,
+    completed_appointments: apptRow.rows[0].completed_appointments,
+  };
+};
+
+const getCachedPlatformStats = async () => {
+  const { rows } = await pool.query(
+    `SELECT *, (NOW() - computed_at) > $1::interval AS is_stale
+     FROM public.platform_stats_cache WHERE id = 1`,
+    [`${PLATFORM_STATS_TTL_MS} milliseconds`]
+  );
+  const cached = rows[0];
+  if (cached && !cached.is_stale) return cached;
+
+  const fresh = await computePlatformStats();
+  const { rows: upserted } = await pool.query(
+    `INSERT INTO public.platform_stats_cache
+       (id, total_sales, total_revenue, sales_this_month, total_appointments, upcoming_appointments, completed_appointments, computed_at)
+     VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (id) DO UPDATE SET
+       total_sales = EXCLUDED.total_sales, total_revenue = EXCLUDED.total_revenue,
+       sales_this_month = EXCLUDED.sales_this_month, total_appointments = EXCLUDED.total_appointments,
+       upcoming_appointments = EXCLUDED.upcoming_appointments, completed_appointments = EXCLUDED.completed_appointments,
+       computed_at = EXCLUDED.computed_at
+     RETURNING *`,
+    [fresh.total_sales, fresh.total_revenue, fresh.sales_this_month,
+     fresh.total_appointments, fresh.upcoming_appointments, fresh.completed_appointments]
+  );
+  return upserted[0];
+};
+
 const getStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Phase 1: get tenant schema names for dynamic cross-tenant queries
-    const [pharmacyRes, hospitalRes] = await Promise.all([
-      pool.query(
-        "SELECT schema_name FROM public.organizations WHERE org_type='pharmacy' AND schema_name IS NOT NULL AND is_active=TRUE"
-      ),
-      pool.query(
-        "SELECT schema_name FROM public.organizations WHERE org_type IN ('hospital','clinic') AND schema_name IS NOT NULL AND is_active=TRUE"
-      ),
-    ]);
+    // Phase 1: cross-tenant sales/appointments totals come from the cache
+    // (recomputed lazily, at most once per TTL — see getCachedPlatformStats).
+    const platformStats = await getCachedPlatformStats();
 
-    const pharmacySchemas: string[] = pharmacyRes.rows.map((r: any) => r.schema_name);
-    const hospitalSchemas: string[] = hospitalRes.rows.map((r: any) => r.schema_name);
-
-    // Build cross-tenant SQL (schema names come from DB, not user input)
-    const salesSQL = pharmacySchemas.length
-      ? `SELECT COUNT(*)::bigint AS total_sales,
-                COALESCE(SUM(total_amount),0)::numeric AS total_revenue,
-                COUNT(*) FILTER (WHERE sold_at >= NOW() - INTERVAL '30 days')::bigint AS sales_this_month
-         FROM (${pharmacySchemas.map(s => `SELECT total_amount, sold_at FROM "${s}".sales`).join(' UNION ALL ')}) _s`
-      : `SELECT 0::bigint AS total_sales, 0::numeric AS total_revenue, 0::bigint AS sales_this_month`;
-
-    const apptSQL = hospitalSchemas.length
-      ? `SELECT COUNT(*)::bigint AS total_appointments,
-                COUNT(*) FILTER (WHERE status='scheduled')::bigint AS upcoming_appointments,
-                COUNT(*) FILTER (WHERE status='completed')::bigint AS completed_appointments
-         FROM (${hospitalSchemas.map(s => `SELECT status FROM "${s}".appointments`).join(' UNION ALL ')}) _a`
-      : `SELECT 0::bigint AS total_appointments, 0::bigint AS upcoming_appointments, 0::bigint AS completed_appointments`;
-
-    // Phase 2: run all stats in parallel
-    const [userRes, orgRes, medRes, consultRes, labRes, salesRow, apptRow, recentRes] = await Promise.all([
+    // Phase 2: run all other stats in parallel
+    const [userRes, orgRes, medRes, consultRes, labRes, recentRes] = await Promise.all([
       pool.query(`
         SELECT
           COUNT(*) FILTER (WHERE role='patient')    AS total_patients,
@@ -377,8 +439,6 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
           COUNT(*) FILTER (WHERE status='completed')        AS completed_lab_requests
         FROM clinical.lab_requests
       `),
-      pool.query(salesSQL),
-      pool.query(apptSQL),
       pool.query(`
         SELECT id, name, email, role, is_active, created_at
         FROM public.users ORDER BY created_at DESC LIMIT 8
@@ -391,16 +451,30 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
       medicines:     medRes.rows[0],
       consultations: consultRes.rows[0],
       labs:          labRes.rows[0],
-      sales:         salesRow.rows[0],
-      appointments:  apptRow.rows[0],
+      sales: {
+        total_sales: platformStats.total_sales,
+        total_revenue: platformStats.total_revenue,
+        sales_this_month: platformStats.sales_this_month,
+      },
+      appointments: {
+        total_appointments: platformStats.total_appointments,
+        upcoming_appointments: platformStats.upcoming_appointments,
+        completed_appointments: platformStats.completed_appointments,
+      },
       recentUsers:   recentRes.rows,
     });
   } catch (err) { next(err); }
 };
 
+// PRO-02: these searches relied entirely on the client debouncing and never
+// sending short queries — nothing server-side stopped a 1-character (or
+// empty) query from hitting the database directly.
+const MIN_SEARCH_LEN = 2;
+
 const searchPatients = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await queryAs(actor(req), `
       SELECT u.id, u.name, u.email, u.is_active,
              p.phone, p.date_of_birth, p.blood_type, p.gender
@@ -417,6 +491,7 @@ const searchPatients = async (req: Request, res: Response, next: NextFunction): 
 const searchPharmacists = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
              p.pharmacy_name, p.pharmacy_address, p.phone,
@@ -435,6 +510,7 @@ const searchPharmacists = async (req: Request, res: Response, next: NextFunction
 const searchDoctors = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
              p.specialization, p.hospital_affiliation, p.phone, p.license_number,
@@ -459,6 +535,7 @@ const searchDoctors = async (req: Request, res: Response, next: NextFunction): P
 const searchLaboratories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
              p.lab_name, p.lab_type, p.address, p.phone,

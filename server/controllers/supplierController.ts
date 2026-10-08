@@ -1,9 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/db';
+import { parsePaging } from '../utils/pagination';
 
-const getAll = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+// PERF-04: never paginated. See utils/pagination.ts for why the default is
+// generous rather than "a page."
+const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rows } = await pool.query('SELECT * FROM suppliers ORDER BY name');
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
+    const { rows } = await pool.query('SELECT * FROM suppliers ORDER BY name LIMIT $1 OFFSET $2', [limit, offset]);
     res.json(rows);
   } catch (err) { next(err); }
 };

@@ -1,6 +1,22 @@
 -- =============================================================================
 -- Core Health — FULL DATABASE BUILD (single-file, Railway-ready)
 -- =============================================================================
+-- *** DEVELOPMENT / FRESH-INSTALL ONLY — NEVER RUN THIS AGAINST AN EXISTING,
+-- *** POPULATED DATABASE. Section 1 below DROPS every tenant_<slug> schema,
+-- *** the clinical schema, and the public application tables before rebuilding
+-- *** from scratch. On a database that already holds real data (staging,
+-- *** production) this is data loss, not a migration.
+--
+-- This file is still the single source of truth for the SCHEMA shape (it is
+-- copied, minus the drop block, into server/migrations/001_initial_schema.sql,
+-- which node-pg-migrate uses for genuinely fresh databases). Any schema change
+-- going forward must be added as a NEW file under server/migrations/ — add
+-- columns/tables first, remove old ones only in a later migration once nothing
+-- reads them (see server/migrations/BASELINE.md) — and mirrored here so this
+-- file keeps matching what a fresh install actually gets. Do not edit this
+-- file's DDL in a way that would change already-deployed schema; that belongs
+-- in a migration.
+--
 -- This file is the union of:
 --   1) corehealth_multitenant.sql  — schema: public + clinical (RLS) + the
 --      provision_tenant() function that creates tenant_<slug> schemas
@@ -8,7 +24,7 @@
 --      provision_tenant() that physically create every tenant_<slug> schema
 --      (tenant schemas do not exist until those calls run)
 --
--- HOW TO RUN ON RAILWAY
+-- HOW TO RUN (local/dev database, or a brand-new Railway Postgres instance)
 --   Option A (recommended) — from your machine, using the DATABASE_URL Railway
 --   shows on the Postgres service's "Connect" tab:
 --     psql "$DATABASE_URL" -f corehealth_database.sql
@@ -20,6 +36,10 @@
 --   Option C — via Railway CLI from the project directory:
 --     railway connect postgres
 --     \i corehealth_database.sql
+--
+-- For the existing production database, see server/migrations/BASELINE.md —
+-- it is brought up to date (and onto node-pg-migrate) incrementally, not by
+-- running this file.
 --
 -- IDEMPOTENCY
 --   Safe to re-run from scratch: section 1 below drops every tenant_<slug>
@@ -265,6 +285,40 @@ CREATE TABLE public.medicines (
 CREATE INDEX idx_medicines_name     ON public.medicines(name);
 CREATE INDEX idx_medicines_category ON public.medicines(category);
 CREATE INDEX idx_medicines_supplier ON public.medicines(supplier_id);
+
+-- 2.6 pg_trgm GIN indexes — every user/medicine/profile search in the app uses
+-- ILIKE '%text%' (see userController.searchDoctors/searchPharmacists/
+-- searchLaboratories/searchPatients and medicineController.getAll), which a
+-- plain btree index (idx_users_email, idx_medicines_name above) cannot serve.
+-- These let Postgres use a trigram GIN index for those lookups instead.
+CREATE INDEX idx_users_name_trgm       ON public.users USING GIN (name gin_trgm_ops);
+CREATE INDEX idx_users_email_trgm      ON public.users USING GIN (email gin_trgm_ops);
+CREATE INDEX idx_medicines_name_trgm         ON public.medicines USING GIN (name gin_trgm_ops);
+CREATE INDEX idx_medicines_generic_name_trgm ON public.medicines USING GIN (generic_name gin_trgm_ops);
+CREATE INDEX idx_doctor_profiles_specialization_trgm       ON public.doctor_profiles USING GIN (specialization gin_trgm_ops);
+CREATE INDEX idx_doctor_profiles_hospital_affiliation_trgm ON public.doctor_profiles USING GIN (hospital_affiliation gin_trgm_ops);
+CREATE INDEX idx_pharmacist_profiles_pharmacy_name_trgm    ON public.pharmacist_profiles USING GIN (pharmacy_name gin_trgm_ops);
+CREATE INDEX idx_pharmacist_profiles_pharmacy_address_trgm ON public.pharmacist_profiles USING GIN (pharmacy_address gin_trgm_ops);
+CREATE INDEX idx_laboratory_profiles_lab_name_trgm ON public.laboratory_profiles USING GIN (lab_name gin_trgm_ops);
+CREATE INDEX idx_laboratory_profiles_address_trgm  ON public.laboratory_profiles USING GIN (address gin_trgm_ops);
+CREATE INDEX idx_laboratory_profiles_lab_type_trgm ON public.laboratory_profiles USING GIN (lab_type gin_trgm_ops);
+
+-- 2.7 platform stats cache — userController.getStats() used to run a UNION ALL
+-- across every tenant_<slug> schema's sales/appointments on every admin
+-- dashboard load, so the query grew with the number of organisations. It now
+-- recomputes into this single-row cache at most once per staleness window
+-- (see refreshPlatformStatsIfStale in userController.ts) instead of on every
+-- request.
+CREATE TABLE IF NOT EXISTS public.platform_stats_cache (
+  id                      INTEGER      PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- enforce single row
+  total_sales             BIGINT       NOT NULL DEFAULT 0,
+  total_revenue           NUMERIC(14,2) NOT NULL DEFAULT 0,
+  sales_this_month        BIGINT       NOT NULL DEFAULT 0,
+  total_appointments      BIGINT       NOT NULL DEFAULT 0,
+  upcoming_appointments   BIGINT       NOT NULL DEFAULT 0,
+  completed_appointments  BIGINT       NOT NULL DEFAULT 0,
+  computed_at             TIMESTAMPTZ  NOT NULL DEFAULT '-infinity'
+);
 
 -- =============================================================================
 -- 3. CLINICAL SCHEMA — patient PHI, shared but RLS-protected
@@ -864,7 +918,10 @@ CREATE POLICY notif_all ON clinical.notifications FOR ALL USING (
 -- 6. APPLICATION ROLE + GRANTS
 -- =============================================================================
 -- One login role the app uses for clinical + shared access. RLS does the row
--- filtering; this role is deliberately NOT a superuser (superusers bypass RLS).
+-- filtering; this role is deliberately NOT a superuser (superusers bypass RLS)
+-- and is never granted BYPASSRLS. This is the role the running server (and
+-- DATABASE_URL in production) should connect as — never the bootstrap/owner
+-- role used to run this file, and never a superuser.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'corehealth_app') THEN
@@ -880,6 +937,27 @@ GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA clinical TO core
 GRANT EXECUTE ON FUNCTION clinical.set_context(int,int,text) TO corehealth_app;
 -- Unqualified table names keep working because clinical is on the search_path:
 ALTER ROLE corehealth_app SET search_path = public, clinical;
+
+-- Second login role, used ONLY to run migrations (this file and anything under
+-- server/migrations/) and as the owner of public.provision_tenant() below. It
+-- is deliberately kept separate from corehealth_app: it is the one role allowed
+-- to CREATE SCHEMA / CREATE ROLE (needed for tenant_<slug> provisioning and for
+-- future migrations), while corehealth_app — what the running server actually
+-- connects as — never gets those rights. It is still NOT a superuser and is
+-- never granted BYPASSRLS, so it remains subject to clinical's RLS policies.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'corehealth_migrator') THEN
+    CREATE ROLE corehealth_migrator LOGIN PASSWORD 'change_me_in_prod' CREATEROLE;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  EXECUTE format('GRANT CREATE ON DATABASE %I TO corehealth_migrator', current_database());
+END $$;
+GRANT ALL ON SCHEMA public, clinical TO corehealth_migrator;
+ALTER ROLE corehealth_migrator SET search_path = public, clinical;
 
 -- =============================================================================
 -- 7. TENANT PROVISIONING  (physical schema-per-tenant for org-owned operations)
@@ -900,13 +978,19 @@ ALTER ROLE corehealth_app SET search_path = public, clinical;
 --   • Both memberships are tracked via organization_members.
 --   • A personal clinic is just an org with org_type = 'clinic' and
 --     owner_user_id pointing to the owning doctor.
+-- SECURITY DEFINER: runs with the privileges of its OWNER (corehealth_migrator,
+-- set below), not the caller's. This is what lets corehealth_app — the
+-- low-privilege role the running server connects as — call this function
+-- (CREATE SCHEMA / CREATE ROLE inside it) without itself needing CREATE on the
+-- database or CREATEROLE. search_path is pinned so a caller cannot hijack name
+-- resolution inside a SECURITY DEFINER function.
 CREATE OR REPLACE FUNCTION public.provision_tenant(
     p_slug     text,
     p_name     text,
     p_type     text,
     p_owner_id int DEFAULT NULL          -- doctor user_id, for clinic type only
 )
-  RETURNS text LANGUAGE plpgsql AS
+  RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, clinical, pg_temp AS
 $fn$
 DECLARE
   v_schema text := 'tenant_' || regexp_replace(lower(p_slug), '[^a-z0-9_]', '_', 'g');
@@ -1141,6 +1225,14 @@ BEGIN
   RETURN v_schema;
 END;
 $fn$;
+
+-- Ownership makes the SECURITY DEFINER above run as corehealth_migrator (which
+-- has CREATE on the database + CREATEROLE), not as whoever created the
+-- function. Only corehealth_app (the running server) and corehealth_migrator
+-- itself may call it — no other role, and not PUBLIC.
+ALTER FUNCTION public.provision_tenant(text, text, text, int) OWNER TO corehealth_migrator;
+REVOKE ALL ON FUNCTION public.provision_tenant(text, text, text, int) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.provision_tenant(text, text, text, int) TO corehealth_app, corehealth_migrator;
 
 -- =============================================================================
 -- Core Health – Seed Migration of existing sample data into the new layout

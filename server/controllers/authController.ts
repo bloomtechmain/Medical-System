@@ -132,10 +132,25 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     await client.query('BEGIN');
 
     const hash = await bcrypt.hash(password, 10);
-    const { rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'>>(
-      'INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role',
-      [name, email, hash, role]
-    );
+    // PRO-29: the existence check above races with a second concurrent
+    // registration for the same email — both can pass it before either
+    // commits. The unique constraint on users.email is what actually
+    // prevents the duplicate; map its violation to the same 409 instead of
+    // letting it fall through to errorHandler as a raw 500.
+    let user: Pick<DbUser, 'id' | 'name' | 'email' | 'role'>;
+    try {
+      ({ rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'>>(
+        'INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role',
+        [name, email, hash, role]
+      ));
+    } catch (err) {
+      if ((err as { code?: string }).code === '23505') {
+        await client.query('ROLLBACK');
+        res.status(409).json({ message: 'Email already in use' });
+        return;
+      }
+      throw err;
+    }
 
     // patient_profiles lives in the `clinical` schema behind row-level
     // security. There's no authenticated session during registration, but

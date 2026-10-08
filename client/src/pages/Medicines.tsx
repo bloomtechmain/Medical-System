@@ -44,9 +44,20 @@ export default function Medicines() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Editing a medicine no longer sends an absolute stock_quantity (see
+  // medicineController.update) — only a relative adjustment, applied as a
+  // separate call so a sale recorded between loading and saving this form
+  // is never silently overwritten.
   const saveMutation = useMutation({
-    mutationFn: (data: any) =>
-      formModal.data ? medicineApi.update(formModal.data.id, data) : medicineApi.create(data),
+    mutationFn: async (data: any) => {
+      if (formModal.data) {
+        const { stock_delta, ...rest } = data;
+        const updated = await medicineApi.update(formModal.data.id, rest);
+        const delta = parseInt(stock_delta, 10) || 0;
+        return delta !== 0 ? medicineApi.adjustStock(formModal.data.id, delta) : updated;
+      }
+      return medicineApi.create(data);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['medicines'] });
       toast.success(formModal.data ? t('medicines.toast.updated') : t('medicines.toast.added'));
@@ -134,8 +145,17 @@ export default function Medicines() {
             <input type="number" step="0.01" className="input" {...register('cost_price')} />
           </div>
           <div>
-            <label className="label">{t('medicines.modal.stockQuantity')}</label>
-            <input type="number" className="input" {...register('stock_quantity')} />
+            {formModal.data ? (
+              <>
+                <label className="label">{t('medicines.modal.stockQuantity')} ({formModal.data.stock_quantity} {t('medicines.modal.currentSuffix', { defaultValue: 'current' })})</label>
+                <input type="number" className="input" placeholder="+/- adjustment" {...register('stock_delta')} />
+              </>
+            ) : (
+              <>
+                <label className="label">{t('medicines.modal.stockQuantity')}</label>
+                <input type="number" className="input" {...register('stock_quantity')} />
+              </>
+            )}
           </div>
           <div>
             <label className="label">{t('medicines.modal.reorderLevel')}</label>

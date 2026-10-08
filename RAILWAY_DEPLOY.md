@@ -95,8 +95,11 @@ NODE_ENV=production
 DB_HOST=${{Postgres.PGHOST}}
 DB_PORT=${{Postgres.PGPORT}}
 DB_NAME=${{Postgres.PGDATABASE}}
-DB_USER=${{Postgres.PGUSER}}
-DB_PASSWORD=${{Postgres.PGPASSWORD}}
+DB_USER=corehealth_app
+DB_PASSWORD=<corehealth_app's password — see below>
+
+# Used only by the Dockerfile's migration step, not by the running server.
+DATABASE_MIGRATOR_URL=postgresql://corehealth_migrator:<password>@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}
 
 JWT_SECRET=your_strong_random_secret_here_change_this
 JWT_EXPIRES_IN=7d
@@ -104,7 +107,7 @@ JWT_EXPIRES_IN=7d
 CLIENT_URL=https://your-frontend-url.railway.app
 ```
 
-> **Reference syntax:** `${{Postgres.PGHOST}}` lets Railway inject the database service's variable directly — no copy-pasting credentials. Replace `Postgres` with the exact name of your PostgreSQL service if it differs.
+> **Reference syntax:** `${{Postgres.PGHOST}}` lets Railway inject the database service's variable directly — no copy-pasting credentials. Replace `Postgres` with the exact name of your PostgreSQL service if it differs. `${{Postgres.PGUSER}}`/`PGPASSWORD` are Railway's own Postgres superuser — do **not** point `DB_USER`/`DB_PASSWORD` at those; the running server must connect as `corehealth_app` (created by `server/migrations/001_initial_schema.sql`, or by `server/migrations/BASELINE_prod_catchup.sql` on a database that already existed before node-pg-migrate — see `server/migrations/BASELINE.md`), which is not a superuser and cannot bypass row-level security. Set real passwords for `corehealth_app` and `corehealth_migrator` with `ALTER ROLE ... SET PASSWORD '...'` (see `server/.env.example`).
 
 > **Generate a strong JWT secret:**
 > ```bash
@@ -122,42 +125,43 @@ Save this — you'll need it for the frontend.
 
 ## Step 5 — Run Database Migrations
 
-After the backend service is deployed and running, run the migration to create all tables.
+Migrations now run automatically on every deploy: the backend's `Dockerfile`
+`CMD` runs `node-pg-migrate up` before starting the server, and fails the
+deploy (non-zero exit → failed healthcheck) if a migration fails. You only
+need the steps below for the **first-ever deploy against a brand-new
+database**, or to run one manually.
 
-### Option A — Via Railway CLI
+**Brand-new database** (nothing has ever run against it): nothing extra to
+do — the first deploy's automatic migration runs `server/migrations/001_initial_schema.sql`
+and you're done.
 
+**Existing production database** (already has data, was never managed by
+node-pg-migrate): follow `server/migrations/BASELINE.md` first — a one-time
+procedure to bring it up to date and tell node-pg-migrate "001 is already
+applied" without re-running it. Skipping this makes the first automatic
+migration fail the deploy (it would try to re-create tables that already
+exist).
+
+Set `DATABASE_MIGRATOR_URL` (see `server/.env.example`) in the Railway
+dashboard alongside `DATABASE_URL` — the Dockerfile `CMD` uses it for the
+migration step only; the server itself still runs as `DATABASE_URL`
+(`corehealth_app`).
+
+### Running a migration manually (rare — normally automatic on deploy)
+
+Via Railway CLI:
 ```bash
-# Install Railway CLI
 npm install -g @railway/cli
-
-# Login
 railway login
-
-# Link to your project
 railway link
-
-# Run migration against the deployed service
 railway run --service your-backend-service-name npm run db:migrate
 ```
 
-### Option B — Via Railway Shell (in the dashboard)
-
-1. Go to the backend service → **Deploy** tab → click the active deployment
-2. Open the **Terminal / Shell** panel (if available on your plan)
-3. Run:
-   ```bash
-   npm run db:migrate
-   ```
-
-### Option C — Trigger migration on startup (simplest)
-
-Modify `server/package.json` start script to run migrations before starting:
-
-```json
-"start": "node -e \"require('./dist/config/migrate')\" && node dist/server.js"
+Via Railway Shell (dashboard → backend service → Deploy tab → active
+deployment → Terminal/Shell panel, if available on your plan):
+```bash
+npm run db:migrate
 ```
-
-But the cleanest approach is a separate one-time run via the CLI (Option A).
 
 ### Run the seed (optional)
 
@@ -291,8 +295,9 @@ Railway's free tier sleeps inactive services. For a medical system in active use
 | `DB_HOST` | `${{Postgres.PGHOST}}` |
 | `DB_PORT` | `${{Postgres.PGPORT}}` |
 | `DB_NAME` | `${{Postgres.PGDATABASE}}` |
-| `DB_USER` | `${{Postgres.PGUSER}}` |
-| `DB_PASSWORD` | `${{Postgres.PGPASSWORD}}` |
+| `DB_USER` | `corehealth_app` (not `${{Postgres.PGUSER}}` — that's the Postgres superuser) |
+| `DB_PASSWORD` | `corehealth_app`'s password |
+| `DATABASE_MIGRATOR_URL` | `corehealth_migrator`'s full connection string (migration step only) |
 | `JWT_SECRET` | `<64-char random string>` |
 | `JWT_EXPIRES_IN` | `7d` |
 | `CLIENT_URL` | `https://your-frontend.railway.app` |
@@ -312,7 +317,9 @@ Railway's free tier sleeps inactive services. For a medical system in active use
 - [ ] PostgreSQL service created on Railway
 - [ ] Backend service configured (root: `server`, build + start commands set)
 - [ ] Backend environment variables set (DB vars referencing Postgres service)
-- [ ] Database migrations run (`npm run db:migrate`)
+- [ ] `corehealth_app` / `corehealth_migrator` roles exist with real passwords, and `DB_USER`/`DATABASE_MIGRATOR_URL` point at them — not the Postgres superuser
+- [ ] If this is an existing database (not brand new): `server/migrations/BASELINE.md` completed first
+- [ ] Database migrations run (automatic on deploy — the Dockerfile `CMD` runs `node-pg-migrate up`; see `npm run db:migrate` for a manual run)
 - [ ] Seed data loaded if needed (`npm run db:seed`)
 - [ ] `client/.env.production` created with `VITE_API_URL`
 - [ ] Frontend service configured (root: `client`, build command set)
