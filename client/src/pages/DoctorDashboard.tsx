@@ -64,7 +64,7 @@ function PatientHistoryPanel({ patientId, patient, onViewProfile }: PatientHisto
     enabled:  !!patientId,
   });
 
-  const consultations = (data as any)?.consultations || [];
+  const consultations: any[] = (data as any)?.consultations || [];
   const stats         = (data as any)?.stats || {};
 
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
@@ -176,7 +176,7 @@ function PatientHistoryPanel({ patientId, patient, onViewProfile }: PatientHisto
                         <div>
                           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">{t('doctorDashboard.history.medicines')}</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {c.medicines.map(m => (
+                            {c.medicines.map((m: any) => (
                               <span key={m.id} className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full pl-2 pr-2.5 py-0.5 text-[10px] font-semibold text-gray-700">
                                 💊 {m.medicine_name}{m.dosage ? ` · ${m.dosage}` : ''}
                               </span>
@@ -214,12 +214,12 @@ export default function DoctorDashboard() {
   const debouncedQ = useDebounce(query, 350);
 
   const { data: me }      = useQuery({ queryKey: ['me'], queryFn: authApi.me });
-  const { data: requests = [] } = useQuery({ queryKey: ['access-requests'], queryFn: accessRequestApi.getAll });
+  const { data: requests = [] as any[] } = useQuery({ queryKey: ['access-requests'], queryFn: accessRequestApi.getAll });
   const { data: labRequests = [] } = useQuery({ queryKey: ['lab-requests'], queryFn: labApi.getAll });
   const { data: labViewRequests = [] } = useQuery({ queryKey: ['lab-view-requests'], queryFn: labViewRequestApi.getAll });
   const { data: consultations = [] } = useQuery({ queryKey: ['doctor-consultations'], queryFn: consultationApi.getAll });
 
-  const { data: searchResults = [], isLoading: searching } = useQuery({
+  const { data: searchResults = [] as any[], isLoading: searching } = useQuery({
     queryKey: ['patient-search', debouncedQ],
     queryFn:  () => accessRequestApi.searchPatients(debouncedQ),
     enabled:  debouncedQ.length >= 1,
@@ -228,8 +228,8 @@ export default function DoctorDashboard() {
   const profile   = me?.profile;
   const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Doctor';
 
-  const pendingRequests = requests.filter(r => r.status === 'pending').length;
-  const accepted        = requests.filter(r => r.status === 'accepted').length;
+  const pendingRequests = requests.filter((r: any) => r.status === 'pending').length;
+  const accepted        = requests.filter((r: any) => r.status === 'accepted').length;
 
   const pendingLabResults = (labRequests as any[])
     .filter((r: any) => r.status !== 'completed')
@@ -485,7 +485,7 @@ export default function DoctorDashboard() {
                 <p className="text-sm">{t('dashboard.search.noResults', { query: debouncedQ })}</p>
               </div>
             ) : (
-              searchResults.map(pt => {
+              searchResults.map((pt: any) => {
                 const age        = calcAge(pt.date_of_birth);
                 const isExpanded = expandedPatientId === pt.id;
                 return (
