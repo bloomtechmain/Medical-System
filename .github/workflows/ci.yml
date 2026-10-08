@@ -41,6 +41,18 @@ jobs:
         working-directory: ./server
         run: npm ci
 
+      # WARN-19: nothing reported known vulnerabilities in dependencies —
+      # no scan in the pipeline and no update bot (the update-bot half is
+      # .github/dependabot.yml, added separately). continue-on-error for the
+      # same reason as lint below: this repo's transitive dependencies
+      # already carry pre-existing findings unrelated to any one change, so
+      # a hard gate here would block every PR on pre-existing issues instead
+      # of surfacing new ones for review.
+      - name: Audit server dependencies for known vulnerabilities
+        working-directory: ./server
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
       - name: Lint server
         working-directory: ./server
         run: npm run lint
@@ -98,6 +110,13 @@ jobs:
       - name: Install client dependencies
         working-directory: ./client
         run: npm ci
+
+      # WARN-19 — see the server job's equivalent step for why this doesn't
+      # fail the build.
+      - name: Audit client dependencies for known vulnerabilities
+        working-directory: ./client
+        run: npm audit --audit-level=high
+        continue-on-error: true
 
       - name: Lint client
         working-directory: ./client
