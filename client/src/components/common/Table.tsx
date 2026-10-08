@@ -12,11 +12,15 @@ interface TableProps<T extends { id?: number | string }> {
 }
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
-export default function Table<T extends { id?: number | string }>({ columns, data, loading, emptyText = 'No records found.' }: TableProps<T>) {
+export default function Table<T extends { id?: number | string }>({ columns, data, loading, emptyText }: TableProps<T>) {
+  const { t } = useTranslation('common');
+  const resolvedEmptyText = emptyText ?? t('empty.noResults');
+
   if (loading) {
     return (
-      <div className="flex justify-center py-12 text-gray-400 text-sm">Loading...</div>
+      <div className="flex justify-center py-12 text-gray-400 text-sm">{t('actions.loading')}</div>
     );
   }
 
@@ -36,7 +40,7 @@ export default function Table<T extends { id?: number | string }>({ columns, dat
           {data.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="px-4 py-8 text-center text-sm text-gray-400">
-                {emptyText}
+                {resolvedEmptyText}
               </td>
             </tr>
           ) : (

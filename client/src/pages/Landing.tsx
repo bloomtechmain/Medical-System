@@ -73,26 +73,43 @@ const ROLES = [
   { icon: '🔬', label: 'Laboratory',  desc: 'Receive lab requests and upload patient reports',          color: 'text-cyan-600 bg-cyan-100' },
 ];
 
-function useCountUp(target: number, duration = 2000, start = false) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!start) return;
-    let startTime: number | null = null;
-    const step = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      setCount(Math.floor(progress * target));
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [target, duration, start]);
-  return count;
+function GetStartedModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <div>
+            <p className="text-lg font-bold text-gray-900">How will you join Core Health?</p>
+            <p className="text-sm text-gray-500 mt-0.5">Choose the option that fits you.</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-200 shrink-0">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
+          <Link to="/org-register" onClick={onClose}
+            className="group text-left p-6 rounded-2xl border-2 border-teal-400 bg-teal-50 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+            <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">🏢</div>
+            <p className="font-bold text-gray-900 text-lg mb-1.5">Register an Organization</p>
+            <p className="text-sm text-gray-500 leading-relaxed">Hospital, clinic, pharmacy, or laboratory — bring your whole team onto Core Health.</p>
+          </Link>
+          <Link to="/register" onClick={onClose}
+            className="group text-left p-6 rounded-2xl border-2 border-primary-400 bg-primary-50 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+            <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">🧑‍⚕️</div>
+            <p className="font-bold text-gray-900 text-lg mb-1.5">Join as Patient or Doctor</p>
+            <p className="text-sm text-gray-500 leading-relaxed">Create a personal account to manage your health records or your own practice.</p>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Landing() {
   const [scrolled, setScrolled] = useState(false);
+  const [showGetStarted, setShowGetStarted] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
-  const [statsVisible, setStatsVisible] = useState(false);
+  const [, setStatsVisible] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -135,12 +152,12 @@ export default function Landing() {
             >
               Sign In
             </Link>
-            <Link
-              to="/register"
+            <button
+              onClick={() => setShowGetStarted(true)}
               className="text-sm font-semibold px-4 py-2 rounded-lg bg-white text-teal-700 hover:bg-teal-50 transition-colors shadow-sm"
             >
               Get Started
-            </Link>
+            </button>
           </div>
         </div>
       </nav>
@@ -386,7 +403,7 @@ export default function Landing() {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-bold text-gray-900 mb-1">New User Registration</h3>
-                    <p className="text-gray-500 text-sm mb-4">Register as a patient, doctor, pharmacist, or lab technician.</p>
+                    <p className="text-gray-500 text-sm mb-4">Register as a patient or doctor. Pharmacies and laboratories register as organizations.</p>
                     <Link
                       to="/register"
                       className="inline-flex items-center gap-2 border-2 border-teal-600 text-teal-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-50 transition-colors text-sm"
@@ -572,6 +589,8 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {showGetStarted && <GetStartedModal onClose={() => setShowGetStarted(false)} />}
     </div>
   );
 }

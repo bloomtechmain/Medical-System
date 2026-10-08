@@ -1,0 +1,282 @@
+{
+  "labTests": {
+    "pageTitle": "රසායනාගාර වාර්තා",
+    "pageSubtitle": "රසායනාගාරයක් සමඟ පරීක්ෂණයක් වෙන් කරන්න, සහ ඔබගේ පරීක්ෂණ ඉල්ලීම් සහ ප්‍රතිඵල නරඹන්න",
+    "bookTestBtn": "රසායනාගාර පරීක්ෂණයක් වෙන් කරන්න",
+    "labFallback": "රසායනාගාරය",
+    "loadFailed": "පූරණය කිරීමට අසමත් විය",
+    "selfBooked": "ස්වයං-වෙන් කළ",
+    "viewReport": "වාර්තාව බලන්න →",
+    "loading": "රසායනාගාර වාර්තා පූරණය වෙමින්...",
+    "filters": {
+      "all": "සියල්ල",
+      "reportsReady": "වාර්තා සූදානම්"
+    },
+    "stats": {
+      "totalTests": "මුළු පරීක්ෂණ",
+      "reportsReady": "වාර්තා සූදානම්"
+    },
+    "empty": {
+      "title": "තවම රසායනාගාර වාර්තා නැත",
+      "subtitle": "ඔබටම පරීක්ෂණයක් වෙන් කරගන්න, නැතහොත් අවශ්‍ය විට ඔබේ වෛද්‍යවරයා එකක් පවරනු ඇත."
+    },
+    "statusLabels": {
+      "pending": "අපේක්ෂිත",
+      "inProgress": "ක්‍රියාත්මක වෙමින්",
+      "reportReady": "වාර්තාව සූදානම්",
+      "rejected": "ප්‍රතික්ෂේප කරන ලදී"
+    },
+    "modal": {
+      "title": "රසායනාගාර පරීක්ෂණයක් වෙන් කරන්න",
+      "laboratoryLabel": "රසායනාගාරය *",
+      "laboratorySearchPlaceholder": "රසායනාගාර නාමය හෝ ලිපිනය අනුව සොයන්න…",
+      "testLabel": "පරීක්ෂණය *",
+      "selectLabFirst": "එහි ලබා ගත හැකි පරීක්ෂණ බැලීමට පළමුව රසායනාගාරයක් තෝරන්න",
+      "selectTestPlaceholder": "පරීක්ෂණයක් තෝරන්න…",
+      "catalogOptionLabel": "{{name}} — රු. {{price}}",
+      "priceConfirmed": "මිල තහවුරු කරන ලදී: රු. {{price}}",
+      "otherOption": "වෙනත් (ලැයිස්තුවේ නැත)…",
+      "otherInputPlaceholder": "පරීක්ෂණයේ නම ටයිප් කරන්න",
+      "testInputPlaceholder": "උදා. සම්පූර්ණ රුධිර ගණන (FBC)",
+      "dateTimeLabel": "කැමති දිනය සහ වේලාව",
+      "optional": "(අත්‍යවශ්‍ය නොවේ)",
+      "referralLabel": "වෛද්‍ය යොමු කිරීම / බෙහෙත් වට්ටෝරුව",
+      "attachReferral": "යොමු කිරීම අමුණන්න (PDF/රූපය)",
+      "notesLabel": "රසායනාගාරය සඳහා සටහන්",
+      "notesPlaceholder": "සඳහන් කිරීමට වටිනා රෝග ලක්ෂණ හෝ විස්තර…",
+      "submitBtn": "පරීක්ෂණය වෙන් කරන්න",
+      "noResultsFor": "\"{{query}}\" සඳහා ප්‍රතිඵල හමු නොවීය",
+      "bookedSuccess": "{{lab}} සමඟ පරීක්ෂණය වෙන් කරන ලදී!",
+      "errors": {
+        "selectLab": "කරුණාකර රසායනාගාරයක් තෝරන්න",
+        "selectTest": "කරුණාකර පරීක්ෂණයක් තෝරන්න",
+        "bookFailed": "පරීක්ෂණය වෙන් කිරීමට අසමත් විය"
+      }
+    },
+    "reportModal": {
+      "title": "රසායනාගාර වාර්තාව",
+      "requestingDoctor": "ඉල්ලුම් කළ වෛද්‍යවරයා",
+      "laboratory": "රසායනාගාරය",
+      "requestedOn": "ඉල්ලූ දිනය",
+      "labType": "රසායනාගාර වර්ගය",
+      "testsPerformed": "🧪 සිදු කළ පරීක්ෂණ",
+      "labReportNotes": "🔬 රසායනාගාර වාර්තා සටහන්",
+      "openPdf": "රසායනාගාර වාර්තාව විවෘත කරන්න (PDF)",
+      "viewImage": "රසායනාගාර වාර්තා රූපය බලන්න",
+      "clickToView": "ඔබේ වාර්තාව බැලීමට හෝ බාගත කිරීමට ක්ලික් කරන්න",
+      "priceHeading": "💰 මිල",
+      "priceValue": "රු. {{price}}",
+      "priceNotSet": "තවම සකසා නැත — රසායනාගාරය ඉක්මනින් මිලක් තහවුරු කරනු ඇත.",
+      "rejectedHeading": "❌ ඉල්ලීම ප්‍රතික්ෂේප කරන ලදී",
+      "rejectedHint": "පහත පණිවිඩවල රසායනාගාරයේ හේතුව බලන්න."
+    }
+  },
+  "myReports": {
+    "pageTitle": "මගේ වාර්තා",
+    "pageSubtitle": "ඔබගේ සියලුම සෞඛ්‍ය වාර්තා — උඩුගත කළ සහ රසායනාගාරවලින් ලැබුණු",
+    "uploadBtn": "වාර්තාවක් උඩුගත කරන්න",
+    "stats": {
+      "totalReports": "මුළු වාර්තා",
+      "labReady": "රසායනාගාර වාර්තා සූදානම්",
+      "pendingTests": "අපේක්ෂිත පරීක්ෂණ"
+    },
+    "searchPlaceholder": "වාර්තා නාමය, වෛද්‍යවරයා, රසායනාගාරය, විස්තරය අනුව සොයන්න…",
+    "filters": {
+      "all": "සියල්ල ({{count}})",
+      "personal": "පුද්ගලික ({{count}})",
+      "labSystem": "රසායනාගාර පද්ධතිය ({{count}})",
+      "typeWithCount": "{{label}} ({{count}})"
+    },
+    "types": {
+      "lab_report": "රසායනාගාර වාර්තාව",
+      "prescription": "බෙහෙත් වට්ටෝරුව",
+      "imaging": "රූප ගත කිරීම/එක්ස්-රේ",
+      "discharge_summary": "පිටව යාමේ සාරාංශය",
+      "vaccination": "එන්නත් කිරීම",
+      "other": "වෙනත්"
+    },
+    "labRequestLabel": "රසායනාගාර ඉල්ලීම",
+    "labTestFallback": "රසායනාගාර පරීක්ෂණය",
+    "empty": {
+      "noResultsFor": "\"{{query}}\" සඳහා ප්‍රතිඵල හමු නොවීය",
+      "noReportsYet": "තවම වාර්තා නැත",
+      "tryDifferentSearch": "වෙනත් සෙවුම් පදයක් උත්සාහ කරන්න හෝ පෙරහන හිස් කරන්න.",
+      "uploadFirst": "ඔබේ සෞඛ්‍ය වාර්තා සංවිධානාත්මකව තබා ගැනීමට ඔබේ පළමු වාර්තාව උඩුගත කරන්න."
+    },
+    "labCard": {
+      "labFallback": "රසායනාගාරය",
+      "statusReady": "වාර්තාව සූදානම්",
+      "statusProcessing": "සැකසෙමින්",
+      "labBadge": "රසායනාගාරය",
+      "testsLabel": "පරීක්ෂණ",
+      "waitingUpload": "රසායනාගාරය වාර්තාව උඩුගත කිරීම බලාපොරොත්තුවෙන්",
+      "clickToView": "වාර්තාව බැලීමට ක්ලික් කරන්න"
+    },
+    "personalCard": {
+      "viewBtn": "බලන්න",
+      "openingBtn": "විවෘත වෙමින්…"
+    },
+    "modal": {
+      "labReportFallback": "රසායනාගාර වාර්තාව",
+      "doctorLabel": "වෛද්‍යවරයා",
+      "labLabel": "රසායනාගාරය",
+      "statusReady": "✅ සූදානම්",
+      "statusProcessing": "🔄 සැකසෙමින්",
+      "statusPending": "⏳ අපේක්ෂිත",
+      "testsRequested": "ඉල්ලූ පරීක්ෂණ",
+      "labNotes": "රසායනාගාර සටහන්",
+      "openPdf": "PDF වාර්තාව විවෘත කරන්න",
+      "viewImage": "වාර්තා රූපය බලන්න",
+      "clickToOpen": "නව ටැබ් එකක විවෘත කිරීමට ක්ලික් කරන්න",
+      "waitingForLab": "රසායනාගාරය වාර්තා ගොනුව උඩුගත කිරීම බලාපොරොත්තුවෙන්"
+    },
+    "uploadModal": {
+      "title": "සෞඛ්‍ය වාර්තාවක් උඩුගත කරන්න",
+      "reportTitleLabel": "වාර්තා මාතෘකාව *",
+      "reportTitlePlaceholder": "උදා. රුධිර පරීක්ෂණය – ජනවාරි 2025",
+      "reportTypeLabel": "වාර්තා වර්ගය *",
+      "selectTypePlaceholder": "වර්ගය තෝරන්න…",
+      "issuedDateLabel": "නිකුත් කළ දිනය *",
+      "laboratoryNameLabel": "රසායනාගාර නාමය",
+      "laboratoryNamePlaceholder": "උදා. City Medical Laboratory",
+      "doctorNameLabel": "වෛද්‍යවරයාගේ නම",
+      "doctorNamePlaceholder": "වෛද්‍ය Smith",
+      "hospitalClinicLabel": "රෝහල / සායනය",
+      "hospitalClinicPlaceholder": "ජාතික රෝහල",
+      "notesPlaceholder": "මෙම වාර්තාවේ අඩංගු වන්නේ කුමක්ද?",
+      "fileLabel": "වාර්තා ගොනුව *",
+      "clickToUpload": "උඩුගත කිරීමට ක්ලික් කරන්න",
+      "fileHint": "PDF, JPG, PNG, TIFF — උපරිම 20 MB",
+      "uploading": "උඩුගත වෙමින්…",
+      "uploadBtn": "වාර්තාව උඩුගත කරන්න",
+      "errors": {
+        "titleRequired": "මාතෘකාව අවශ්‍යයි",
+        "typeRequired": "වාර්තා වර්ගය අවශ්‍යයි",
+        "dateRequired": "දිනය අවශ්‍යයි",
+        "fileRequired": "උඩුගත කිරීමට ගොනුවක් තෝරන්න",
+        "uploadFailed": "උඩුගත කිරීම අසාර්ථක විය"
+      }
+    },
+    "toast": {
+      "reportDeleted": "වාර්තාව මකා දමන ලදී.",
+      "deleteFailed": "මකා දැමීම අසාර්ථක විය",
+      "fileOpenFailed": "ගොනුව විවෘත කළ නොහැකි විය",
+      "uploadSuccess": "වාර්තාව සාර්ථකව උඩුගත කරන ලදී!"
+    },
+    "deleteConfirm": {
+      "title": "වාර්තාව මකන්නද?",
+      "message": "මෙය වාර්තාව සහ එහි ගොනුව ස්ථිරවම ඉවත් කරනු ඇත."
+    }
+  },
+  "accessRequests": {
+    "pageTitle": "වෛද්‍ය ඉල්ලීම්",
+    "pageSubtitle": "වෛද්‍යවරු ඔබේ සෞඛ්‍ය දත්තවලට ප්‍රවේශය ඉල්ලා සිටී — ඔවුන්ට බැලිය හැක්කේ කුමක්දැයි ඔබ පාලනය කරයි",
+    "loading": "ඉල්ලීම් පූරණය වෙමින්…",
+    "tabs": {
+      "healthInfo": "සෞඛ්‍ය තොරතුරු",
+      "labReports": "රසායනාගාර වාර්තා"
+    },
+    "typeMeta": {
+      "labReports": "රසායනාගාර වාර්තා",
+      "medicalHistory": "වෛද්‍ය ඉතිහාසය",
+      "personalReports": "පුද්ගලික සෞඛ්‍ය වාර්තා",
+      "contactInfo": "සම්බන්ධතා තොරතුරු",
+      "fullRecord": "සම්පූර්ණ සෞඛ්‍ය වාර්තාව"
+    },
+    "statusMeta": {
+      "pending": "ප්‍රතිචාරය අපේක්ෂිතයි",
+      "accepted": "ප්‍රවේශය ලබා දෙන ලදී"
+    },
+    "card": {
+      "accessRequested": "ප්‍රවේශය ඉල්ලා ඇත",
+      "fullRecordIncludes": "මෙය පහත සඳහා ප්‍රවේශය ලබා දේ:",
+      "defaultSpecialization": "වෛද්‍ය විශේෂඥ",
+      "reasonFromDoctor": "වෛද්‍යවරයාගෙන් හේතුව",
+      "requestedOn": "ඉල්ලූ දිනය: {{date}}",
+      "respondedOn": "ප්‍රතිචාර දැක්වූ දිනය: {{date}}",
+      "acceptWarning": "ඔබ පිළිගතහොත්, වෛද්‍ය {{doctor}} ට ඔවුන්ගේ පෝට්ලය තුළ ඔබේ {{type}} බැලීමට හැකි වනු ඇත.",
+      "acceptBtn": "ඉල්ලීම පිළිගන්න",
+      "declineBtn": "ප්‍රතික්ෂේප කරන්න",
+      "confirmDeclineQuestion": "ඔබට ප්‍රතික්ෂේප කිරීමට අවශ්‍ය බව ස්ථිරද?",
+      "yesDecline": "ඔව්, ප්‍රතික්ෂේප කරන්න",
+      "accessGrantedMsg": "ප්‍රවේශය ලබා දෙන ලදී — වෛද්‍ය {{doctor}} ට දැන් ඔබේ {{type}} බැලිය හැක",
+      "requestDeclinedMsg": "ඉල්ලීම ප්‍රතික්ෂේප කරන ලදී"
+    },
+    "labCard": {
+      "title": "රසායනාගාර වාර්තා ප්‍රවේශය",
+      "subtitle": "වෛද්‍යවරයාට ඔබේ රසායනාගාර වාර්තාව බැලීමට අවශ්‍යයි",
+      "laboratoryLabel": "රසායනාගාරය:",
+      "testsLabel": "පරීක්ෂණ",
+      "acceptWarning": "ඔබ පිළිගතහොත්, වෛද්‍ය {{doctor}} ට මෙම නිශ්චිත රසායනාගාර වාර්තාව බැලීමට සහ බාගත කිරීමට හැකි වනු ඇත.",
+      "allowAccessBtn": "ප්‍රවේශය ලබා දෙන්න",
+      "accessGrantedMsg": "ප්‍රවේශය ලබා දෙන ලදී — වෛද්‍ය {{doctor}} ට දැන් මෙම රසායනාගාර වාර්තාව බැලිය හැක"
+    },
+    "toast": {
+      "accessGranted": "ප්‍රවේශය ලබා දෙන ලදී! වෛද්‍යවරයාට දැනුම් දී ඇත.",
+      "requestDeclined": "ඉල්ලීම ප්‍රතික්ෂේප කරන ලදී.",
+      "respondFailed": "ප්‍රතිචාර දැක්වීමට අසමත් විය",
+      "labAccessGranted": "රසායනාගාර වාර්තා ප්‍රවේශය ලබා දෙන ලදී! වෛද්‍යවරයාට දැනුම් දී ඇත."
+    },
+    "filters": {
+      "all": "සියල්ල",
+      "accepted": "පිළිගත්"
+    },
+    "emptyHealthInfo": {
+      "allFilter": "සෞඛ්‍ය තොරතුරු ඉල්ලීම් නැත",
+      "filtered": "{{status}} සෞඛ්‍ය තොරතුරු ඉල්ලීම් නැත",
+      "subtitle": "වෛද්‍යවරයෙකු ඔබේ සෞඛ්‍ය දත්තවලට ප්‍රවේශය ඉල්ලූ විට, එය මෙහි දිස්වනු ඇත."
+    },
+    "emptyLabReports": {
+      "allFilter": "රසායනාගාර වාර්තා ඉල්ලීම් නැත",
+      "filtered": "{{status}} රසායනාගාර වාර්තා ඉල්ලීම් නැත",
+      "subtitle": "වෛද්‍යවරයෙකු ඔබේ රසායනාගාර වාර්තාවක් බැලීමට ඉල්ලූ විට, එය මෙහි දිස්වනු ඇත."
+    }
+  },
+  "bookDoctor": {
+    "pageTitle": "වෛද්‍යවරයෙකු වෙන් කරන්න",
+    "pageSubtitle": "වෛද්‍යවරයෙකුගේ ලබා ගත හැකි වේලාව සොයා හමුවීමක් ඉල්ලන්න",
+    "bookBtn": "හමුවීමක් වෙන් කරන්න",
+    "filters": {
+      "all": "සියල්ල"
+    },
+    "stats": {
+      "upcoming": "ඉදිරි",
+      "totalBooked": "මුළු වෙන් කළ"
+    },
+    "loading": "හමුවීම් පූරණය වෙමින්…",
+    "empty": {
+      "title": "තවම හමුවීම් නැත",
+      "subtitle": "ආරම්භ කිරීමට වෛද්‍යවරයෙකුගේ ලබා ගත හැකි වේලාවක් වෙන් කරන්න."
+    },
+    "statusLabels": {
+      "awaitingDoctor": "වෛද්‍යවරයා අපේක්ෂිතයි"
+    },
+    "doctorNote": "වෛද්‍යවරයාගේ සටහන: {{note}}",
+    "cancelConfirm": "මෙම හමුවීම අවලංගු කරන්නද?",
+    "toast": {
+      "cancelled": "හමුවීම අවලංගු කරන ලදී",
+      "cancelFailed": "අවලංගු කිරීමට අසමත් විය"
+    },
+    "modal": {
+      "title": "වෛද්‍ය හමුවීමක් වෙන් කරන්න",
+      "doctorLabel": "වෛද්‍යවරයා *",
+      "doctorSearchPlaceholder": "නම හෝ විශේෂඥතාව අනුව සොයන්න…",
+      "noDoctorsFound": "\"{{query}}\" සඳහා වෛද්‍යවරු හමු නොවීය",
+      "selectLocationLabel": "ස්ථානයක් තෝරන්න *",
+      "selectDateLabel": "දිනයක් තෝරන්න *",
+      "loadingAvailability": "ලබා ගත හැකි වේලාවන් පූරණය වෙමින්…",
+      "noAvailability": "මෙම වෛද්‍යවරයාට ඉදිරි සති දෙක තුළ ලබා ගත හැකි වේලාවන් නොමැත.",
+      "selectTimeLabel": "වේලාවක් තෝරන්න *",
+      "reasonLabel": "පැමිණීමට හේතුව",
+      "optional": "(අත්‍යවශ්‍ය නොවේ)",
+      "reasonPlaceholder": "උදා. පසු විපරම් පරීක්ෂාව, දිගටම පවතින හිසරදය…",
+      "submitBtn": "හමුවීම ඉල්ලන්න",
+      "bookedSuccess": "වෛද්‍ය {{doctor}} සමඟ හමුවීම ඉල්ලා ඇත!",
+      "errors": {
+        "selectDoctor": "කරුණාකර වෛද්‍යවරයෙකු තෝරන්න",
+        "selectDateTime": "කරුණාකර දිනයක් සහ වේලාවක් තෝරන්න",
+        "bookFailed": "හමුවීම වෙන් කිරීමට අසමත් විය"
+      }
+    }
+  }
+}

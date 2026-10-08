@@ -1,14 +1,20 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
-import { DbUser, JwtUser } from '../types';
+import { pool, queryAs } from '../config/db';
+import { DbUser } from '../types';
 
-const generateToken = (user: Pick<DbUser, 'id' | 'email' | 'role'>): string =>
+const generateToken = (
+  user: Pick<DbUser, 'id' | 'email' | 'role'>,
+  opts?: { expiresIn?: string; impersonatedBy?: number }
+): string =>
   jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    {
+      id: user.id, email: user.email, role: user.role,
+      ...(opts?.impersonatedBy ? { impersonatedBy: opts.impersonatedBy } : {}),
+    },
     process.env.JWT_SECRET as string,
-    { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any }
+    { expiresIn: (opts?.expiresIn || process.env.JWT_EXPIRES_IN || '7d') as any }
   );
 
 const getOrgForUser = async (userId: number) => {
@@ -112,8 +118,9 @@ const createProfile = async (
 const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const { name, email, password, role, profile } = req.body as {
+    const { name, email, password, role, profile, hospital_organization_ids } = req.body as {
       name: string; email: string; password: string; role: string; profile?: Record<string, any>;
+      hospital_organization_ids?: number[];
     };
 
     const existing = await client.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -125,12 +132,53 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     await client.query('BEGIN');
 
     const hash = await bcrypt.hash(password, 10);
-    const { rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'>>(
-      'INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role',
-      [name, email, hash, role]
+    // PRO-29: the existence check above races with a second concurrent
+    // registration for the same email — both can pass it before either
+    // commits. The unique constraint on users.email is what actually
+    // prevents the duplicate; map its violation to the same 409 instead of
+    // letting it fall through to errorHandler as a raw 500.
+    let user: Pick<DbUser, 'id' | 'name' | 'email' | 'role'>;
+    try {
+      ({ rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'>>(
+        'INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role',
+        [name, email, hash, role]
+      ));
+    } catch (err) {
+      if ((err as { code?: string }).code === '23505') {
+        await client.query('ROLLBACK');
+        res.status(409).json({ message: 'Email already in use' });
+        return;
+      }
+      throw err;
+    }
+
+    // patient_profiles lives in the `clinical` schema behind row-level
+    // security. There's no authenticated session during registration, but
+    // the user we just created *is* the actor for their own profile row,
+    // so set the RLS context to them before inserting it.
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+      [String(user.id), role]
     );
 
     if (profile) await createProfile(client, role, user.id, profile);
+
+    // A doctor can self-register already affiliated with 0+ existing hospitals/
+    // clinics (more can be added later from Settings) — just membership rows,
+    // same as the admin-driven addMember flow, no approval needed.
+    if (role === 'doctor' && Array.isArray(hospital_organization_ids) && hospital_organization_ids.length) {
+      const { rows: validOrgs } = await client.query(
+        "SELECT id FROM public.organizations WHERE id = ANY($1) AND is_active = TRUE AND org_type IN ('hospital','clinic')",
+        [hospital_organization_ids]
+      );
+      for (const org of validOrgs) {
+        await client.query(
+          `INSERT INTO public.organization_members (organization_id, user_id, member_role)
+           VALUES ($1, $2, 'doctor') ON CONFLICT (organization_id, user_id) DO NOTHING`,
+          [org.id, user.id]
+        );
+      }
+    }
 
     await client.query('COMMIT');
     res.status(201).json({ user, token: generateToken(user as DbUser) });
@@ -177,7 +225,7 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
     let profile: Record<string, unknown> | null = null;
 
     if (user.role === 'patient') {
-      const { rows: p } = await pool.query('SELECT * FROM patient_profiles WHERE user_id = $1', [user.id]);
+      const { rows: p } = await queryAs({ id: req.user.id, role: req.user.role }, 'SELECT * FROM patient_profiles WHERE user_id = $1', [user.id]);
       profile = p[0] || null;
     } else if (user.role === 'doctor') {
       const { rows: p } = await pool.query('SELECT * FROM doctor_profiles WHERE user_id = $1', [user.id]);
@@ -197,4 +245,50 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
   }
 };
 
-export { register, login, getMe, createProfile, generateToken };
+/**
+ * Admin "View As" — mints a short-lived token for the target user so the
+ * admin's browser session becomes that user for every subsequent request
+ * (REST, RLS actor context, and socket room — see server/middleware/auth.ts
+ * and server/config/socket.ts, both of which just trust whatever identity
+ * is in the JWT). Session-start only; logged to impersonation_log for a
+ * lightweight "who viewed as whom and when" audit trail, not per-action.
+ */
+const impersonate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const targetId = parseInt(req.params.userId, 10);
+    const { rows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [targetId]);
+    if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+
+    const target = rows[0];
+    if (!target.is_active) { res.status(400).json({ message: 'Cannot view as an inactive account.' }); return; }
+    if (target.role === 'admin') { res.status(403).json({ message: 'Cannot view as another admin.' }); return; }
+
+    const organization = await getOrgForUser(target.id);
+    const { password: _, ...safeUser } = target;
+
+    await pool.query(
+      `INSERT INTO impersonation_log (admin_id, target_user_id, target_name, target_role) VALUES ($1,$2,$3,$4)`,
+      [req.user.id, target.id, target.name, target.role]
+    );
+
+    res.json({
+      user: { ...safeUser, organization },
+      token: generateToken(target, { expiresIn: '4h', impersonatedBy: req.user.id }),
+    });
+  } catch (err) { next(err); }
+};
+
+const listImpersonations = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT il.*, a.name AS admin_name
+      FROM impersonation_log il
+      JOIN users a ON a.id = il.admin_id
+      ORDER BY il.started_at DESC
+      LIMIT 20
+    `);
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
+export { register, login, getMe, createProfile, generateToken, impersonate, listImpersonations };

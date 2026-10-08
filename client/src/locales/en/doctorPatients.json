@@ -1,0 +1,223 @@
+{
+  "patientView": {
+    "backToDashboard": "Back to Dashboard",
+    "loadingProfile": "Loading patient profile…",
+    "notFound": "Patient not found",
+    "goBack": "← Go back",
+    "ageYears": "{{age}} yrs",
+    "dob": "DOB: {{date}}",
+    "knownAllergies": "Known Allergies",
+    "chronicConditions": "Chronic Conditions",
+    "noAllergiesOrConditions": "No allergies or chronic conditions recorded.",
+    "activeMedications": "Active Medications",
+    "medicinesPrescribedCount": "{{count}} medicine currently prescribed",
+    "protectedPatientData": "Protected Patient Data",
+    "toastAccessRequestSent": "Access request sent! Patient will be notified.",
+    "doctorPrefix": "Dr.",
+    "opening": "Opening…",
+    "fileOpenError": "Failed to open file. Please try again.",
+    "accessTypes": {
+      "labReports": { "label": "Lab Reports", "desc": "Hospital & clinic laboratory test results" },
+      "medicationWorkflow": { "label": "Medication Workflow", "desc": "Consultation records, diagnoses & full prescriptions" },
+      "personalReports": { "label": "Personal Health Reports", "desc": "Patient-uploaded medical documents & reports" },
+      "personalDetails": { "label": "Personal Details", "desc": "Personal contact, address & insurance details" },
+      "vitals": { "label": "Patient Vitals", "desc": "Blood work, CBC, metabolic & vital sign readings" },
+      "fullRecord": { "label": "Full Health Record" }
+    },
+    "fullAccess": {
+      "title": "Request Full Access",
+      "grantedTitle": "Full access granted",
+      "grantedDesc": "You can view this patient's complete health record below.",
+      "noneDesc": "Send one request to view lab reports, medical history, personal reports, contact info and vitals — all at once.",
+      "pendingDesc": "Waiting for the patient to approve your request, sent {{date}}.",
+      "declinedDesc": "The patient declined your last request.",
+      "requestButton": "Request Full Access",
+      "reRequestButton": "Re-request",
+      "pendingButton": "Pending…"
+    },
+    "accessSection": {
+      "granted": "Granted",
+      "reRequest": "Re-request",
+      "requestAccess": "Request Access",
+      "waitingApproval": "Request sent — waiting for patient approval",
+      "patientDeclined": "Patient declined this request",
+      "accessRequired": "Request full access above to unlock this",
+      "requestedOn": "Requested on {{date}}"
+    },
+    "requestModal": {
+      "descriptionPre": "You are requesting access to the patient's",
+      "descriptionPost": "The patient will be notified and must approve before you can view this data.",
+      "errorDefault": "Failed to send request",
+      "reasonLabel": "Reason for request",
+      "optional": "(optional)",
+      "reasonPlaceholder": "e.g. Required for diagnosis and treatment planning…",
+      "sending": "Sending…",
+      "sendRequest": "Send Request"
+    },
+    "labReportsTab": {
+      "empty": "No lab reports found.",
+      "labFallback": "Laboratory",
+      "viewPdf": "View PDF"
+    },
+    "medicalHistoryTab": {
+      "empty": "No consultation history found.",
+      "visitFallback": "Medical Visit",
+      "statusDispensed": "Dispensed",
+      "symptoms": "Symptoms",
+      "diagnosis": "Diagnosis",
+      "treatmentPlan": "Treatment Plan",
+      "labTestsRequested": "Lab Tests Requested",
+      "prescribedMedications": "Prescribed Medications ({{count}})",
+      "ocrBadge": "OCR",
+      "noMedicinesPrescribed": "No medicines prescribed for this visit."
+    },
+    "contactInfoTab": {
+      "empty": "No contact details on file.",
+      "emergencyContact": "Emergency Contact",
+      "emergencyPhone": "Emergency Phone",
+      "insurance": "Insurance",
+      "policyNumber": "Policy No."
+    },
+    "personalReportsTab": {
+      "empty": "No personal reports uploaded.",
+      "types": {
+        "labReport": "Lab Report",
+        "prescription": "Prescription",
+        "imaging": "Imaging",
+        "dischargeSummary": "Discharge Summary",
+        "vaccination": "Vaccination",
+        "other": "Other"
+      }
+    },
+    "vitalsTab": {
+      "empty": "No vitals recorded yet.",
+      "recordedOn": "Recorded {{date}}",
+      "fromLabReport": "From Lab Report",
+      "manualEntry": "Manual Entry",
+      "entriesCount": "{{count}} recorded entries — most recent first",
+      "latest": "Latest",
+      "lab": "Lab",
+      "manual": "Manual",
+      "groups": {
+        "basicVitals": {
+          "label": "Basic Vitals",
+          "fields": {
+            "bpSystolic": "Systolic BP",
+            "bpDiastolic": "Diastolic BP",
+            "heartRate": "Heart Rate",
+            "temperature": "Temperature",
+            "oxygenSaturation": "SpO₂"
+          }
+        },
+        "metabolicPanel": {
+          "label": "Metabolic Panel",
+          "fields": {
+            "bloodGlucose": "Blood Glucose",
+            "hba1c": "HbA1c",
+            "creatinine": "Creatinine"
+          }
+        },
+        "lipidPanel": {
+          "label": "Lipid Panel",
+          "fields": {
+            "cholesterol": "Total Cholesterol",
+            "hdl": "HDL",
+            "ldl": "LDL",
+            "triglycerides": "Triglycerides"
+          }
+        },
+        "cbcPanel": {
+          "label": "CBC Panel",
+          "fields": {
+            "hemoglobin": "Hemoglobin",
+            "wbc": "WBC",
+            "rbc": "RBC",
+            "platelets": "Platelets",
+            "hematocrit": "Hematocrit",
+            "mcv": "MCV",
+            "mch": "MCH",
+            "mchc": "MCHC",
+            "rdw": "RDW",
+            "mpv": "MPV"
+          }
+        }
+      }
+    }
+  },
+  "appointments": {
+    "pageTitle": "Appointments",
+    "pageSubtitle": "Manage booking requests and set the hours patients can book you",
+    "tabs": {
+      "requestsBookings": "Requests & Bookings",
+      "availabilitySettings": "Availability Settings"
+    },
+    "weekdays": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    "weekdaysShort": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "status": {
+      "pendingResponse": "Pending Response"
+    },
+    "stats": {
+      "pendingRequests": "Pending Requests"
+    },
+    "filters": {
+      "all": "All"
+    },
+    "loading": "Loading appointments…",
+    "emptyTitle": "No appointments here",
+    "emptySubtitle": "Booking requests from patients will show up here.",
+    "yourNote": "Your note: {{note}}",
+    "actions": {
+      "accept": "Accept",
+      "decline": "Decline",
+      "markCompleted": "Mark Completed"
+    },
+    "confirmCancel": "Cancel this confirmed appointment?",
+    "toast": {
+      "confirmed": "Appointment confirmed",
+      "declined": "Appointment declined",
+      "cancelled": "Appointment cancelled",
+      "completed": "Appointment marked completed",
+      "updated": "Updated",
+      "updateFailed": "Failed to update appointment"
+    },
+    "declineModal": {
+      "title": "Decline Appointment",
+      "placeholder": "Let the patient know why (optional)…"
+    },
+    "availability": {
+      "defaultWeeklyHours": "Default Weekly Hours",
+      "defaultWeeklyHoursDesc": "Turn on the days you normally see patients, and set your hours for each.",
+      "toastWeeklySaved": "Weekly availability saved",
+      "toastWeeklyFailed": "Failed to save availability",
+      "toastDayUpdated": "Availability updated for that day",
+      "toastDayUpdateFailed": "Failed to update that day",
+      "toastDayReverted": "Reverted to default schedule",
+      "toastDayResetFailed": "Failed to reset that day",
+      "to": "to",
+      "minSlots": "{{count}} min slots",
+      "endTimeError": "End time must be after start time",
+      "notAvailable": "Not available",
+      "exceptionsTitle": "This Week's Exceptions",
+      "exceptionsDesc": "Override your default schedule for a specific upcoming day — e.g. block a day off, or open a normally-closed day.",
+      "available": "Available",
+      "overrideSuffix": " (override)",
+      "defaultSuffix": " (default)",
+      "open": "Open",
+      "block": "Block",
+      "reset": "Reset"
+    },
+    "hospitals": {
+      "title": "My Hospitals / Clinics",
+      "description": "Affiliate with the hospitals or clinics where you practice — set different hours for each from below.",
+      "searchPlaceholder": "Search for a hospital or clinic...",
+      "searching": "Searching…",
+      "noResults": "No matching hospitals or clinics found",
+      "toastAdded": "Added to your hospitals",
+      "toastAddFailed": "Failed to add that affiliation",
+      "toastRemoved": "Removed from your hospitals",
+      "toastRemoveFailed": "Failed to remove that affiliation",
+      "editingHoursFor": "Editing hours for:",
+      "general": "General (no specific location)"
+    }
+  }
+}

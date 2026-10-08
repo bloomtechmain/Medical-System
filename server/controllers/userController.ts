@@ -1,14 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
-import { pool } from '../config/db';
+import { pool, queryAs, RLSActor } from '../config/db';
+import { parsePaging } from '../utils/pagination';
+
+// clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
+// live behind row-level security — queries against them must carry the
+// acting user's identity. See config/db.ts (queryAs).
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { role } = req.query as { role?: string };
-    let query = 'SELECT id, name, email, role, is_active, created_at FROM users';
-    const params: string[] = [];
-    if (role) { query += ' WHERE role = $1'; params.push(role); }
-    query += ' ORDER BY created_at DESC';
+    const { role } = req.query as Record<string, string | undefined>;
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
+
+    let query = 'SELECT id, name, email, role, is_active, created_at FROM users WHERE deleted_at IS NULL';
+    const params: unknown[] = [];
+    if (role) { params.push(role); query += ` AND role = $${params.length}`; }
+    params.push(limit, offset);
+    query += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) { next(err); }
@@ -17,7 +26,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 const getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1 AND deleted_at IS NULL',
       [req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
@@ -35,7 +44,7 @@ const getOneWithProfile = async (req: Request, res: Response, next: NextFunction
     const user = rows[0];
     let profile: Record<string, unknown> | null = null;
     if (user.role === 'patient') {
-      const { rows: p } = await pool.query('SELECT * FROM clinical.patient_profiles WHERE user_id = $1', [user.id]);
+      const { rows: p } = await queryAs(actor(req), 'SELECT * FROM clinical.patient_profiles WHERE user_id = $1', [user.id]);
       profile = p[0] || null;
     } else if (user.role === 'doctor') {
       const { rows: p } = await pool.query('SELECT * FROM public.doctor_profiles WHERE user_id = $1', [user.id]);
@@ -66,6 +75,77 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
+/** Upserts the role-specific profile row. Shared by admin edit (any user) and self-service edit (own profile). */
+const upsertRoleProfile = async (
+  client: import('pg').PoolClient,
+  userId: number,
+  role: string,
+  profile: Record<string, string>
+): Promise<void> => {
+  if (role === 'doctor') {
+    await client.query(`
+      INSERT INTO public.doctor_profiles (user_id, phone, specialization, license_number, medical_school, years_experience, hospital_affiliation, consultation_fee, bio)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ON CONFLICT (user_id) DO UPDATE SET
+        phone=$2, specialization=$3, license_number=$4, medical_school=$5,
+        years_experience=$6, hospital_affiliation=$7, consultation_fee=$8, bio=$9, updated_at=NOW()
+    `, [userId, profile.phone||null, profile.specialization||null, profile.license_number||null,
+        profile.medical_school||null, parseInt(profile.years_experience)||0,
+        profile.hospital_affiliation||null, parseFloat(profile.consultation_fee)||0, profile.bio||null]);
+  } else if (role === 'pharmacist') {
+    await client.query(`
+      INSERT INTO public.pharmacist_profiles (user_id, phone, license_number, pharmacy_name, pharmacy_address, years_experience, specialization_area)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      ON CONFLICT (user_id) DO UPDATE SET
+        phone=$2, license_number=$3, pharmacy_name=$4, pharmacy_address=$5, years_experience=$6, specialization_area=$7, updated_at=NOW()
+    `, [userId, profile.phone||null, profile.license_number||null, profile.pharmacy_name||null,
+        profile.pharmacy_address||null, parseInt(profile.years_experience)||0, profile.specialization_area||null]);
+  } else if (role === 'patient') {
+    await client.query(`
+      INSERT INTO clinical.patient_profiles (
+        user_id, date_of_birth, gender, phone, address,
+        emergency_contact_name, emergency_contact_phone,
+        blood_type, allergies, chronic_conditions,
+        insurance_provider, insurance_policy_number
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      ON CONFLICT (user_id) DO UPDATE SET
+        date_of_birth=$2, gender=$3, phone=$4, address=$5,
+        emergency_contact_name=$6, emergency_contact_phone=$7,
+        blood_type=$8, allergies=$9, chronic_conditions=$10,
+        insurance_provider=$11, insurance_policy_number=$12, updated_at=NOW()
+    `, [userId, profile.date_of_birth||null, profile.gender||null, profile.phone||null,
+        profile.address||null, profile.emergency_contact_name||null, profile.emergency_contact_phone||null,
+        profile.blood_type||null, profile.allergies||null, profile.chronic_conditions||null,
+        profile.insurance_provider||null, profile.insurance_policy_number||null]);
+  } else if (role === 'laboratory') {
+    await client.query(`
+      INSERT INTO public.laboratory_profiles (user_id, phone, lab_name, lab_type, license_number, accreditation, address, services_offered, operating_hours)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ON CONFLICT (user_id) DO UPDATE SET
+        phone=$2, lab_name=$3, lab_type=$4, license_number=$5, accreditation=$6, address=$7, services_offered=$8, operating_hours=$9, updated_at=NOW()
+    `, [userId, profile.phone||null, profile.lab_name||null, profile.lab_type||null,
+        profile.license_number||null, profile.accreditation||null, profile.address||null,
+        profile.services_offered||null, profile.operating_hours||null]);
+  }
+};
+
+const fetchRoleProfile = async (
+  client: import('pg').PoolClient,
+  userId: number,
+  role: string
+): Promise<Record<string, unknown> | null> => {
+  const table = ({
+    doctor:     'public.doctor_profiles',
+    pharmacist: 'public.pharmacist_profiles',
+    patient:    'clinical.patient_profiles',
+    laboratory: 'public.laboratory_profiles',
+  } as Record<string, string>)[role];
+  if (!table) return null;
+  const { rows } = await client.query(`SELECT * FROM ${table} WHERE user_id = $1`, [userId]);
+  return rows[0] || null;
+};
+
 const updateWithProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
@@ -84,69 +164,126 @@ const updateWithProfile = async (req: Request, res: Response, next: NextFunction
     }
     params.push(req.params.id);
 
+    await client.query('BEGIN');
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+      [String(req.user.id), req.user.role]
+    );
+
     const { rows } = await client.query(
       `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${params.length} RETURNING id, name, email, role, is_active`,
       params
     );
-    if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ message: 'User not found' }); return;
+    }
     const user = rows[0];
 
     if (profile && Object.keys(profile).length) {
-      if (user.role === 'doctor') {
-        await client.query(`
-          INSERT INTO public.doctor_profiles (user_id, phone, specialization, license_number, medical_school, years_experience, hospital_affiliation, consultation_fee, bio)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-          ON CONFLICT (user_id) DO UPDATE SET
-            phone=$2, specialization=$3, license_number=$4, medical_school=$5,
-            years_experience=$6, hospital_affiliation=$7, consultation_fee=$8, bio=$9, updated_at=NOW()
-        `, [user.id, profile.phone||null, profile.specialization||null, profile.license_number||null,
-            profile.medical_school||null, parseInt(profile.years_experience)||0,
-            profile.hospital_affiliation||null, parseFloat(profile.consultation_fee)||0, profile.bio||null]);
-      } else if (user.role === 'pharmacist') {
-        await client.query(`
-          INSERT INTO public.pharmacist_profiles (user_id, phone, license_number, pharmacy_name, pharmacy_address, years_experience, specialization_area)
-          VALUES ($1,$2,$3,$4,$5,$6,$7)
-          ON CONFLICT (user_id) DO UPDATE SET
-            phone=$2, license_number=$3, pharmacy_name=$4, pharmacy_address=$5, years_experience=$6, specialization_area=$7, updated_at=NOW()
-        `, [user.id, profile.phone||null, profile.license_number||null, profile.pharmacy_name||null,
-            profile.pharmacy_address||null, parseInt(profile.years_experience)||0, profile.specialization_area||null]);
-      } else if (user.role === 'patient') {
-        await client.query(`
-          INSERT INTO clinical.patient_profiles (user_id, date_of_birth, gender, phone, address, blood_type, allergies, chronic_conditions)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-          ON CONFLICT (user_id) DO UPDATE SET
-            date_of_birth=$2, gender=$3, phone=$4, address=$5, blood_type=$6, allergies=$7, chronic_conditions=$8, updated_at=NOW()
-        `, [user.id, profile.date_of_birth||null, profile.gender||null, profile.phone||null,
-            profile.address||null, profile.blood_type||null, profile.allergies||null, profile.chronic_conditions||null]);
-      } else if (user.role === 'laboratory') {
-        await client.query(`
-          INSERT INTO public.laboratory_profiles (user_id, phone, lab_name, lab_type, license_number, accreditation, address, services_offered, operating_hours)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-          ON CONFLICT (user_id) DO UPDATE SET
-            phone=$2, lab_name=$3, lab_type=$4, license_number=$5, accreditation=$6, address=$7, services_offered=$8, operating_hours=$9, updated_at=NOW()
-        `, [user.id, profile.phone||null, profile.lab_name||null, profile.lab_type||null,
-            profile.license_number||null, profile.accreditation||null, profile.address||null,
-            profile.services_offered||null, profile.operating_hours||null]);
-      }
+      await upsertRoleProfile(client, user.id, user.role, profile);
     }
 
-    let updatedProfile: Record<string, unknown> | null = null;
-    if (user.role === 'doctor') {
-      const { rows: p } = await client.query('SELECT * FROM public.doctor_profiles WHERE user_id = $1', [user.id]);
-      updatedProfile = p[0] || null;
-    } else if (user.role === 'pharmacist') {
-      const { rows: p } = await client.query('SELECT * FROM public.pharmacist_profiles WHERE user_id = $1', [user.id]);
-      updatedProfile = p[0] || null;
-    } else if (user.role === 'patient') {
-      const { rows: p } = await client.query('SELECT * FROM clinical.patient_profiles WHERE user_id = $1', [user.id]);
-      updatedProfile = p[0] || null;
-    } else if (user.role === 'laboratory') {
-      const { rows: p } = await client.query('SELECT * FROM public.laboratory_profiles WHERE user_id = $1', [user.id]);
-      updatedProfile = p[0] || null;
-    }
+    const updatedProfile = await fetchRoleProfile(client, user.id, user.role);
 
+    await client.query('COMMIT');
     res.json({ ...user, profile: updatedProfile });
-  } catch (err) { next(err); } finally { client.release(); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+/** Self-service profile edit: any logged-in user editing their own name + role profile fields. No email/password/role/is_active — those stay admin-only. */
+const updateMyProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    const { name, profile } = req.body as { name?: string; profile?: Record<string, string> };
+    const userId = req.user.id;
+    const role   = req.user.role;
+
+    await client.query('BEGIN');
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+      [String(userId), role]
+    );
+
+    if (name && name.trim()) {
+      await client.query('UPDATE users SET name=$1, updated_at=NOW() WHERE id=$2', [name.trim(), userId]);
+    }
+
+    if (profile && Object.keys(profile).length) {
+      await upsertRoleProfile(client, userId, role, profile);
+    }
+
+    const { rows: [user] } = await client.query(
+      'SELECT id, name, email, role, is_active FROM users WHERE id=$1', [userId]
+    );
+    const updatedProfile = await fetchRoleProfile(client, userId, role);
+
+    await client.query('COMMIT');
+    res.json({ ...user, profile: updatedProfile });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+// Every organization this user belongs to, any member_role (not just 'owner') —
+// the plural counterpart to authController's singular/owner-only getOrgForUser,
+// used for doctor multi-hospital affiliation features (availability, booking,
+// Settings) without touching that legacy singular field or its consumers.
+const getMyOrganizations = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT o.id, o.name, o.org_type, o.slug, om.member_role
+      FROM public.organization_members om
+      JOIN public.organizations o ON o.id = om.organization_id
+      WHERE om.user_id = $1 AND o.is_active = TRUE
+      ORDER BY o.name
+    `, [req.user.id]);
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
+// Self-service join — a doctor adding another hospital/clinic affiliation later
+// from Settings. Only doctors may join as 'doctor'; the org must be a hospital/clinic.
+const joinOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (req.user.role !== 'doctor') { res.status(403).json({ message: 'Only doctors can join a hospital/clinic this way' }); return; }
+    const { organization_id } = req.body as { organization_id?: number };
+    if (!organization_id) { res.status(400).json({ message: 'organization_id is required' }); return; }
+
+    const { rows: org } = await pool.query(
+      "SELECT id, org_type FROM public.organizations WHERE id=$1 AND is_active=TRUE AND org_type IN ('hospital','clinic')",
+      [organization_id]
+    );
+    if (!org.length) { res.status(404).json({ message: 'Organization not found' }); return; }
+
+    const { rows } = await pool.query(`
+      INSERT INTO public.organization_members (organization_id, user_id, member_role)
+      VALUES ($1, $2, 'doctor')
+      ON CONFLICT (organization_id, user_id) DO NOTHING
+      RETURNING *
+    `, [organization_id, req.user.id]);
+
+    res.status(201).json(rows[0] || { organization_id, user_id: req.user.id, member_role: 'doctor' });
+  } catch (err) { next(err); }
+};
+
+const leaveOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rowCount } = await pool.query(
+      "DELETE FROM public.organization_members WHERE organization_id=$1 AND user_id=$2 AND member_role != 'owner'",
+      [req.params.organizationId, req.user.id]
+    );
+    if (!rowCount) { res.status(404).json({ message: 'Membership not found (or you are the owner and cannot leave)' }); return; }
+    res.status(204).end();
+  } catch (err) { next(err); }
 };
 
 const toggleActive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -161,46 +298,104 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
   } catch (err) { next(err); }
 };
 
+// PRO-25: users were hard-deleted. Soft-delete (deleted_at) instead, and
+// deactivate the login at the same time; a separate, ops-run purge script
+// removes rows for real after a retention window (see
+// server/scripts/purgeSoftDeleted.ts) rather than this doing it immediately.
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    const { rowCount } = await pool.query(
+      'UPDATE users SET deleted_at = NOW(), is_active = FALSE WHERE id = $1 AND deleted_at IS NULL',
+      [req.params.id]
+    );
     if (!rowCount) { res.status(404).json({ message: 'User not found' }); return; }
     res.status(204).end();
   } catch (err) { next(err); }
 };
 
+// userController.getStats() used to run a UNION ALL across every tenant
+// schema's sales/appointments tables on every single request, so the query
+// grew with the number of organisations. Instead it reads this cache and
+// only pays for the cross-tenant scan once per PLATFORM_STATS_TTL_MS, no
+// matter how many admins load the dashboard in between.
+const PLATFORM_STATS_TTL_MS = parseInt(process.env.PLATFORM_STATS_TTL_MS || '300000', 10); // 5 min
+
+const computePlatformStats = async (): Promise<{
+  total_sales: number; total_revenue: number; sales_this_month: number;
+  total_appointments: number; upcoming_appointments: number; completed_appointments: number;
+}> => {
+  const [pharmacyRes, hospitalRes] = await Promise.all([
+    pool.query(
+      "SELECT schema_name FROM public.organizations WHERE org_type='pharmacy' AND schema_name IS NOT NULL AND is_active=TRUE"
+    ),
+    pool.query(
+      "SELECT schema_name FROM public.organizations WHERE org_type IN ('hospital','clinic') AND schema_name IS NOT NULL AND is_active=TRUE"
+    ),
+  ]);
+
+  const pharmacySchemas: string[] = pharmacyRes.rows.map((r: any) => r.schema_name);
+  const hospitalSchemas: string[] = hospitalRes.rows.map((r: any) => r.schema_name);
+
+  // Build cross-tenant SQL (schema names come from DB, not user input)
+  const salesSQL = pharmacySchemas.length
+    ? `SELECT COUNT(*)::bigint AS total_sales,
+              COALESCE(SUM(total_amount),0)::numeric AS total_revenue,
+              COUNT(*) FILTER (WHERE sold_at >= NOW() - INTERVAL '30 days')::bigint AS sales_this_month
+       FROM (${pharmacySchemas.map(s => `SELECT total_amount, sold_at FROM "${s}".sales`).join(' UNION ALL ')}) _s`
+    : `SELECT 0::bigint AS total_sales, 0::numeric AS total_revenue, 0::bigint AS sales_this_month`;
+
+  const apptSQL = hospitalSchemas.length
+    ? `SELECT COUNT(*)::bigint AS total_appointments,
+              COUNT(*) FILTER (WHERE status='scheduled')::bigint AS upcoming_appointments,
+              COUNT(*) FILTER (WHERE status='completed')::bigint AS completed_appointments
+       FROM (${hospitalSchemas.map(s => `SELECT status FROM "${s}".appointments`).join(' UNION ALL ')}) _a`
+    : `SELECT 0::bigint AS total_appointments, 0::bigint AS upcoming_appointments, 0::bigint AS completed_appointments`;
+
+  const [salesRow, apptRow] = await Promise.all([pool.query(salesSQL), pool.query(apptSQL)]);
+  return {
+    total_sales: salesRow.rows[0].total_sales,
+    total_revenue: salesRow.rows[0].total_revenue,
+    sales_this_month: salesRow.rows[0].sales_this_month,
+    total_appointments: apptRow.rows[0].total_appointments,
+    upcoming_appointments: apptRow.rows[0].upcoming_appointments,
+    completed_appointments: apptRow.rows[0].completed_appointments,
+  };
+};
+
+const getCachedPlatformStats = async () => {
+  const { rows } = await pool.query(
+    `SELECT *, (NOW() - computed_at) > $1::interval AS is_stale
+     FROM public.platform_stats_cache WHERE id = 1`,
+    [`${PLATFORM_STATS_TTL_MS} milliseconds`]
+  );
+  const cached = rows[0];
+  if (cached && !cached.is_stale) return cached;
+
+  const fresh = await computePlatformStats();
+  const { rows: upserted } = await pool.query(
+    `INSERT INTO public.platform_stats_cache
+       (id, total_sales, total_revenue, sales_this_month, total_appointments, upcoming_appointments, completed_appointments, computed_at)
+     VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (id) DO UPDATE SET
+       total_sales = EXCLUDED.total_sales, total_revenue = EXCLUDED.total_revenue,
+       sales_this_month = EXCLUDED.sales_this_month, total_appointments = EXCLUDED.total_appointments,
+       upcoming_appointments = EXCLUDED.upcoming_appointments, completed_appointments = EXCLUDED.completed_appointments,
+       computed_at = EXCLUDED.computed_at
+     RETURNING *`,
+    [fresh.total_sales, fresh.total_revenue, fresh.sales_this_month,
+     fresh.total_appointments, fresh.upcoming_appointments, fresh.completed_appointments]
+  );
+  return upserted[0];
+};
+
 const getStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Phase 1: get tenant schema names for dynamic cross-tenant queries
-    const [pharmacyRes, hospitalRes] = await Promise.all([
-      pool.query(
-        "SELECT schema_name FROM public.organizations WHERE org_type='pharmacy' AND schema_name IS NOT NULL AND is_active=TRUE"
-      ),
-      pool.query(
-        "SELECT schema_name FROM public.organizations WHERE org_type IN ('hospital','clinic') AND schema_name IS NOT NULL AND is_active=TRUE"
-      ),
-    ]);
+    // Phase 1: cross-tenant sales/appointments totals come from the cache
+    // (recomputed lazily, at most once per TTL — see getCachedPlatformStats).
+    const platformStats = await getCachedPlatformStats();
 
-    const pharmacySchemas: string[] = pharmacyRes.rows.map((r: any) => r.schema_name);
-    const hospitalSchemas: string[] = hospitalRes.rows.map((r: any) => r.schema_name);
-
-    // Build cross-tenant SQL (schema names come from DB, not user input)
-    const salesSQL = pharmacySchemas.length
-      ? `SELECT COUNT(*)::bigint AS total_sales,
-                COALESCE(SUM(total_amount),0)::numeric AS total_revenue,
-                COUNT(*) FILTER (WHERE sold_at >= NOW() - INTERVAL '30 days')::bigint AS sales_this_month
-         FROM (${pharmacySchemas.map(s => `SELECT total_amount, sold_at FROM "${s}".sales`).join(' UNION ALL ')}) _s`
-      : `SELECT 0::bigint AS total_sales, 0::numeric AS total_revenue, 0::bigint AS sales_this_month`;
-
-    const apptSQL = hospitalSchemas.length
-      ? `SELECT COUNT(*)::bigint AS total_appointments,
-                COUNT(*) FILTER (WHERE status='scheduled')::bigint AS upcoming_appointments,
-                COUNT(*) FILTER (WHERE status='completed')::bigint AS completed_appointments
-         FROM (${hospitalSchemas.map(s => `SELECT status FROM "${s}".appointments`).join(' UNION ALL ')}) _a`
-      : `SELECT 0::bigint AS total_appointments, 0::bigint AS upcoming_appointments, 0::bigint AS completed_appointments`;
-
-    // Phase 2: run all stats in parallel
-    const [userRes, orgRes, medRes, consultRes, labRes, salesRow, apptRow, recentRes] = await Promise.all([
+    // Phase 2: run all other stats in parallel
+    const [userRes, orgRes, medRes, consultRes, labRes, recentRes] = await Promise.all([
       pool.query(`
         SELECT
           COUNT(*) FILTER (WHERE role='patient')    AS total_patients,
@@ -230,22 +425,20 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
           COUNT(*) FILTER (WHERE expiry_date < NOW())         AS expired
         FROM public.medicines WHERE is_active=TRUE
       `),
-      pool.query(`
+      queryAs(actor(req), `
         SELECT
           COUNT(*)                                          AS total_consultations,
           COUNT(*) FILTER (WHERE status='active')           AS active_consultations,
           COUNT(*) FILTER (WHERE status='completed')        AS completed_consultations
         FROM clinical.medical_consultations
       `),
-      pool.query(`
+      queryAs(actor(req), `
         SELECT
           COUNT(*)                                          AS total_lab_requests,
           COUNT(*) FILTER (WHERE status='pending')          AS pending_lab_requests,
           COUNT(*) FILTER (WHERE status='completed')        AS completed_lab_requests
         FROM clinical.lab_requests
       `),
-      pool.query(salesSQL),
-      pool.query(apptSQL),
       pool.query(`
         SELECT id, name, email, role, is_active, created_at
         FROM public.users ORDER BY created_at DESC LIMIT 8
@@ -258,17 +451,31 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
       medicines:     medRes.rows[0],
       consultations: consultRes.rows[0],
       labs:          labRes.rows[0],
-      sales:         salesRow.rows[0],
-      appointments:  apptRow.rows[0],
+      sales: {
+        total_sales: platformStats.total_sales,
+        total_revenue: platformStats.total_revenue,
+        sales_this_month: platformStats.sales_this_month,
+      },
+      appointments: {
+        total_appointments: platformStats.total_appointments,
+        upcoming_appointments: platformStats.upcoming_appointments,
+        completed_appointments: platformStats.completed_appointments,
+      },
       recentUsers:   recentRes.rows,
     });
   } catch (err) { next(err); }
 };
 
+// PRO-02: these searches relied entirely on the client debouncing and never
+// sending short queries — nothing server-side stopped a 1-character (or
+// empty) query from hitting the database directly.
+const MIN_SEARCH_LEN = 2;
+
 const searchPatients = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
-    const { rows } = await pool.query(`
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
+    const { rows } = await queryAs(actor(req), `
       SELECT u.id, u.name, u.email, u.is_active,
              p.phone, p.date_of_birth, p.blood_type, p.gender
       FROM public.users u
@@ -284,6 +491,7 @@ const searchPatients = async (req: Request, res: Response, next: NextFunction): 
 const searchPharmacists = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
              p.pharmacy_name, p.pharmacy_address, p.phone,
@@ -299,9 +507,35 @@ const searchPharmacists = async (req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 };
 
+const searchDoctors = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
+    const { rows } = await pool.query(`
+      SELECT u.id, u.name, u.email, u.is_active,
+             p.specialization, p.hospital_affiliation, p.phone, p.license_number,
+             COALESCE(
+               (SELECT JSON_AGG(JSON_BUILD_OBJECT('id', o.id, 'name', o.name, 'org_type', o.org_type) ORDER BY o.name)
+                FROM public.organization_members om
+                JOIN public.organizations o ON o.id = om.organization_id
+                WHERE om.user_id = u.id AND o.is_active = TRUE AND o.org_type IN ('hospital','clinic')),
+               '[]'
+             ) AS organizations
+      FROM public.users u
+      LEFT JOIN public.doctor_profiles p ON p.user_id = u.id
+      WHERE u.role = 'doctor' AND u.is_active = TRUE
+        AND (u.name ILIKE $1 OR p.specialization ILIKE $1
+             OR p.hospital_affiliation ILIKE $1 OR u.email ILIKE $1)
+      ORDER BY u.name LIMIT 20
+    `, [`%${q}%`]);
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
 const searchLaboratories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
              p.lab_name, p.lab_type, p.address, p.phone,
@@ -318,4 +552,4 @@ const searchLaboratories = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-export { getAll, getOne, getOneWithProfile, update, updateWithProfile, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories };
+export { getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, getMyOrganizations, joinOrganization, leaveOrganization, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors };

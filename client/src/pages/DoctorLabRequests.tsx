@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus, X, Search, FlaskConical, CheckCircle2, Clock, XCircle,
-  Eye, Lock, Send, ArrowUpRight, Microscope, FileText,
+  Eye, Lock, Send, ArrowUpRight, Microscope,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { labApi, userApi, labViewRequestApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import { SERVER_ORIGIN } from '../env';
-
-const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
 function useDebounce(v: string, ms = 350) {
   const [d, setD] = useState(v);
@@ -28,6 +28,7 @@ interface SearchDropdownProps {
 }
 
 function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSelect, renderItem, renderSelected }: SearchDropdownProps) {
+  const { t } = useTranslation('doctorClinical');
   const [q, setQ]       = useState('');
   const dq              = useDebounce(q);
   const [open, setOpen] = useState(false);
@@ -69,7 +70,7 @@ function SearchDropdown({ label, placeholder, fetchFn, queryKey, selected, onSel
           {open && dq.length >= 1 && (
             <ul className="absolute z-40 mt-1 w-full bg-white rounded-2xl shadow-xl border border-gray-100 max-h-52 overflow-y-auto">
               {(results as any[]).length === 0 && !isFetching
-                ? <li className="px-4 py-3 text-sm text-gray-400">No results for "{dq}"</li>
+                ? <li className="px-4 py-3 text-sm text-gray-400">{t('shared.noResultsFor', { query: dq })}</li>
                 : (results as any[]).map((item: any) => (
                   <li key={item.id}
                     onClick={() => { onSelect(item); setOpen(false); setQ(''); }}
@@ -91,6 +92,8 @@ interface NewRequestModalProps {
 }
 
 function NewRequestModal({ onClose, onSaved }: NewRequestModalProps) {
+  const { t } = useTranslation('doctorClinical');
+  const { t: tc } = useTranslation('common');
   const [patient,    setPatient]    = useState<any>(null);
   const [lab,        setLab]        = useState<any>(null);
   const [testDesc,   setTestDesc]   = useState('');
@@ -100,16 +103,16 @@ function NewRequestModal({ onClose, onSaved }: NewRequestModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!patient)         return setError('Please select a patient');
-    if (!lab)             return setError('Please select a laboratory');
-    if (!testDesc.trim()) return setError('Test description is required');
+    if (!patient)         return setError(t('labRequests.newModal.errorSelectPatient'));
+    if (!lab)             return setError(t('labRequests.newModal.errorSelectLab'));
+    if (!testDesc.trim()) return setError(t('labRequests.newModal.errorTestDescRequired'));
     setError('');
     setSubmitting(true);
     try {
       await labApi.create({ patient_id: patient.id, laboratory_id: lab.id, test_description: testDesc, notes });
       onSaved(); onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to create request');
+      setError(err.message || t('labRequests.newModal.errorCreateFailed'));
     } finally { setSubmitting(false); }
   };
 
@@ -123,8 +126,8 @@ function NewRequestModal({ onClose, onSaved }: NewRequestModalProps) {
                 <Microscope size={18} strokeWidth={1.8} />
               </div>
               <div>
-                <p className="font-bold text-base">New Lab Request</p>
-                <p className="text-white/70 text-xs">Assign a lab test for your patient</p>
+                <p className="font-bold text-base">{t('labRequests.newModal.title')}</p>
+                <p className="text-white/70 text-xs">{t('labRequests.newModal.subtitle')}</p>
               </div>
             </div>
             <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors">
@@ -141,8 +144,8 @@ function NewRequestModal({ onClose, onSaved }: NewRequestModalProps) {
           )}
 
           <SearchDropdown
-            label="Patient *"
-            placeholder="Search by name or email…"
+            label={t('labRequests.newModal.patientLabel')}
+            placeholder={t('labRequests.newModal.patientPlaceholder')}
             fetchFn={userApi.searchPatients}
             queryKey="lab-search-patients"
             selected={patient}
@@ -166,17 +169,17 @@ function NewRequestModal({ onClose, onSaved }: NewRequestModalProps) {
 
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Tests Required <span className="text-red-400">*</span>
+              {t('labRequests.newModal.testsRequiredLabel')} <span className="text-red-400">*</span>
             </label>
             <textarea rows={3}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400"
-              placeholder="e.g. Full Blood Count, Liver Function Tests, Blood Glucose…"
+              placeholder={t('labRequests.newModal.testsRequiredPlaceholder')}
               value={testDesc} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setTestDesc(e.target.value)} />
           </div>
 
           <SearchDropdown
-            label="Assign Laboratory *"
-            placeholder="Search by lab name or address…"
+            label={t('labRequests.newModal.assignLabLabel')}
+            placeholder={t('labRequests.newModal.assignLabPlaceholder')}
             fetchFn={userApi.searchLaboratories}
             queryKey="lab-search-labs"
             selected={lab}
@@ -202,24 +205,24 @@ function NewRequestModal({ onClose, onSaved }: NewRequestModalProps) {
 
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Clinical Notes <span className="text-gray-300 font-normal">(optional)</span>
+              {t('labRequests.newModal.clinicalNotesLabel')} <span className="text-gray-300 font-normal">{t('shared.optional')}</span>
             </label>
             <textarea rows={2}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400"
-              placeholder="Notes for the lab technician…"
+              placeholder={t('labRequests.newModal.clinicalNotesPlaceholder')}
               value={notes} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)} />
           </div>
 
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
               className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">
-              Cancel
+              {tc('actions.cancel')}
             </button>
             <button type="submit" disabled={submitting}
               className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-teal-500 to-emerald-600 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
               {submitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
               <Send size={14} strokeWidth={2.5} />
-              Send to Lab
+              {t('labRequests.newModal.sendButton')}
             </button>
           </div>
         </form>
@@ -235,6 +238,8 @@ interface ViewRequestModalProps {
 }
 
 function ViewRequestModal({ labRequestId, onClose, onRequested }: ViewRequestModalProps) {
+  const { t } = useTranslation('doctorClinical');
+  const { t: tc } = useTranslation('common');
   const [message, setMessage] = useState('');
   const qc = useQueryClient();
 
@@ -260,8 +265,8 @@ function ViewRequestModal({ labRequestId, onClose, onRequested }: ViewRequestMod
                 <Eye size={16} strokeWidth={2} />
               </div>
               <div>
-                <p className="font-bold">Request Report Access</p>
-                <p className="text-white/70 text-xs">Patient must approve before you can view</p>
+                <p className="font-bold">{t('labRequests.viewRequestModal.title')}</p>
+                <p className="text-white/70 text-xs">{t('labRequests.viewRequestModal.subtitle')}</p>
               </div>
             </div>
             <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors">
@@ -271,15 +276,15 @@ function ViewRequestModal({ labRequestId, onClose, onRequested }: ViewRequestMod
         </div>
         <div className="px-5 py-5 space-y-4">
           <p className="text-sm text-gray-600 leading-relaxed">
-            The patient will be notified and must accept your request before you can view this lab report.
+            {t('labRequests.viewRequestModal.description')}
           </p>
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-              Reason <span className="text-gray-300 font-normal">(optional)</span>
+              {t('labRequests.viewRequestModal.reasonLabel')} <span className="text-gray-300 font-normal">{t('shared.optional')}</span>
             </label>
             <textarea
               rows={2}
-              placeholder="e.g. Required for treatment plan review…"
+              placeholder={t('labRequests.viewRequestModal.reasonPlaceholder')}
               value={message}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400"
@@ -290,7 +295,7 @@ function ViewRequestModal({ labRequestId, onClose, onRequested }: ViewRequestMod
               onClick={onClose}
               className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              {tc('actions.cancel')}
             </button>
             <button
               onClick={() => mutation.mutate()}
@@ -298,7 +303,7 @@ function ViewRequestModal({ labRequestId, onClose, onRequested }: ViewRequestMod
               className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
             >
               {mutation.isPending && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-              Send Request
+              {t('labRequests.viewRequestModal.sendButton')}
             </button>
           </div>
         </div>
@@ -314,6 +319,7 @@ interface ViewRequestStripProps {
 }
 
 function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewRequestStripProps) {
+  const { t } = useTranslation('doctorClinical');
   const [viewing, setViewing] = useState(false);
 
   const openFile = async () => {
@@ -327,7 +333,7 @@ function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewReques
       if (!res.ok) throw new Error('Could not fetch file');
       const blob = await res.blob();
       window.open(URL.createObjectURL(blob), '_blank');
-    } catch { alert('Could not open file.'); }
+    } catch { alert(t('labRequests.viewRequestStrip.errorOpenFile')); }
     finally { setViewing(false); }
   };
 
@@ -341,7 +347,7 @@ function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewReques
           className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl hover:opacity-90 transition-opacity shadow-sm"
         >
           <Lock size={14} strokeWidth={2.5} />
-          Request to View Report
+          {t('labRequests.viewRequestStrip.requestButton')}
         </button>
       )}
 
@@ -349,8 +355,8 @@ function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewReques
         <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-2.5">
           <Clock size={14} strokeWidth={2.5} className="text-amber-500 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-amber-700">Awaiting Patient Approval</p>
-            <p className="text-[10px] text-amber-500">Patient has been notified — waiting for response</p>
+            <p className="text-xs font-bold text-amber-700">{t('labRequests.viewRequestStrip.awaitingTitle')}</p>
+            <p className="text-[10px] text-amber-500">{t('labRequests.viewRequestStrip.awaitingSubtitle')}</p>
           </div>
         </div>
       )}
@@ -359,7 +365,7 @@ function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewReques
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 flex-1 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-1.5">
             <CheckCircle2 size={13} strokeWidth={2.5} className="text-emerald-600 shrink-0" />
-            <span className="text-xs font-bold text-emerald-700">Access Granted</span>
+            <span className="text-xs font-bold text-emerald-700">{t('labRequests.viewRequestStrip.accessGranted')}</span>
           </div>
           <button
             onClick={openFile}
@@ -370,7 +376,7 @@ function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewReques
               ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               : <Eye size={13} strokeWidth={2.5} />
             }
-            View Report
+            {t('labRequests.viewRequestStrip.viewReportButton')}
           </button>
         </div>
       )}
@@ -379,13 +385,13 @@ function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewReques
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 flex-1 bg-red-50 border border-red-100 rounded-xl px-3 py-1.5">
             <XCircle size={13} strokeWidth={2.5} className="text-red-500 shrink-0" />
-            <span className="text-xs font-bold text-red-600">Patient Declined</span>
+            <span className="text-xs font-bold text-red-600">{t('labRequests.viewRequestStrip.patientDeclined')}</span>
           </div>
           <button
             onClick={() => onOpenModal(labRequestId)}
             className="text-xs font-bold text-primary-600 bg-primary-50 border border-primary-100 px-3 py-2 rounded-xl hover:bg-primary-100 transition-colors"
           >
-            Re-request
+            {t('labRequests.viewRequestStrip.reRequestButton')}
           </button>
         </div>
       )}
@@ -394,14 +400,26 @@ function ViewRequestStrip({ labRequestId, viewRequest, onOpenModal }: ViewReques
 }
 
 export default function DoctorLabRequests() {
+  const { t } = useTranslation('doctorClinical');
+  const { t: tc } = useTranslation('common');
   const [showForm,         setShowForm]         = useState(false);
   const [filter,           setFilter]           = useState('all');
   const [toast,            setToast]            = useState<string | null>(null);
   const [viewModalLabId,   setViewModalLabId]   = useState<number | null>(null);
   const qc = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const { data: labRequests  = [], isLoading: loadingLab  } = useQuery({ queryKey: ['lab-requests'],      queryFn: labApi.getAll });
   const { data: viewRequests = [], isLoading: loadingView } = useQuery({ queryKey: ['lab-view-requests'], queryFn: labViewRequestApi.getAll });
+
+  useEffect(() => {
+    if ((location.state as any)?.autoOpen) {
+      setShowForm(true);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const viewMap = useMemo(() => {
     const map: Record<number, any> = {};
@@ -422,9 +440,9 @@ export default function DoctorLabRequests() {
   };
 
   const STATUS_STYLE: Record<string, { cls: string; label: string }> = {
-    pending:     { cls:'bg-amber-100 text-amber-700',   label:'Pending'     },
-    in_progress: { cls:'bg-blue-100 text-blue-700',     label:'In Progress' },
-    completed:   { cls:'bg-emerald-100 text-emerald-700', label:'Completed'  },
+    pending:     { cls:'bg-amber-100 text-amber-700',   label: tc('status.pending')     },
+    in_progress: { cls:'bg-blue-100 text-blue-700',     label: tc('status.inProgress')  },
+    completed:   { cls:'bg-emerald-100 text-emerald-700', label: tc('status.completed') },
   };
 
   const isLoading = loadingLab || loadingView;
@@ -440,24 +458,24 @@ export default function DoctorLabRequests() {
 
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Received Lab Reports</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Track lab tests you've sent and request access to view completed reports</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t('labRequests.page.title')}</h1>
+          <p className="text-sm text-gray-400 mt-0.5">{t('labRequests.page.subtitle')}</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-teal-500 to-emerald-600 rounded-2xl shadow-sm hover:opacity-90 transition-opacity"
         >
           <Plus size={15} strokeWidth={2.5} />
-          New Lab Request
+          {t('labRequests.page.newRequestButton')}
         </button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label:'Total Sent',    value:counts.total,     grad:'from-cyan-500 to-sky-600'      },
-          { label:'Completed',     value:counts.completed, grad:'from-emerald-500 to-teal-600'  },
-          { label:'Pending',       value:counts.pending,   grad:'from-amber-500 to-orange-500'  },
-          { label:'View Granted',  value:counts.granted,   grad:'from-violet-500 to-purple-600' },
+          { label: t('labRequests.page.statsTotalSent'),   value:counts.total,     grad:'from-cyan-500 to-sky-600'      },
+          { label: tc('status.completed'),                 value:counts.completed, grad:'from-emerald-500 to-teal-600'  },
+          { label: tc('status.pending'),                   value:counts.pending,   grad:'from-amber-500 to-orange-500'  },
+          { label: t('labRequests.page.statsViewGranted'), value:counts.granted,   grad:'from-violet-500 to-purple-600' },
         ].map(s => (
           <div key={s.label} className="ios-stat-tile relative overflow-hidden">
             <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${s.grad} opacity-10`} />
@@ -471,30 +489,39 @@ export default function DoctorLabRequests() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {['all','completed','pending','in_progress'].map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-              filter === f
-                ? 'bg-primary-600 text-white border-primary-600'
-                : 'bg-white text-gray-500 border-gray-200 hover:border-primary-300'
-            }`}>
-            {f === 'all' ? `All (${counts.total})` : `${f.replace('_',' ')} (${(labRequests as any[]).filter((r: any) => r.status===f).length})`}
-          </button>
-        ))}
+        {['all','completed','pending','in_progress'].map(f => {
+          const FILTER_LABELS: Record<string, string> = {
+            all: t('labRequests.page.filterAll'),
+            completed: tc('status.completed'),
+            pending: tc('status.pending'),
+            in_progress: tc('status.inProgress'),
+          };
+          const count = f === 'all' ? counts.total : (labRequests as any[]).filter((r: any) => r.status===f).length;
+          return (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                filter === f
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-primary-300'
+              }`}>
+              {t('labRequests.page.filterCountFormat', { label: FILTER_LABELS[f], count })}
+            </button>
+          );
+        })}
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-24 text-gray-400">
           <span className="w-5 h-5 border-2 border-gray-200 border-t-primary-500 rounded-full animate-spin mr-3" />
-          Loading…
+          {tc('actions.loading')}
         </div>
       ) : (filtered as any[]).length === 0 ? (
         <div className="text-center py-20">
           <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <FlaskConical size={28} strokeWidth={1.3} className="text-gray-300" />
           </div>
-          <p className="font-bold text-gray-500">No lab requests found</p>
-          <p className="text-sm text-gray-400 mt-1">Create a new lab request to get started.</p>
+          <p className="font-bold text-gray-500">{t('labRequests.page.emptyTitle')}</p>
+          <p className="text-sm text-gray-400 mt-1">{t('labRequests.page.emptySubtitle')}</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -529,25 +556,25 @@ export default function DoctorLabRequests() {
                         </span>
                         {isComplete && viewReq?.status === 'accepted' && (
                           <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Eye size={9} strokeWidth={2.5} /> View Access
+                            <Eye size={9} strokeWidth={2.5} /> {t('labRequests.page.viewAccessBadge')}
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
                         <FlaskConical size={10} strokeWidth={2} />
-                        {r.lab_name || 'Laboratory'} · {formatDate(r.created_at)}
+                        {r.lab_name || t('labRequests.page.labFallback')} · {formatDate(r.created_at)}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-3 bg-gray-50 rounded-xl px-3.5 py-2.5 border border-gray-100">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Tests Requested</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{t('labRequests.page.testsRequestedLabel')}</p>
                     <p className="text-sm text-gray-700 line-clamp-2">{r.test_description}</p>
                   </div>
 
                   {r.report_notes && (
                     <div className="mt-2 bg-teal-50 rounded-xl px-3.5 py-2.5 border border-teal-100">
-                      <p className="text-[10px] font-bold text-teal-600 uppercase tracking-wider mb-0.5">Lab Notes</p>
+                      <p className="text-[10px] font-bold text-teal-600 uppercase tracking-wider mb-0.5">{t('labRequests.page.labNotesLabel')}</p>
                       <p className="text-xs text-gray-700 line-clamp-2">{r.report_notes}</p>
                     </div>
                   )}
@@ -555,7 +582,7 @@ export default function DoctorLabRequests() {
                   {!isComplete && (
                     <div className="mt-3 flex items-center gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2">
                       <Clock size={12} strokeWidth={2} className="text-amber-400" />
-                      Waiting for laboratory to complete and upload the report
+                      {t('labRequests.page.waitingForLab')}
                     </div>
                   )}
 
@@ -577,14 +604,14 @@ export default function DoctorLabRequests() {
         <ViewRequestModal
           labRequestId={viewModalLabId}
           onClose={() => setViewModalLabId(null)}
-          onRequested={() => showToast('Request sent! Patient has been notified.')}
+          onRequested={() => showToast(t('labRequests.page.toastRequestSent'))}
         />
       )}
 
       {showForm && (
         <NewRequestModal
           onClose={() => setShowForm(false)}
-          onSaved={() => { qc.invalidateQueries({ queryKey: ['lab-requests'] }); showToast('Lab request sent to laboratory!'); }}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ['lab-requests'] }); showToast(t('labRequests.page.toastLabRequestSent')); }}
         />
       )}
     </div>

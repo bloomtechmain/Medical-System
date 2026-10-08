@@ -1,11 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Stethoscope, FlaskConical, ShieldCheck, ArrowUpRight, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { authApi, consultationApi, labApi, accessRequestApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/helpers';
 
 export default function ClinicDashboard() {
+  const { t } = useTranslation('doctorCore');
+  const { t: tc } = useTranslation('common');
   const { user } = useAuth();
   const navigate = useNavigate();
   const org = user?.organization;
@@ -38,29 +41,25 @@ export default function ClinicDashboard() {
     <div className="space-y-6">
 
       {/* Welcome banner */}
-      <div className="relative bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 rounded-2xl p-6 overflow-hidden text-white">
+      <div className="relative w-full lg:w-3/4 bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 rounded-2xl p-6 overflow-hidden text-white">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-20 translate-x-20" />
         <div className="absolute bottom-0 left-32 w-48 h-48 bg-white/5 rounded-full translate-y-16" />
         <div className="relative flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-semibold bg-white/15 border border-white/20 px-2.5 py-0.5 rounded-full">
-                🩺 Clinic Portal
+                🩺 {t('clinicDashboard.badge')}
               </span>
             </div>
             <h1 className="text-2xl font-bold mt-2">
-              {org?.name || 'My Clinic'}
+              {org?.name || t('clinicDashboard.defaultName')}
             </h1>
             <p className="text-teal-100 text-sm mt-1">
-              Welcome back, Dr. {firstName} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              {t('dashboard.welcomeBack', { name: firstName })} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </p>
             {profile?.specialization && (
               <p className="text-teal-300 text-xs mt-1">{profile.specialization}</p>
             )}
-          </div>
-          <div className="hidden sm:flex flex-col items-center bg-white/10 rounded-xl p-4 shrink-0">
-            <span className="text-4xl">🩺</span>
-            <p className="text-xs mt-1 text-teal-200">Clinic</p>
           </div>
         </div>
 
@@ -70,42 +69,51 @@ export default function ClinicDashboard() {
             to="/clinic/consultations"
             className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
           >
-            <Stethoscope size={13} /> New Consultation
+            <Stethoscope size={13} /> {t('dashboard.actions.newConsultation')}
           </Link>
           <Link
             to="/clinic/lab-requests"
             className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
           >
-            <FlaskConical size={13} /> Lab Requests
+            <FlaskConical size={13} /> {t('dashboard.actions.labRequests')}
           </Link>
           <Link
             to="/clinic/requests"
             className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
           >
-            <ShieldCheck size={13} /> Requests
+            <ShieldCheck size={13} /> {t('clinicDashboard.actions.requests')}
             {pendingRequests > 0 && (
               <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRequests}</span>
             )}
           </Link>
         </div>
-      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        {[
-          { label: 'Active Consultations', value: activeConsultations, icon: Stethoscope, bg: 'bg-teal-50',   text: 'text-teal-600'   },
-          { label: 'Completed Today',      value: completedToday,      icon: CheckCircle2, bg: 'bg-emerald-50', text: 'text-emerald-600' },
-          { label: 'Pending Lab Tests',    value: pendingLabs,         icon: FlaskConical, bg: 'bg-purple-50', text: 'text-purple-600' },
-          { label: 'Access Requests',      value: pendingRequests,     icon: ShieldCheck,  bg: 'bg-amber-50',  text: 'text-amber-600'  },
-        ].map(({ label, value, icon: Icon, bg, text }) => (
-          <div key={label} className={`rounded-xl border p-5 ${bg}`}>
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${bg} border`}>
-              <Icon size={16} className={text} />
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500 mt-1">{label}</p>
-          </div>
-        ))}
+        {/* Stats list */}
+        <div className="relative mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
+          {(() => {
+            const fields = [
+              { label: t('clinicDashboard.stats.activeConsultations'), value: activeConsultations, icon: Stethoscope },
+              { label: t('clinicDashboard.stats.completedToday'),      value: completedToday,      icon: CheckCircle2 },
+              { label: t('dashboard.stats.pendingLabTests'),    value: pendingLabs,         icon: FlaskConical },
+              { label: t('dashboard.stats.accessRequests'),      value: pendingRequests,     icon: ShieldCheck  },
+            ];
+            const rows = [];
+            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
+            return rows.map((row, i) => (
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10 max-w-2xl">
+                {row.map(({ label, value, icon: Icon }) => (
+                  <div key={label} className="flex items-center gap-3 px-6 py-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                      <Icon size={16} className="text-white" />
+                    </div>
+                    <span className="flex-1 text-sm text-teal-100 truncate">{label}</span>
+                    <span className="text-base font-bold text-white shrink-0">{value}</span>
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -113,14 +121,14 @@ export default function ClinicDashboard() {
         {/* Recent consultations */}
         <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-900">Recent Consultations</h2>
+            <h2 className="font-semibold text-gray-900">{t('dashboard.recentConsultations.title')}</h2>
             <Link to="/clinic/consultations" className="text-xs text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
-              View all <ArrowUpRight size={12} />
+              {t('dashboard.recentConsultations.viewAll')} <ArrowUpRight size={12} />
             </Link>
           </div>
           <div className="divide-y divide-gray-50">
             {recentConsultations.length === 0 ? (
-              <div className="py-10 text-center text-gray-400 text-sm">No consultations yet</div>
+              <div className="py-10 text-center text-gray-400 text-sm">{t('dashboard.recentConsultations.empty')}</div>
             ) : recentConsultations.map((c: any) => (
               <div
                 key={c.id}
@@ -131,11 +139,11 @@ export default function ClinicDashboard() {
                   {c.patient_name?.[0]?.toUpperCase() || 'P'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{c.patient_name || `Patient #${c.patient_id}`}</p>
-                  <p className="text-xs text-gray-400 truncate">{c.diagnosis || c.sick_description || 'General consultation'}</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{c.patient_name || t('dashboard.recentConsultations.patientFallback', { id: c.patient_id })}</p>
+                  <p className="text-xs text-gray-400 truncate">{c.diagnosis || c.sick_description || t('dashboard.recentConsultations.generalConsultation')}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${statusColor(c.status)}`}>{c.status}</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${statusColor(c.status)}`}>{tc(`status.${c.status}`, { defaultValue: c.status })}</span>
                   <span className="text-xs text-gray-400">{formatDate(c.visit_date || c.created_at)}</span>
                 </div>
               </div>
@@ -149,26 +157,26 @@ export default function ClinicDashboard() {
           {/* Clinic / org info */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <span className="text-lg">🩺</span> Clinic Info
+              <span className="text-lg">🩺</span> {t('clinicDashboard.info.title')}
             </h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-400">Name</span>
+                <span className="text-gray-400">{t('dashboard.info.name')}</span>
                 <span className="font-medium text-gray-700 text-right max-w-[55%] truncate">{org?.name || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">Type</span>
+                <span className="text-gray-400">{t('dashboard.info.type')}</span>
                 <span className="font-medium text-gray-700 capitalize">{org?.org_type || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">Slug</span>
+                <span className="text-gray-400">{t('dashboard.info.slug')}</span>
                 <span className="font-mono text-xs text-gray-500">{org?.slug || '—'}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">Status</span>
+                <span className="text-gray-400">{t('dashboard.info.status')}</span>
                 {org?.is_active
-                  ? <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 size={12} /> Active</span>
-                  : <span className="flex items-center gap-1 text-xs text-amber-600 font-medium"><AlertCircle size={12} /> Inactive</span>
+                  ? <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 size={12} /> {t('dashboard.info.active')}</span>
+                  : <span className="flex items-center gap-1 text-xs text-amber-600 font-medium"><AlertCircle size={12} /> {t('dashboard.info.inactive')}</span>
                 }
               </div>
             </div>
@@ -177,14 +185,14 @@ export default function ClinicDashboard() {
           {/* Activity summary */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Clock size={14} className="text-gray-400" /> Summary
+              <Clock size={14} className="text-gray-400" /> {t('clinicDashboard.summary.title')}
             </h3>
             <div className="space-y-3">
               {[
-                { label: 'Total consultations', value: (consultations as any[]).length, color: 'bg-teal-500' },
-                { label: 'Total lab requests',  value: (labRequests  as any[]).length, color: 'bg-purple-500' },
-                { label: 'Completed cases',     value: (consultations as any[]).filter((c: any) => c.status === 'completed').length, color: 'bg-emerald-500' },
-                { label: 'Dispensed',           value: (consultations as any[]).filter((c: any) => c.status === 'dispensed').length, color: 'bg-blue-500' },
+                { label: t('clinicDashboard.summary.totalConsultations'), value: (consultations as any[]).length, color: 'bg-teal-500' },
+                { label: t('clinicDashboard.summary.totalLabRequests'),  value: (labRequests  as any[]).length, color: 'bg-purple-500' },
+                { label: t('clinicDashboard.summary.completedCases'),     value: (consultations as any[]).filter((c: any) => c.status === 'completed').length, color: 'bg-emerald-500' },
+                { label: t('clinicDashboard.summary.dispensed'),           value: (consultations as any[]).filter((c: any) => c.status === 'dispensed').length, color: 'bg-blue-500' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -200,12 +208,12 @@ export default function ClinicDashboard() {
           {/* Doctor profile */}
           {profile && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h3 className="font-semibold text-gray-900 mb-3">My Profile</h3>
+              <h3 className="font-semibold text-gray-900 mb-3">{t('dashboard.profile.title')}</h3>
               <div className="space-y-1.5 text-sm">
                 {profile.specialization && <p className="text-gray-500">🩺 {profile.specialization}</p>}
                 {profile.license_number  && <p className="text-gray-500">🪪 {profile.license_number}</p>}
-                {profile.years_experience > 0 && <p className="text-gray-500">📅 {profile.years_experience} yrs experience</p>}
-                {profile.consultation_fee > 0  && <p className="text-gray-500">💰 LKR {profile.consultation_fee.toLocaleString()} fee</p>}
+                {profile.years_experience > 0 && <p className="text-gray-500">📅 {t('clinicDashboard.profile.yearsExpShort', { count: profile.years_experience })}</p>}
+                {profile.consultation_fee > 0  && <p className="text-gray-500">💰 {t('clinicDashboard.profile.fee', { amount: profile.consultation_fee.toLocaleString() })}</p>}
                 {profile.phone && <p className="text-gray-500">📞 {profile.phone}</p>}
               </div>
             </div>

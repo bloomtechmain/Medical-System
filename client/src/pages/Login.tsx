@@ -37,7 +37,7 @@ export default function Login() {
     <div className="min-h-screen flex bg-gray-50">
       {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-700 to-primary-900 flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
+        <Link to="/welcome" className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
             <svg className="w-6 h-6 text-primary-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 12h15m-7.5-7.5v15M9 7.5H6a1.5 1.5 0 00-1.5 1.5v9A1.5 1.5 0 006 19.5h12a1.5 1.5 0 001.5-1.5V9A1.5 1.5 0 0018 7.5h-3" />
@@ -47,7 +47,7 @@ export default function Login() {
             <p className="text-white font-bold text-lg leading-none">Core Health</p>
             <p className="text-primary-200 text-xs">by BloomTech</p>
           </div>
-        </div>
+        </Link>
 
         <div>
           <h2 className="text-4xl font-bold text-white leading-tight mb-4">
@@ -81,7 +81,7 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-8">
+          <Link to="/welcome" className="lg:hidden text-center mb-8 block">
             <div className="inline-flex items-center gap-2 mb-2">
               <div className="w-9 h-9 bg-primary-600 rounded-xl flex items-center justify-center">
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -91,7 +91,7 @@ export default function Login() {
               <span className="text-xl font-bold text-gray-900">Core Health</span>
             </div>
             <p className="text-sm text-gray-500">by BloomTech</p>
-          </div>
+          </Link>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
             <div className="mb-6">

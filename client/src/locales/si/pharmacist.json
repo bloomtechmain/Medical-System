@@ -1,0 +1,326 @@
+{
+  "dashboard": {
+    "welcome": "ආයුබෝවන්,",
+    "defaultName": "ෆාමසිස්ට්",
+    "defaultPharmacyName": "ෆාමසිය",
+    "portalSuffix": "කෝර් හෙල්ත් පෝට්ලය",
+    "stats": {
+      "totalMedicines": "මුළු බෙහෙත් ගණන",
+      "lowStockItems": "අඩු තොග අයිතම",
+      "expiredItems": "කල් ඉකුත් වූ අයිතම",
+      "todaysRevenue": "අද දින ආදායම",
+      "salesCount": "විකුණුම් {{count}}"
+    },
+    "quickActions": {
+      "newSale": "+ නව විකුණුමක්",
+      "addMedicine": "+ බෙහෙතක් එකතු කරන්න",
+      "newOrder": "+ නව ඇණවුමක්"
+    },
+    "searchPlaceholder": "බෙහෙතක් සොයන්න...",
+    "inStock": "තොග {{count}}",
+    "salesTrendTitle": "විකුණුම් ප්‍රවණතාව (දින 14)",
+    "noSalesData": "තවම විකුණුම් දත්ත නැත.",
+    "revenueProfitTitle": "ආදායම සහ ලාභය",
+    "todayVsYesterday": "අද vs ඊයේ",
+    "thisWeekVsLast": "මෙම සතිය vs පසුගිය සතිය",
+    "profitMarginTitle": "ලාභ ආන්තිකය (දින 30)",
+    "revenueCostLine": "ආදායම {{revenue}} · පිරිවැය {{cost}}",
+    "lowStockAlertsTitle": "අඩු තොග අනතුරු ඇඟවීම්",
+    "allStockHealthy": "සියලුම තොග මට්ටම් සතුටුදායකයි.",
+    "suggestReorder": "යෝජිත නැවත ඇණවුම: {{count}}",
+    "itemsLeft": "ඉතිරි {{count}}",
+    "expiringSoonTitle": "ළඟදීම කල් ඉකුත් වේ (දින 30)",
+    "nothingExpiringSoon": "ළඟදී කල් ඉකුත් වන දෙයක් නැත.",
+    "daysLeft": "දින {{count}}ක් ඉතිරියි",
+    "topSellingTitle": "වැඩිපුරම විකුණන බෙහෙත් (දින 30)",
+    "noSalesPeriod": "මෙම කාලසීමාව තුළ විකුණුම් නැත.",
+    "unitsSold": "ඒකක {{count}} විකුණා ඇත",
+    "pendingOrdersTitle": "පොරොත්තු ඇණවුම්",
+    "noPendingOrders": "පොරොත්තු ඇණවුම් නැත.",
+    "markReceived": "ලැබුණු බව සලකුණු කරන්න",
+    "recentActivityTitle": "මෑත ක්‍රියාකාරකම්",
+    "noActivityYet": "තවම ක්‍රියාකාරකම් නැත.",
+    "walkInSale": "සාමාන්‍ය විකුණුම",
+    "orderReceivedFrom": "ඇණවුම ලැබුණි — {{supplier}}",
+    "defaultSupplier": "සැපයුම්කරු",
+    "pharmacyInfoTitle": "ෆාමසි තොරතුරු",
+    "fields": {
+      "pharmacyName": "ෆාමසි නම",
+      "licenseNo": "බලපත්‍ර අංකය",
+      "experience": "පළපුරුද්ද",
+      "experienceYears": "වසර {{count}}",
+      "specialization": "විශේෂඥතාව"
+    },
+    "toast": {
+      "orderReceived": "ඇණවුම ලැබුණි — තොග යාවත්කාලීන කරන ලදී",
+      "orderReceiveFailed": "ඇණවුම ලැබුණු බව සලකුණු කිරීමට අසමත් විය"
+    },
+    "prescriptions": {
+      "title": "එන බෙහෙත් වට්ටෝරු",
+      "pending": "පොරොත්තුවෙන්",
+      "preparing": "සූදානම් කරමින්",
+      "ready": "සූදානම්",
+      "empty": "දැනට ඔබ මත රැඳී ඇති බෙහෙත් වට්ටෝරු නැත.",
+      "fromDoctor": "වෛද්‍ය {{name}} වෙතින්",
+      "selfRequested": "රෝගියා විසින් ඉල්ලන ලද"
+    }
+  },
+  "consultations": {
+    "pageTitle": "පවරන ලද බෙහෙත් වට්ටෝරු",
+    "pageDescription": "වෛද්‍යවරුන් සහ රෝගීන් විසින් ඔබේ ෆාමසියට පවරන ලද බෙහෙත් වට්ටෝරු",
+    "filter": {
+      "all": "සියල්ල",
+      "pending": "පොරොත්තුවෙන්",
+      "preparing": "සූදානම් කරමින්",
+      "ready": "සූදානම්",
+      "delivered": "භාර දුන්නා",
+      "cancelled": "අවලංගු කරන ලදී"
+    },
+    "status": {
+      "pending": "පොරොත්තුවෙන්",
+      "preparing": "සූදානම් කරමින්",
+      "ready": "සූදානම්",
+      "delivered": "භාර දුන්නා",
+      "completed": "සම්පූර්ණයි",
+      "cancelled": "අවලංගු කරන ලදී"
+    },
+    "stats": {
+      "totalAssigned": "මුළු පවරන ලද",
+      "pending": "පොරොත්තුවෙන්",
+      "preparing": "සූදානම් කරමින්",
+      "ready": "සූදානම්"
+    },
+    "action": {
+      "startPreparing": "සූදානම් කිරීම අරඹන්න",
+      "markReady": "සූදානම් ලෙස සලකුණු කරන්න ✅",
+      "markDelivered": "භාර දුන් බව සලකුණු කරන්න 📦"
+    },
+    "loading": "බෙහෙත් වට්ටෝරු පූරණය වෙමින්...",
+    "emptyTitleFiltered": "{{filter}} බෙහෙත් වට්ටෝරු නැත",
+    "emptyTitleAll": "බෙහෙත් වට්ටෝරු නැත",
+    "emptySubtitle": "වෛද්‍යවරුන් සහ රෝගීන් විසින් පවරන ලද බෙහෙත් වට්ටෝරු මෙහි දිස්වේ.",
+    "doctorLabel": "වෛද්‍යවරයා",
+    "doctorPrefix": "වෛද්‍ය {{name}}",
+    "dxPrefix": "රෝග විනිශ්චය: {{diagnosis}}",
+    "medicinesCount": "බෙහෙත් {{count}}",
+    "rxImage": "වට්ටෝරු පිළිඹිබුව",
+    "dispenseButton": "නිකුත් කරන්න ✅",
+    "toast": {
+      "preparing": "සූදානම් කරමින් ලෙස සලකුණු කරන ලදී — රෝගියාට දැනුම් දෙන ලදී!",
+      "dispensed": "ලබා ගැනීමට සූදානම් ලෙස සලකුණු කරන ලදී — රෝගියාට දැනුම් දෙන ලදී!",
+      "delivered": "භාර දුන් බව සලකුණු කරන ලදී — ප්‍රතිකාරය සම්පූර්ණයි!",
+      "updateFailed": "තත්ත්වය යාවත්කාලීන කිරීමට අසමත් විය",
+      "loadFailed": "පූරණය කිරීමට අසමත් විය"
+    },
+    "modal": {
+      "title": "පවරන ලද බෙහෙත් වට්ටෝරුව",
+      "patient": "රෝගියා",
+      "visitDate": "සංචාර දිනය",
+      "patientEmail": "රෝගියාගේ විද්‍යුත් තැපෑල",
+      "healthInfoTitle": "⚠️ රෝගියාගේ සෞඛ්‍ය තොරතුරු",
+      "blood": "රුධිර වර්ගය:",
+      "allergies": "අසාත්මිකතා:",
+      "symptoms": "රෝග ලක්ෂණ",
+      "diagnosis": "රෝග විනිශ්චය",
+      "treatment": "ප්‍රතිකාර",
+      "prescriptionImage": "වට්ටෝරු පිළිඹිබුව",
+      "clickToOpenFullSize": "සම්පූර්ණ ප්‍රමාණයෙන් විවෘත කිරීමට ක්ලික් කරන්න",
+      "medicinesToDispense": "නිකුත් කළ යුතු බෙහෙත් ({{count}})",
+      "noMedicinesListed": "බෙහෙත් ලැයිස්තුගත කර නැත.",
+      "source": {
+        "ocr": "OCR",
+        "manual": "අතින් ඇතුළත් කළ"
+      },
+      "hideOcr": "OCR පෙළ සඟවන්න",
+      "showOcr": "OCR පෙළ පෙන්වන්න",
+      "markDispensedButton": "නිකුත් කළා ලෙස සලකුණු කරන්න — රෝගියාට දැනුම් දෙන්න",
+      "dispenseNote": "මෙය තත්ත්ව වෙනස රෝගියාට දැනුම් දෙනු ඇත.",
+      "dispensedNote": "බෙහෙත් නිකුත් කරන ලදී · රෝගියාට දැනුම් දී ඇත",
+      "deliveredNote": "භාර දී ඇත · ප්‍රතිකාරය සම්පූර්ණයි",
+      "cancelledNote": "මෙම බෙහෙත් වට්ටෝරුව ඉවත් කරන ලදී — කිසිදු ක්‍රියාමාර්ගයක් අවශ්‍ය නැත"
+    }
+  },
+  "settings": {
+    "title": "සැකසුම්",
+    "subtitle": "වෛද්‍යවරුන්ට සහ රෝගීන්ට ඔබේ ෆාමසි පැතිකඩ යොවුන් කරගෙන තබා ගන්න.",
+    "sections": {
+      "account": "ගිණුම් තොරතුරු",
+      "pharmacy": "ෆාමසි විස්තර"
+    },
+    "fields": {
+      "licenseNumber": "බලපත්‍ර අංකය",
+      "pharmacyName": "ෆාමසියේ නම",
+      "pharmacyAddress": "ෆාමසියේ ලිපිනය",
+      "yearsExperience": "පළපුරුද්ද (වසර)",
+      "specializationArea": "විශේෂඥතා ක්ෂේත්‍රය"
+    },
+    "placeholders": {
+      "licenseNumber": "උදා., PH-12345",
+      "pharmacyName": "උදා., City Pharmacy",
+      "pharmacyAddress": "අංක 12, ප්‍රධාන වීදිය, කොළඹ 03",
+      "specializationArea": "උදා., Clinical Pharmacy"
+    },
+    "toastSuccess": "ප්‍රොෆයිලය සාර්ථකව යාවත්කාලීන කරන ලදී",
+    "toastError": "ප්‍රොෆයිලය යාවත්කාලීන කිරීමට අසමත් විය"
+  },
+  "medicines": {
+    "pageTitle": "බෙහෙත්",
+    "pageDescription": "බෙහෙත් තොග කළමනාකරණය කරන්න",
+    "addButton": "+ බෙහෙතක් එකතු කරන්න",
+    "searchPlaceholder": "බෙහෙත් සොයන්න...",
+    "columns": {
+      "category": "කාණ්ඩය",
+      "stock": "තොගය",
+      "expiry": "කල් ඉකුත් වීම"
+    },
+    "modal": {
+      "editTitle": "බෙහෙත සංස්කරණය කරන්න",
+      "addTitle": "බෙහෙතක් එකතු කරන්න",
+      "name": "නම *",
+      "genericName": "ජාන්‍ය නාමය",
+      "category": "කාණ්ඩය",
+      "unit": "ඒකකය",
+      "units": {
+        "tablet": "පෙති",
+        "capsule": "කැප්සියුල",
+        "syrup": "සිරප්",
+        "injection": "එන්නත",
+        "cream": "ක්‍රීම්",
+        "drops": "බින්දු"
+      },
+      "sellingPrice": "විකුණුම් මිල (රු.) *",
+      "costPrice": "පිරිවැය මිල (රු.)",
+      "stockQuantity": "තොග ප්‍රමාණය",
+      "reorderLevel": "නැවත ඇණවුම් මට්ටම",
+      "expiryDate": "කල් ඉකුත් වන දිනය",
+      "supplier": "සැපයුම්කරු",
+      "noneOption": "— කිසිවක් නැත —",
+      "description": "විස්තරය"
+    },
+    "deleteDialog": {
+      "title": "බෙහෙත මකන්න",
+      "message": "\"{{name}}\" මැකීමට විශ්වාසද?"
+    },
+    "toast": {
+      "updated": "බෙහෙත යාවත්කාලීන කරන ලදී",
+      "added": "බෙහෙත එකතු කරන ලදී",
+      "saveFailed": "සුරැකීමට අසමත් විය",
+      "deleted": "බෙහෙත මකා දමන ලදී",
+      "deleteFailed": "මකා දැමීමට අසමත් විය"
+    }
+  },
+  "suppliers": {
+    "pageTitle": "සැපයුම්කරුවන්",
+    "addButton": "+ සැපයුම්කරුවෙක් එකතු කරන්න",
+    "columns": {
+      "contactPerson": "සම්බන්ධතා පුද්ගලයා"
+    },
+    "modal": {
+      "editTitle": "සැපයුම්කරු සංස්කරණය කරන්න",
+      "addTitle": "සැපයුම්කරු එකතු කරන්න",
+      "name": "නම *",
+      "contactPerson": "සම්බන්ධතා පුද්ගලයා",
+      "address": "ලිපිනය"
+    },
+    "deleteDialog": {
+      "title": "සැපයුම්කරු මකන්න",
+      "message": "\"{{name}}\" මකන්නද?"
+    },
+    "toast": {
+      "updated": "සැපයුම්කරු යාවත්කාලීන කරන ලදී",
+      "added": "සැපයුම්කරු එකතු කරන ලදී",
+      "saveFailed": "සුරැකීමට අසමත් විය",
+      "deleted": "සැපයුම්කරු මකා දමන ලදී"
+    }
+  },
+  "orders": {
+    "pageTitle": "මිලදී ගැනීමේ ඇණවුම්",
+    "newButton": "+ නව ඇණවුමක්",
+    "columns": {
+      "supplier": "සැපයුම්කරු"
+    },
+    "status": {
+      "pending": "පොරොත්තුවෙන්",
+      "received": "ලැබුණි",
+      "cancelled": "අවලංගු කළා"
+    },
+    "markReceived": "ලැබුණු බව සලකුණු කරන්න",
+    "modal": {
+      "title": "නව මිලදී ගැනීමේ ඇණවුමක්",
+      "supplier": "සැපයුම්කරු *",
+      "selectSupplier": "සැපයුම්කරු තෝරන්න",
+      "notes": "සටහන්",
+      "orderItems": "ඇණවුම් අයිතම",
+      "addItem": "+ අයිතමයක් එකතු කරන්න",
+      "selectMedicine": "බෙහෙතක් තෝරන්න",
+      "qtyPlaceholder": "ප්‍රමාණය",
+      "unitCostPlaceholder": "ඒකක පිරිවැය",
+      "placeOrder": "ඇණවුම තබන්න",
+      "placing": "තබමින්..."
+    },
+    "toast": {
+      "placed": "ඇණවුම තබන ලදී",
+      "createFailed": "ඇණවුම සෑදීමට අසමත් විය",
+      "received": "ඇණවුම ලැබුණි — තොග යාවත්කාලීන කරන ලදී",
+      "receiveFailed": "ඇණවුම ලැබුණු බව සලකුණු කිරීමට අසමත් විය"
+    }
+  },
+  "sales": {
+    "pageTitle": "විකුණුම්",
+    "pageDescription": "විකුණුම් ස්ථානය සහ විකුණුම් ඉතිහාසය",
+    "newButton": "+ නව විකුණුමක්",
+    "columns": {
+      "customer": "පාරිභෝගිකයා",
+      "walkIn": "සාමාන්‍ය පාරිභෝගිකයා",
+      "payment": "ගෙවීම",
+      "dateTime": "දිනය සහ වේලාව",
+      "soldBy": "විකුණුවේ"
+    },
+    "payment": {
+      "cash": "මුදල්",
+      "card": "කාඩ්පත",
+      "online": "අන්තර්ජාලය"
+    },
+    "modal": {
+      "title": "නව විකුණුමක්",
+      "customerName": "පාරිභෝගිකයාගේ නම",
+      "customerPlaceholder": "සාමාන්‍ය පාරිභෝගිකයා",
+      "paymentMethod": "ගෙවීම් ක්‍රමය",
+      "items": "අයිතම",
+      "addItem": "+ අයිතමයක් එකතු කරන්න",
+      "selectMedicine": "බෙහෙතක් තෝරන්න",
+      "stockSuffix": "(තොගය: {{count}})",
+      "qtyPlaceholder": "ප්‍රමාණය",
+      "unitPricePlaceholder": "ඒකක මිල",
+      "total": "එකතුව: {{amount}}",
+      "complete": "විකුණුම සම්පූර්ණ කරන්න",
+      "processing": "සකසමින්..."
+    },
+    "toast": {
+      "recorded": "විකුණුම වාර්තා කරන ලදී",
+      "recordFailed": "විකුණුම වාර්තා කිරීමට අසමත් විය"
+    }
+  },
+  "inventory": {
+    "pageTitle": "තොග කළමනාකරණය",
+    "pageDescription": "තොග මට්ටම් සහ අනතුරු ඇඟවීම්",
+    "stats": {
+      "totalMedicines": "මුළු බෙහෙත් ගණන",
+      "lowStock": "අඩු තොග",
+      "expired": "කල් ඉකුත් වූ",
+      "inventoryValue": "තොග වටිනාකම"
+    },
+    "columns": {
+      "medicine": "බෙහෙත",
+      "category": "කාණ්ඩය",
+      "currentStock": "වත්මන් තොගය",
+      "reorderLevel": "නැවත ඇණවුම් මට්ටම",
+      "stock": "තොගය",
+      "expiryDate": "කල් ඉකුත් වන දිනය"
+    },
+    "lowStockTitle": "අඩු තොග අයිතම",
+    "expiringTitle": "දින 60ක් තුළ කල් ඉකුත් වේ",
+    "noLowStock": "අඩු තොග අයිතම නැත.",
+    "noExpiring": "ළඟදී කල් ඉකුත් වන දෙයක් නැත."
+  }
+}

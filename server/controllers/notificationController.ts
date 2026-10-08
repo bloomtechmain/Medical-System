@@ -1,9 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { queryAs, RLSActor } from '../config/db';
+
+// notifications lives in the `clinical` schema behind row-level security —
+// every query against it must carry the acting user's identity. See
+// config/db.ts (queryAs).
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rows } = await pool.query(
+    const { rows } = await queryAs(actor(req),
       `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
       [req.user.id]
     );
@@ -13,7 +18,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 
 const markRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    await pool.query(
+    await queryAs(actor(req),
       `UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2`,
       [req.params.id, req.user.id]
     );
@@ -23,7 +28,7 @@ const markRead = async (req: Request, res: Response, next: NextFunction): Promis
 
 const markAllRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    await pool.query(
+    await queryAs(actor(req),
       `UPDATE notifications SET is_read = TRUE WHERE user_id = $1`,
       [req.user.id]
     );

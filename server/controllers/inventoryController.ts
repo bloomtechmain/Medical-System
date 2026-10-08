@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/db';
+import { parsePaging } from '../utils/pagination';
 
 const getSummary = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -19,10 +20,15 @@ const getSummary = async (_req: Request, res: Response, next: NextFunction): Pro
   } catch (err) { next(err); }
 };
 
-const getLowStock = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+// PERF-04: never paginated. See utils/pagination.ts for why the default is
+// generous rather than "a page."
+const getLowStock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
     const { rows } = await pool.query(
-      `SELECT * FROM medicines WHERE stock_quantity <= reorder_level AND is_active = TRUE ORDER BY stock_quantity ASC`
+      `SELECT * FROM medicines WHERE stock_quantity <= reorder_level AND is_active = TRUE
+       ORDER BY stock_quantity ASC LIMIT $1 OFFSET $2`,
+      [limit, offset]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -31,8 +37,11 @@ const getLowStock = async (_req: Request, res: Response, next: NextFunction): Pr
 const getExpiring = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const days = parseInt(req.query.days as string) || 30;
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
     const { rows } = await pool.query(
-      `SELECT * FROM medicines WHERE expiry_date BETWEEN NOW() AND NOW() + INTERVAL '${days} days' AND is_active = TRUE ORDER BY expiry_date ASC`
+      `SELECT * FROM medicines WHERE expiry_date BETWEEN NOW() AND NOW() + INTERVAL '${days} days' AND is_active = TRUE
+       ORDER BY expiry_date ASC LIMIT $1 OFFSET $2`,
+      [limit, offset]
     );
     res.json(rows);
   } catch (err) { next(err); }

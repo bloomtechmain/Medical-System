@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { TFunction } from 'i18next';
 import { orgApi, userApi } from '../services/api';
 import { Organization, OrganizationMember } from '../types';
 import { formatDate } from '../utils/helpers';
@@ -11,14 +13,18 @@ import {
   PowerOff, X, Users, Hash, CheckCircle, Clock,
 } from 'lucide-react';
 
-const ORG_TYPE_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  hospital:    { label: 'Hospital',    icon: Hospital,     color: 'bg-blue-50 text-blue-700 border-blue-200' },
-  pharmacy:    { label: 'Pharmacy',    icon: Pill,         color: 'bg-purple-50 text-purple-700 border-purple-200' },
-  laboratory:  { label: 'Laboratory',  icon: FlaskConical, color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
-  clinic:      { label: 'Clinic',      icon: Stethoscope,  color: 'bg-teal-50 text-teal-700 border-teal-200' },
-};
+function getOrgTypeMeta(t: TFunction): Record<string, { label: string; icon: React.ElementType; color: string }> {
+  return {
+    hospital:    { label: t('organizations.types.hospital'),    icon: Hospital,     color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    pharmacy:    { label: t('organizations.types.pharmacy'),    icon: Pill,         color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    laboratory:  { label: t('organizations.types.laboratory'),  icon: FlaskConical, color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+    clinic:      { label: t('organizations.types.clinic'),      icon: Stethoscope,  color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  };
+}
 
 function OrgTypeBadge({ type }: { type: string }) {
+  const { t } = useTranslation('admin');
+  const ORG_TYPE_META = getOrgTypeMeta(t);
   const meta = ORG_TYPE_META[type] ?? { label: type, icon: Building2, color: 'bg-gray-50 text-gray-700 border-gray-200' };
   const Icon = meta.icon;
   return (
@@ -38,6 +44,8 @@ interface ProvisionForm {
 }
 
 function ProvisionModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation('admin');
+  const { t: tc } = useTranslation('common');
   const qc = useQueryClient();
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ProvisionForm>({
     defaultValues: { org_type: 'hospital' },
@@ -58,10 +66,10 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['organizations'] });
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
-      toast.success('Organization provisioned successfully');
+      toast.success(t('organizations.toast.provisionSuccess'));
       onClose();
     },
-    onError: (err: any) => toast.error(err?.message || 'Failed to provision organization'),
+    onError: (err: any) => toast.error(err?.message || t('organizations.toast.provisionFailed')),
   });
 
   const { data: users = [] } = useQuery({
@@ -74,8 +82,8 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Provision Organization</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Creates a new tenant schema in the database</p>
+            <h2 className="text-lg font-bold text-gray-900">{t('organizations.provisionModal.title')}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{t('organizations.provisionModal.subtitle')}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
             <X size={18} />
@@ -84,50 +92,50 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
 
         <form onSubmit={handleSubmit((d) => provision.mutate(d))} className="p-6 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Organization Name *</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">{t('organizations.provisionModal.orgNameLabel')} *</label>
             <input
-              {...register('name', { required: 'Name is required' })}
+              {...register('name', { required: t('organizations.provisionModal.nameRequired') })}
               onBlur={onNameBlur}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-              placeholder="e.g. City General Hospital"
+              placeholder={t('organizations.provisionModal.orgNamePlaceholder')}
             />
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Slug (schema prefix) *</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">{t('organizations.provisionModal.slugLabel')} *</label>
             <input
               {...register('slug', {
-                required: 'Slug is required',
-                pattern: { value: /^[a-z0-9_]+$/, message: 'Lowercase letters, numbers, underscores only' },
+                required: t('organizations.provisionModal.slugRequired'),
+                pattern: { value: /^[a-z0-9_]+$/, message: t('organizations.provisionModal.slugPattern') },
               })}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-400"
               placeholder="e.g. city_general"
             />
             {errors.slug && <p className="text-xs text-red-500 mt-1">{errors.slug.message}</p>}
-            <p className="text-[11px] text-gray-400 mt-1">Schema will be: tenant_[slug]_[type]</p>
+            <p className="text-[11px] text-gray-400 mt-1">{t('organizations.provisionModal.slugHelper')}</p>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Organization Type *</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">{t('organizations.provisionModal.orgTypeLabel')} *</label>
             <select
               {...register('org_type', { required: true })}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             >
-              <option value="hospital">Hospital</option>
-              <option value="pharmacy">Pharmacy</option>
-              <option value="laboratory">Laboratory</option>
-              <option value="clinic">Clinic</option>
+              <option value="hospital">{t('organizations.types.hospital')}</option>
+              <option value="pharmacy">{t('organizations.types.pharmacy')}</option>
+              <option value="laboratory">{t('organizations.types.laboratory')}</option>
+              <option value="clinic">{t('organizations.types.clinic')}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Owner User (optional)</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">{t('organizations.provisionModal.ownerUserLabel')}</label>
             <select
               {...register('owner_user_id')}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             >
-              <option value="">— None —</option>
+              <option value="">{t('organizations.provisionModal.noneOption')}</option>
               {(users as any[]).map((u: any) => (
                 <option key={u.id} value={u.id}>{u.name} ({u.email}) [{u.role}]</option>
               ))}
@@ -140,14 +148,14 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
               onClick={onClose}
               className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              {tc('actions.cancel')}
             </button>
             <button
               type="submit"
               disabled={provision.isPending}
               className="flex-1 bg-primary-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50"
             >
-              {provision.isPending ? 'Provisioning…' : 'Provision'}
+              {provision.isPending ? t('organizations.provisionModal.provisioning') : t('organizations.provisionModal.provision')}
             </button>
           </div>
         </form>
@@ -158,6 +166,8 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
 
 // ── Add member modal ─────────────────────────────────────────────────────────
 function AddMemberModal({ org, onClose }: { org: Organization; onClose: () => void }) {
+  const { t } = useTranslation('admin');
+  const { t: tc } = useTranslation('common');
   const qc = useQueryClient();
   const { register, handleSubmit, formState: { errors } } = useForm<{ user_id: string; member_role: string }>();
 
@@ -172,27 +182,27 @@ function AddMemberModal({ org, onClose }: { org: Organization; onClose: () => vo
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['org-members', org.id] });
       qc.invalidateQueries({ queryKey: ['organizations'] });
-      toast.success('Member added');
+      toast.success(t('organizations.toast.memberAdded'));
       onClose();
     },
-    onError: (err: any) => toast.error(err?.message || 'Failed to add member'),
+    onError: (err: any) => toast.error(err?.message || t('organizations.toast.addMemberFailed')),
   });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h2 className="text-base font-bold text-gray-900">Add Member to {org.name}</h2>
+          <h2 className="text-base font-bold text-gray-900">{t('organizations.addMemberModal.title', { name: org.name })}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit((d) => addMember.mutate(d))} className="p-5 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">User *</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">{t('organizations.addMemberModal.userLabel')} *</label>
             <select
-              {...register('user_id', { required: 'Select a user' })}
+              {...register('user_id', { required: t('organizations.addMemberModal.userRequired') })}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             >
-              <option value="">— Select user —</option>
+              <option value="">{t('organizations.addMemberModal.selectUserOption')}</option>
               {(users as any[]).map((u: any) => (
                 <option key={u.id} value={u.id}>{u.name} [{u.role}]</option>
               ))}
@@ -200,22 +210,22 @@ function AddMemberModal({ org, onClose }: { org: Organization; onClose: () => vo
             {errors.user_id && <p className="text-xs text-red-500 mt-1">{errors.user_id.message}</p>}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Member Role *</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">{t('organizations.addMemberModal.memberRoleLabel')} *</label>
             <select
               {...register('member_role', { required: true })}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             >
-              <option value="owner">Owner</option>
-              <option value="doctor">Doctor</option>
-              <option value="pharmacist">Pharmacist</option>
-              <option value="laboratory">Laboratory</option>
-              <option value="staff">Staff</option>
+              <option value="owner">{t('organizations.memberRoles.owner')}</option>
+              <option value="doctor">{t('organizations.memberRoles.doctor')}</option>
+              <option value="pharmacist">{t('organizations.memberRoles.pharmacist')}</option>
+              <option value="laboratory">{t('organizations.memberRoles.laboratory')}</option>
+              <option value="staff">{t('organizations.memberRoles.staff')}</option>
             </select>
           </div>
           <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
+            <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-2.5 rounded-xl hover:bg-gray-50">{tc('actions.cancel')}</button>
             <button type="submit" disabled={addMember.isPending} className="flex-1 bg-primary-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-primary-700 disabled:opacity-50">
-              {addMember.isPending ? 'Adding…' : 'Add Member'}
+              {addMember.isPending ? t('organizations.addMemberModal.adding') : t('organizations.addMemberModal.addMember')}
             </button>
           </div>
         </form>
@@ -226,6 +236,15 @@ function AddMemberModal({ org, onClose }: { org: Organization; onClose: () => vo
 
 // ── Org row ──────────────────────────────────────────────────────────────────
 function OrgRow({ org }: { org: Organization }) {
+  const { t } = useTranslation('admin');
+  const ORG_TYPE_META = getOrgTypeMeta(t);
+  const MEMBER_ROLE_LABELS: Record<string, string> = {
+    owner: t('organizations.memberRoles.owner'),
+    doctor: t('organizations.memberRoles.doctor'),
+    pharmacist: t('organizations.memberRoles.pharmacist'),
+    laboratory: t('organizations.memberRoles.laboratory'),
+    staff: t('organizations.memberRoles.staff'),
+  };
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
@@ -243,9 +262,9 @@ function OrgRow({ org }: { org: Organization }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['organizations'] });
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
-      toast.success(isPending ? 'Organization approved' : org.is_active ? 'Organization deactivated' : 'Organization activated');
+      toast.success(isPending ? t('organizations.toast.approved') : org.is_active ? t('organizations.toast.deactivated') : t('organizations.toast.activated'));
     },
-    onError: () => toast.error('Failed to update organization'),
+    onError: () => toast.error(t('organizations.toast.updateFailed')),
   });
 
   const removeMember = useMutation({
@@ -253,9 +272,9 @@ function OrgRow({ org }: { org: Organization }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['org-members', org.id] });
       qc.invalidateQueries({ queryKey: ['organizations'] });
-      toast.success('Member removed');
+      toast.success(t('organizations.toast.memberRemoved'));
     },
-    onError: () => toast.error('Failed to remove member'),
+    onError: () => toast.error(t('organizations.toast.removeMemberFailed')),
   });
 
   return (
@@ -276,11 +295,11 @@ function OrgRow({ org }: { org: Organization }) {
               <OrgTypeBadge type={org.org_type} />
               {isPending && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                  <Clock size={9} /> PENDING APPROVAL
+                  <Clock size={9} /> {t('organizations.pendingApprovalBadge')}
                 </span>
               )}
               {!org.is_active && !isPending && (
-                <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">INACTIVE</span>
+                <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{t('organizations.inactiveBadge')}</span>
               )}
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
@@ -289,14 +308,14 @@ function OrgRow({ org }: { org: Organization }) {
                 <span className="font-mono">{org.slug}</span>
               </span>
               {org.schema_name && (
-                <span className="font-mono text-gray-300">schema: {org.schema_name}</span>
+                <span className="font-mono text-gray-300">{t('organizations.schemaLabel', { schema: org.schema_name })}</span>
               )}
               <span className="flex items-center gap-1">
                 <Users size={10} />
-                {org.member_count ?? 0} members
+                {t('organizations.membersCount', { count: org.member_count ?? 0 })}
               </span>
               {org.owner_name && (
-                <span>Owner: <span className="text-gray-600">{org.owner_name}</span></span>
+                <span>{t('organizations.ownerLabel')} <span className="text-gray-600">{org.owner_name}</span></span>
               )}
             </div>
           </div>
@@ -309,10 +328,10 @@ function OrgRow({ org }: { org: Organization }) {
                 onClick={() => toggle.mutate()}
                 disabled={toggle.isPending}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-colors disabled:opacity-50"
-                title="Approve organization"
+                title={t('organizations.approveOrgTitle')}
               >
                 <CheckCircle size={13} />
-                Approve
+                {t('organizations.approve')}
               </button>
             ) : (
               <button
@@ -323,7 +342,7 @@ function OrgRow({ org }: { org: Organization }) {
                     ? 'text-yellow-500 hover:bg-yellow-50'
                     : 'text-green-500 hover:bg-green-50'
                 }`}
-                title={org.is_active ? 'Deactivate' : 'Activate'}
+                title={org.is_active ? t('organizations.deactivate') : t('organizations.activate')}
               >
                 {org.is_active ? <PowerOff size={15} /> : <Power size={15} />}
               </button>
@@ -341,19 +360,19 @@ function OrgRow({ org }: { org: Organization }) {
         {expanded && (
           <div className="border-t border-gray-50 px-5 pb-4">
             <div className="flex items-center justify-between pt-3 mb-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Members</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('organizations.members')}</p>
               <button
                 onClick={() => setAddingMember(true)}
                 className="flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium"
               >
-                <UserPlus size={13} /> Add Member
+                <UserPlus size={13} /> {t('organizations.addMemberModal.addMember')}
               </button>
             </div>
 
             {membersLoading ? (
-              <p className="text-xs text-gray-400 py-2">Loading members…</p>
+              <p className="text-xs text-gray-400 py-2">{t('organizations.loadingMembers')}</p>
             ) : (members as OrganizationMember[]).length === 0 ? (
-              <p className="text-xs text-gray-400 py-2">No members yet.</p>
+              <p className="text-xs text-gray-400 py-2">{t('organizations.noMembersYet')}</p>
             ) : (
               <div className="space-y-2">
                 {(members as OrganizationMember[]).map((m) => (
@@ -363,13 +382,13 @@ function OrgRow({ org }: { org: Organization }) {
                         {(m.name ?? '?').charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-xs font-medium text-gray-800">{m.name ?? `User #${m.user_id}`}</p>
+                        <p className="text-xs font-medium text-gray-800">{m.name ?? t('organizations.userFallbackName', { id: m.user_id })}</p>
                         <p className="text-[10px] text-gray-400">{m.email}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-semibold bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                        {m.member_role}
+                        {MEMBER_ROLE_LABELS[m.member_role] ?? m.member_role}
                       </span>
                       <button
                         onClick={() => removeMember.mutate(m.user_id)}
@@ -394,6 +413,7 @@ function OrgRow({ org }: { org: Organization }) {
 
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function Organizations() {
+  const { t } = useTranslation('admin');
   const [showProvision, setShowProvision] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -422,12 +442,12 @@ export default function Organizations() {
   };
 
   const FILTERS = [
-    { key: 'all',        label: 'All' },
-    { key: 'pending',    label: 'Pending' },
-    { key: 'hospital',   label: 'Hospitals' },
-    { key: 'pharmacy',   label: 'Pharmacies' },
-    { key: 'laboratory', label: 'Laboratories' },
-    { key: 'clinic',     label: 'Clinics' },
+    { key: 'all',        label: t('organizations.filters.all') },
+    { key: 'pending',    label: t('organizations.filters.pending') },
+    { key: 'hospital',   label: t('organizations.filters.hospitals') },
+    { key: 'pharmacy',   label: t('organizations.filters.pharmacies') },
+    { key: 'laboratory', label: t('organizations.filters.laboratories') },
+    { key: 'clinic',     label: t('organizations.filters.clinics') },
   ];
 
   return (
@@ -435,15 +455,15 @@ export default function Organizations() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage tenant organizations and their members</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('organizations.pageTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('organizations.pageSubtitle')}</p>
         </div>
         <button
           onClick={() => setShowProvision(true)}
           className="inline-flex items-center gap-2 bg-primary-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-primary-700 transition-colors self-start sm:self-auto"
         >
           <Plus size={16} />
-          New Organization
+          {t('organizations.newOrganization')}
         </button>
       </div>
 

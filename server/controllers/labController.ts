@@ -1,30 +1,14 @@
-import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { pool, queryAs, getTenantSchema, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
-import { extractVitalsFromText, extractTextFromPDF } from '../utils/labVitalsParser';
-import { saveVitalsFromLab } from './patientVitalsController';
+import { deleteUpload } from '../utils/fileStorage';
+import { parsePaging } from '../utils/pagination';
+import { enqueue as enqueueLabReportVitals } from '../queue/jobs/extractLabReportVitals';
 
-/** Run OCR on an image file; skip PDFs (handled by pdfjs separately). */
-const runOCROnLabFile = async (filePath: string): Promise<string> => {
-  const ext = path.extname(filePath).toLowerCase();
-  if (!['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'].includes(ext)) return '';
-  try {
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker('eng', 1, { logger: () => {} });
-    const { data: { text } } = await worker.recognize(filePath);
-    await worker.terminate();
-    return text || '';
-  } catch { return ''; }
-};
-
-/** Extract text from any file: pdfjs for PDFs, OCR for images. */
-const extractReportText = async (filePath: string): Promise<string> => {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.pdf') return extractTextFromPDF(filePath);
-  return runOCROnLabFile(filePath);
-};
+// lab_requests lives in the `clinical` schema behind row-level security —
+// every query against it must carry the acting user's identity. See
+// config/db.ts (queryAs) for why plain pool.query() isn't enough.
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
 const labName = async (labId: number): Promise<string> => {
   const { rows } = await pool.query(
@@ -38,20 +22,61 @@ const labName = async (labId: number): Promise<string> => {
 const userName = async (uid: number): Promise<string> =>
   (await pool.query('SELECT name FROM users WHERE id=$1', [uid])).rows[0]?.name || 'User';
 
+/**
+ * Pricing lives in each lab's own tenant schema (`"<schema>".invoices`), not
+ * in `clinical.lab_requests` — the lab request may belong to any of several
+ * laboratories, so rows are grouped by `laboratory_id` first and each
+ * distinct lab's schema is queried once. `invoices.lab_request_id` is a
+ * soft-reference by design (see corehealth_database.sql), so this is a plain
+ * join done in application code rather than SQL.
+ */
+const attachPrices = async (rows: any[]): Promise<any[]> => {
+  if (!rows.length) return rows;
+
+  const byLab = new Map<number, any[]>();
+  for (const r of rows) {
+    if (!byLab.has(r.laboratory_id)) byLab.set(r.laboratory_id, []);
+    byLab.get(r.laboratory_id)!.push(r);
+  }
+
+  await Promise.all(Array.from(byLab.entries()).map(async ([labId, labRows]) => {
+    const schema = await getTenantSchema(labId);
+    if (!schema) return;
+    const ids = labRows.map(r => r.id);
+    const { rows: invoices } = await pool.query<{ lab_request_id: number; amount: string; status: string }>(
+      `SELECT lab_request_id, amount, status FROM "${schema}".invoices WHERE lab_request_id = ANY($1)`,
+      [ids]
+    );
+    const byRequest = new Map<number, { amount: string; status: string }>(
+      invoices.map(i => [i.lab_request_id, i])
+    );
+    for (const r of labRows) {
+      const inv = byRequest.get(r.id);
+      r.price = inv ? Number(inv.amount) : null;
+      r.invoice_status = inv?.status || null;
+    }
+  }));
+
+  return rows;
+};
+
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { patient_id, laboratory_id, consultation_id, test_description, notes } = req.body;
+    const {
+      patient_id, laboratory_id, consultation_id, test_description, notes,
+      report_type, scheduled_at, test_catalog_id,
+    } = req.body;
     const isDoctor  = req.user.role === 'doctor';
     const isPatient = req.user.role === 'patient';
 
     if (!laboratory_id) { res.status(400).json({ message: 'Laboratory selection is required' }); return; }
 
     let doctorId  = isDoctor ? req.user.id : null;
-    let patientId = isDoctor ? patient_id  : req.user.id;
+    const patientId = isDoctor ? patient_id  : req.user.id;
     let testDesc  = test_description;
 
     if (isPatient && consultation_id) {
-      const { rows: [cons] } = await pool.query(
+      const { rows: [cons] } = await queryAs(actor(req),
         'SELECT doctor_id, lab_tests_requested FROM medical_consultations WHERE id=$1 AND patient_id=$2',
         [consultation_id, patientId]
       );
@@ -64,19 +89,42 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     if (!testDesc)  { res.status(400).json({ message: 'Test description is required' }); return; }
 
     if (consultation_id && isPatient) {
-      const { rows: dup } = await pool.query(
+      const { rows: dup } = await queryAs(actor(req),
         'SELECT id FROM lab_requests WHERE consultation_id=$1 AND patient_id=$2',
         [consultation_id, patientId]
       );
       if (dup.length) { res.status(409).json({ message: 'Lab request already sent for this consultation' }); return; }
     }
 
-    const { rows: [request] } = await pool.query(`
+    const { rows: [request] } = await queryAs(actor(req), `
       INSERT INTO lab_requests
-        (doctor_id, patient_id, laboratory_id, consultation_id, test_description, notes)
-      VALUES ($1,$2,$3,$4,$5,$6)
+        (doctor_id, patient_id, laboratory_id, consultation_id, test_description, notes,
+         report_type, scheduled_at, referral_file, referral_mimetype)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *
-    `, [doctorId, patientId, laboratory_id, consultation_id || null, testDesc, notes || null]);
+    `, [doctorId, patientId, laboratory_id, consultation_id || null, testDesc, notes || null,
+        report_type || null, scheduled_at || null,
+        req.file?.filename || null, req.file?.mimetype || null]);
+
+    // Catalog-backed bookings are priced immediately — the chosen test's
+    // price is copied into the lab's own tenant invoices table right away,
+    // so the patient sees a price without waiting on the lab. Free-text/
+    // "Other" bookings stay unpriced until the lab sets one later.
+    if (test_catalog_id) {
+      const schema = await getTenantSchema(laboratory_id);
+      if (schema) {
+        const { rows: cat } = await pool.query(
+          `SELECT price FROM "${schema}".test_catalog WHERE id=$1 AND is_active=true`,
+          [test_catalog_id]
+        );
+        if (cat[0]) {
+          await pool.query(
+            `INSERT INTO "${schema}".invoices (lab_request_id, patient_id, amount) VALUES ($1,$2,$3)`,
+            [request.id, patientId, cat[0].price]
+          );
+        }
+      }
+    }
 
     const lName  = await labName(laboratory_id);
     const ptName = await userName(patientId);
@@ -104,6 +152,8 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
+// PERF-04: never paginated. See utils/pagination.ts for why the default is
+// generous rather than "a page."
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { role, id } = req.user;
@@ -115,7 +165,8 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
     const cond = condMap[role];
     if (!cond) { res.json([]); return; }
 
-    const { rows } = await pool.query(`
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
+    const { rows } = await queryAs(actor(req), `
       SELECT lr.*,
         dr.name  AS doctor_name,
         pt.name  AS patient_name,
@@ -129,9 +180,10 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       LEFT JOIN laboratory_profiles lp ON lp.user_id = lr.laboratory_id
       WHERE ${cond}
       ORDER BY lr.created_at DESC
-    `, [id]);
+      LIMIT $2 OFFSET $3
+    `, [id, limit, offset]);
 
-    res.json(rows);
+    res.json(await attachPrices(rows));
   } catch (err) { next(err); }
 };
 
@@ -146,7 +198,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
     const cond = condMap[role];
     if (!cond) { res.status(403).json({ message: 'Forbidden' }); return; }
 
-    const { rows } = await pool.query(`
+    const { rows } = await queryAs(actor(req), `
       SELECT lr.*,
         dr.name  AS doctor_name,
         pt.name  AS patient_name,
@@ -161,8 +213,55 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
     `, [req.params.id, id]);
 
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
-    res.json(rows[0]);
+    res.json((await attachPrices(rows))[0]);
   } catch (err) { next(err); }
+};
+
+/**
+ * Notifies the doctor and patient that the report is ready, and queues the
+ * vitals extraction (PERF-06: previously both ran inline via setImmediate —
+ * OCR/PDF parsing is slow, uncancellable work with no retry and no record
+ * of failure if the process restarted mid-job). Notifications don't depend
+ * on OCR succeeding and must never fire twice, so they run here — once,
+ * awaited — rather than inside the retryable job; only the actually
+ * idempotent vitals-extraction work (see queue/jobs/extractLabReportVitals.ts)
+ * is queued.
+ */
+const finalizeReport = async (
+  labId: number,
+  request: { id: number; patient_id: number; doctor_id: number | null },
+  reportFilename: string,
+  report_notes: string | undefined,
+  vitals_data: string | undefined
+): Promise<void> => {
+  const lName  = await labName(labId);
+  const ptName = await userName(request.patient_id);
+
+  await Promise.all([
+    request.doctor_id && sendNotification(
+      request.doctor_id,
+      'lab_report_ready',
+      'Lab Report Ready 🔬',
+      `Lab report for patient ${ptName} is ready. ${lName} has uploaded the results.`,
+      { lab_request_id: request.id }
+    ),
+    sendNotification(
+      request.patient_id,
+      'lab_report_ready',
+      'Your Lab Report is Ready 🔬',
+      `Your lab report from ${lName} is now available. View and download it from your portal.`,
+      { lab_request_id: request.id }
+    ),
+  ]);
+
+  await enqueueLabReportVitals({
+    labRequestId: request.id,
+    laboratoryId: labId,
+    patientId: request.patient_id,
+    reportFilename,
+    reportNotes: report_notes,
+    vitalsData: vitals_data,
+  });
 };
 
 const uploadReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -173,7 +272,7 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
     };
     const labId = req.user.id;
 
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       'SELECT * FROM lab_requests WHERE id=$1 AND laboratory_id=$2',
       [req.params.id, labId]
     );
@@ -182,12 +281,11 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
 
     // Delete previous file if replacing
     if (existing[0].report_file) {
-      const oldPath = path.join(__dirname, '../uploads/lab-reports', existing[0].report_file);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      await deleteUpload('lab-reports', existing[0].report_file);
     }
 
     // Save the report record immediately
-    const { rows: [request] } = await pool.query(`
+    const { rows: [request] } = await queryAs(actor(req), `
       UPDATE lab_requests
       SET report_file=$1, report_mimetype=$2, report_notes=$3,
           status='completed', updated_at=NOW()
@@ -195,110 +293,170 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
       RETURNING *
     `, [req.file.filename, req.file.mimetype, report_notes || null, req.params.id]);
 
-    // ── Respond to client right away — don't block on OCR ──────────────
+    // Respond right away — don't block on OCR
     res.json(request);
 
-    // ── Background: vitals extraction + notifications ───────────────────
-    // Runs after response is sent so it never blocks the upload
-    setImmediate(async () => {
-      try {
-        const lName  = await labName(labId);
-        const ptName = await userName(request.patient_id);
+    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data)
+      .catch(err => console.error('[finalizeReport]', (err as Error).message));
+  } catch (err) { next(err); }
+};
 
-        // Priority 1: manually entered values from the lab upload form
-        let vitalsToSave: Record<string, number | undefined | null> = {};
+/**
+ * Lab-initiated report: the lab picks a patient + a doctor directly (no
+ * prior request from either) and uploads the report in one step. Creates
+ * the lab_requests record already completed and notifies both parties.
+ */
+const createDirect = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const {
+      patient_id, doctor_id, test_description, report_type, notes, report_notes, vitals_data,
+      sample_id, sample_collected_at,
+    } = req.body as {
+      patient_id?: string; doctor_id?: string; test_description?: string; report_type?: string;
+      notes?: string; report_notes?: string; vitals_data?: string;
+      sample_id?: string; sample_collected_at?: string;
+    };
+    const labId = req.user.id;
 
-        if (vitals_data) {
-          try {
-            const parsed = JSON.parse(vitals_data) as Record<string, number>;
-            const valid  = Object.entries(parsed).filter(([, v]) => typeof v === 'number' && isFinite(v) && v > 0);
-            if (valid.length > 0) {
-              vitalsToSave = Object.fromEntries(valid);
-              console.log(`[Vitals] ${valid.length} manual values saved for report #${request.id}`);
-            }
-          } catch { /* ignore bad JSON */ }
-        }
+    if (!patient_id)       { res.status(400).json({ message: 'Patient is required' }); return; }
+    if (!doctor_id)        { res.status(400).json({ message: 'Doctor is required' }); return; }
+    if (!test_description) { res.status(400).json({ message: 'Test description is required' }); return; }
+    if (!req.file)         { res.status(400).json({ message: 'Report file is required' }); return; }
 
-        // Priority 2: PDF text extraction (pdfjs) OR image OCR (tesseract)
-        if (Object.keys(vitalsToSave).length === 0) {
-          const filePath   = path.join(__dirname, '../uploads/lab-reports', req.file!.filename);
-          const reportText = await extractReportText(filePath);
-          if (reportText.trim().length > 20) {
-            const extracted = extractVitalsFromText(reportText);
-            if (Object.keys(extracted).length > 0) {
-              vitalsToSave = extracted as Record<string, number | undefined>;
-              console.log(`[Vitals] ${Object.keys(extracted).length} auto-extracted values for report #${request.id}`);
-            }
-          }
-        }
+    const { rows: [request] } = await queryAs(actor(req), `
+      INSERT INTO lab_requests
+        (doctor_id, patient_id, laboratory_id, test_description, report_type, notes,
+         report_file, report_mimetype, report_notes, status,
+         sample_id, sample_collected_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'completed',$10,$11)
+      RETURNING *
+    `, [doctor_id, patient_id, labId, test_description, report_type || null, notes || null,
+        req.file.filename, req.file.mimetype, report_notes || null,
+        sample_id || null, sample_collected_at || null]);
 
-        // Priority 3: parse report_notes text
-        if (Object.keys(vitalsToSave).length === 0 && report_notes) {
-          const extracted = extractVitalsFromText(report_notes);
-          if (Object.keys(extracted).length > 0) {
-            vitalsToSave = extracted as Record<string, number | undefined>;
-            console.log(`[Vitals] ${Object.keys(extracted).length} notes values for report #${request.id}`);
-          }
-        }
+    res.status(201).json(request);
 
-        if (Object.keys(vitalsToSave).length > 0) {
-          await saveVitalsFromLab(request.patient_id, vitalsToSave, request.id);
-        }
-
-        // Notifications
-        await Promise.all([
-          request.doctor_id && sendNotification(
-            request.doctor_id,
-            'lab_report_ready',
-            'Lab Report Ready 🔬',
-            `Lab report for patient ${ptName} is ready. ${lName} has uploaded the results.`,
-            { lab_request_id: request.id }
-          ),
-          sendNotification(
-            request.patient_id,
-            'lab_report_ready',
-            'Your Lab Report is Ready 🔬',
-            `Your lab report from ${lName} is now available. View and download it from your portal.`,
-            { lab_request_id: request.id }
-          ),
-        ]);
-      } catch (bgErr) {
-        console.error('[uploadReport background]', (bgErr as Error).message);
-      }
-    });
-
+    finalizeReport(labId, request, req.file.filename, report_notes, vitals_data)
+      .catch(err => console.error('[finalizeReport]', (err as Error).message));
   } catch (err) { next(err); }
 };
 
 const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { status } = req.body;
-    const { rows } = await pool.query(
-      `UPDATE lab_requests SET status=$1, updated_at=NOW()
-       WHERE id=$2 AND laboratory_id=$3 RETURNING *`,
-      [status, req.params.id, req.user.id]
+    const { status, sample_id, sample_collected_at } = req.body as {
+      status: string; sample_id?: string; sample_collected_at?: string;
+    };
+    const { rows } = await queryAs(actor(req),
+      `UPDATE lab_requests
+       SET status=$1, updated_at=NOW(),
+           sample_id           = COALESCE($2, sample_id),
+           sample_collected_at = COALESCE($3, sample_collected_at)
+       WHERE id=$4 AND laboratory_id=$5 RETURNING *`,
+      [status, sample_id || null, sample_collected_at || null,
+       req.params.id, req.user.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
     res.json(rows[0]);
   } catch (err) { next(err); }
 };
 
+const reject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { message } = req.body as { message?: string };
+    if (!message || !message.trim()) { res.status(400).json({ message: 'A reason is required to reject a request.' }); return; }
+
+    const { rows: existing } = await queryAs(actor(req),
+      `SELECT * FROM lab_requests WHERE id=$1 AND laboratory_id=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!existing.length) { res.status(404).json({ message: 'Not found' }); return; }
+    if (existing[0].status !== 'pending') { res.status(409).json({ message: 'Only a pending request can be rejected.' }); return; }
+
+    const { rows: [request] } = await queryAs(actor(req),
+      `UPDATE lab_requests SET status='rejected', updated_at=NOW() WHERE id=$1 RETURNING *`,
+      [req.params.id]
+    );
+
+    await queryAs(actor(req), `
+      INSERT INTO lab_request_messages (lab_request_id, patient_id, doctor_id, laboratory_id, sender_id, sender_role, body)
+      VALUES ($1,$2,$3,$4,$5,'laboratory',$6)
+    `, [request.id, request.patient_id, request.doctor_id, req.user.id, req.user.id, message.trim()]);
+
+    const lName = await labName(req.user.id);
+    await sendNotification(
+      request.patient_id,
+      'lab_request_rejected',
+      'Lab Request Declined',
+      `${lName} declined your lab test request: "${message.trim()}"`,
+      { lab_request_id: request.id }
+    );
+    if (request.doctor_id) {
+      await sendNotification(
+        request.doctor_id,
+        'lab_request_rejected',
+        'Lab Request Declined',
+        `${lName} declined the lab test request you ordered: "${message.trim()}"`,
+        { lab_request_id: request.id }
+      );
+    }
+
+    res.json(request);
+  } catch (err) { next(err); }
+};
+
+const setPrice = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { amount, test_catalog_id } = req.body as { amount?: number | string; test_catalog_id?: number };
+
+    const { rows: existing } = await queryAs(actor(req),
+      `SELECT * FROM lab_requests WHERE id=$1 AND laboratory_id=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!existing.length) { res.status(404).json({ message: 'Not found' }); return; }
+
+    const schema = await getTenantSchema(req.user.id);
+    if (!schema) { res.status(400).json({ message: 'No laboratory organization is linked to this account.' }); return; }
+
+    let finalAmount = amount != null ? Number(amount) : null;
+    if (test_catalog_id) {
+      const { rows: cat } = await pool.query(`SELECT price FROM "${schema}".test_catalog WHERE id=$1`, [test_catalog_id]);
+      if (cat[0]) finalAmount = Number(cat[0].price);
+    }
+    if (finalAmount == null || isNaN(finalAmount) || finalAmount < 0) {
+      res.status(400).json({ message: 'A valid price is required.' }); return;
+    }
+
+    const { rows: existingInvoice } = await pool.query(
+      `SELECT id FROM "${schema}".invoices WHERE lab_request_id=$1`, [req.params.id]
+    );
+    if (existingInvoice.length) {
+      await pool.query(`UPDATE "${schema}".invoices SET amount=$1 WHERE id=$2`, [finalAmount, existingInvoice[0].id]);
+    } else {
+      await pool.query(
+        `INSERT INTO "${schema}".invoices (lab_request_id, patient_id, amount) VALUES ($1,$2,$3)`,
+        [req.params.id, existing[0].patient_id, finalAmount]
+      );
+    }
+
+    res.json({ price: finalAmount });
+  } catch (err) { next(err); }
+};
+
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rows } = await pool.query(
+    const { rows } = await queryAs(actor(req),
       'SELECT report_file FROM lab_requests WHERE id=$1 AND doctor_id=$2',
       [req.params.id, req.user.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
     if (rows[0].report_file) {
-      const fp = path.join(__dirname, '../uploads/lab-reports', rows[0].report_file);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      await deleteUpload('lab-reports', rows[0].report_file);
     }
 
-    await pool.query('DELETE FROM lab_requests WHERE id=$1', [req.params.id]);
+    await queryAs(actor(req), 'DELETE FROM lab_requests WHERE id=$1', [req.params.id]);
     res.status(204).end();
   } catch (err) { next(err); }
 };
 
-export { create, getAll, getOne, uploadReport, updateStatus, remove };
+export { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove };
