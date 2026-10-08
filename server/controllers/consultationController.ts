@@ -1,9 +1,8 @@
-import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { extractMedicines } from '../utils/ocrParser';
 import { sendNotification } from '../utils/notify';
+import { readUploadToTempFile, deleteUpload } from '../utils/fileStorage';
 
 // medical_consultations / consultation_medicines / patient_profiles live in
 // the `clinical` schema and are gated by row-level security — every query
@@ -47,11 +46,15 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     if (!patientId) { res.status(400).json({ message: 'Patient is required' }); return; }
 
     const prescriptionFile = req.file ? req.file.filename : null;
-    const prescriptionPath = req.file ? req.file.path : null;
 
     let ocrText = '', ocrMedicines: ReturnType<typeof extractMedicines> = [];
-    if (prescriptionPath) {
-      ocrText      = await runOCR(prescriptionPath);
+    if (prescriptionFile) {
+      const { filePath, cleanup } = await readUploadToTempFile('prescriptions', prescriptionFile);
+      try {
+        ocrText = await runOCR(filePath);
+      } finally {
+        cleanup();
+      }
       ocrMedicines = extractMedicines(ocrText);
     }
 
@@ -306,12 +309,16 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
 
     if (req.file) {
       if (prev.prescription_file) {
-        const oldPath = path.join(__dirname, '../uploads/prescriptions', prev.prescription_file);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        await deleteUpload('prescriptions', prev.prescription_file);
       }
       prescriptionFile = req.file.filename;
-      ocrText          = await runOCR(req.file.path);
-      ocrMedicines     = extractMedicines(ocrText);
+      const { filePath, cleanup } = await readUploadToTempFile('prescriptions', req.file.filename);
+      try {
+        ocrText = await runOCR(filePath);
+      } finally {
+        cleanup();
+      }
+      ocrMedicines = extractMedicines(ocrText);
     }
 
     await client.query('BEGIN');

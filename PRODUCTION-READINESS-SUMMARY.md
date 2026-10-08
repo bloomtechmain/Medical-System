@@ -3,7 +3,7 @@
 Branch: `fix/database-audit-p0-p1`
 Source: `13-thinking-ahead.md`
 
-This covers every P0 ("must fix") finding in `13-thinking-ahead.md`, plus every P1 ("should fix") finding that could be fixed in code without new third-party infrastructure (an email provider, a CAPTCHA service, S3, a job queue). Items that genuinely need one of those are listed at the bottom, not silently skipped.
+This covers every P0 ("must fix") finding in `13-thinking-ahead.md`, plus every P1 ("should fix") finding that could be fixed in code without new third-party infrastructure (an email provider, a CAPTCHA service, a job queue). Items that genuinely need one of those are listed at the bottom, not silently skipped. **Update:** since this app is being deployed to AWS, PRO-05 (uploads on local disk) is no longer in that "needs a decision" bucket — S3 is the known target, so it's implemented below instead.
 
 ---
 
@@ -35,6 +35,7 @@ This covers every P0 ("must fix") finding in `13-thinking-ahead.md`, plus every 
 
 | ID | Fix |
 |---|---|
+| PRO-05 | Uploads (prescriptions, lab reports/referrals, patient reports) now go to S3 when `AWS_S3_BUCKET` is set, via a new storage abstraction (`utils/fileStorage.ts`) — streamed straight into the bucket, no local disk round-trip. Local disk stays the behavior when it's unset (local dev/CI need no AWS account). Fixes the real failure mode on the AWS target: ECS Fargate tasks each have their own ephemeral filesystem, so a file written by one task was invisible to any other and gone on redeploy. `/uploads/<subdir>/<file>` URLs the client already uses keep working unchanged — a dynamic route proxies them from S3 in S3 mode instead of `express.static`. OCR/PDF text extraction (which need a real local file) download to a temp file first and clean it up after. |
 | PRO-02 | Server-side minimum search length (2 chars) added to every user/medicine search, closing the gap where only the client was enforcing it. Rate limiting added to all search endpoints, including the two public ones (`search-owner`, `search-hospitals-clinics`). (Trigram indexes already existed from the prior DB-06 fix on this branch.) |
 | PRO-03 | `limit`/`offset` pagination added to medicines, users, and sales lists. Default is a generous 500 (not "a page") — there's no page-through UI client-side yet, so a small default would just look like data went missing; this bounds the real failure mode (unbounded growth over time) without a visible regression today. |
 | PRO-07 | Upload filenames now include a random component (`crypto.randomBytes`), not just user id + timestamp. Uploaded file content is checked against known magic bytes (PDF/JPEG/PNG/WEBP/BMP/TIFF) after upload — a mismatch deletes the file and 400s, catching a relabeled file extension. Per-user upload rate limit added. |
@@ -64,7 +65,6 @@ These need something this repo doesn't have today (a credential, a service, a pr
 
 - **PRO-09 / PRO-11:** password reset, MFA, CAPTCHA, email verification — all need an email provider (and CAPTCHA needs a third-party key) that isn't configured anywhere in this app.
 - **PRO-04:** converting `notifications`/chat messages/`impersonation_log`/`patient_vitals` to `BIGINT` ids, and deciding a retention policy for each — the ID type change touches live sequences and foreign keys on tables that may already hold data; not something to apply without a real database to verify the migration against first (none was available while writing this, same caveat the prior DB-audit PR noted for its own biggest migration). Retention is also partly a business decision (how long to keep what), not purely technical.
-- **PRO-05:** moving uploads to S3 — needs an AWS account/bucket decision.
 - **PRO-15:** moving OCR/PDF parsing to a separate worker — needs a queue (Redis/Bull or similar) and a decision on where that worker runs.
 - **PRO-01, PRO-13, PRO-16, PRO-18, PRO-19, PRO-20, PRO-21, PRO-23, PRO-24, PRO-26, PRO-27, PRO-28:** marked `CANNOT VERIFY` or `N/A` in the audit itself — these are facts about the live production deployment (traffic plan, backup health, deployment habits, hosting limits, bus-factor), not something a code change can answer.
 
@@ -73,3 +73,9 @@ These need something this repo doesn't have today (a credential, a service, a pr
 One new file: `server/migrations/002_production_readiness_fixes.sql` — additive only (new columns, new table, new CHECK constraints), same rule as `BASELINE_prod_catchup.sql`. Runs automatically via `npm run db:migrate` on the next deploy, on top of migration `001` (including for a database that adopted `001` via `--fake` per `BASELINE.md` — this one still runs for real there).
 
 One explicit grant was needed and easy to miss: `001`'s grants to `corehealth_app` were a one-time snapshot (`GRANT ... ON ALL TABLES IN SCHEMA public`), not a default-privileges rule, so the new `idempotency_keys` table needed its own `GRANT` in `002` or the running server (which never connects as a superuser) would get "permission denied" on it the first time a sale or order was created.
+
+## 6. For whoever sets up the AWS environment
+
+- Set `AWS_S3_BUCKET` and `AWS_REGION` on the ECS task definition (see `.env.example`). Leaving `AWS_S3_BUCKET` unset makes the server fall back to local disk — fine for a one-off smoke test, wrong for anything with more than one task running.
+- The ECS **task role** (not the task *execution* role) needs `s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` on `arn:aws:s3:::<bucket>/*`. No access key/secret belongs in an env var — the AWS SDK picks up the task role automatically.
+- The bucket itself should block all public access — every read goes through the app (`streamUploadToResponse`), not a public bucket URL.

@@ -10,6 +10,7 @@ import { initSocket } from './config/socket';
 import errorHandler from './middleware/errorHandler';
 import validate from './middleware/validate';
 import { generalApiLimiter, publicFormLimiter, searchLimiter } from './middleware/rateLimiter';
+import { isS3Enabled, streamUploadToResponse } from './utils/fileStorage';
 
 const app    = express();
 const server = http.createServer(app);
@@ -49,11 +50,18 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 
-// Ensure upload directories exist (Railway has ephemeral FS)
-['uploads', 'uploads/prescriptions', 'uploads/lab-reports', 'uploads/lab-referrals', 'uploads/patient-reports'].forEach(dir => {
-  const p = path.join(__dirname, dir);
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
-});
+// PRO-05: on AWS (ECS Fargate, the actual deploy target), each task has its
+// own ephemeral filesystem — a file written to local disk by one task is
+// invisible to every other task and gone on the next deploy. When
+// AWS_S3_BUCKET is set, uploads go to S3 instead (see utils/fileStorage.ts)
+// and there is no local uploads directory to serve or create. When it's
+// unset (local dev, CI), behaviour is exactly what it was before.
+if (!isS3Enabled()) {
+  ['uploads', 'uploads/prescriptions', 'uploads/lab-reports', 'uploads/lab-referrals', 'uploads/patient-reports'].forEach(dir => {
+    const p = path.join(__dirname, dir);
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+  });
+}
 
 // PRO-17: uploaded files (prescriptions, lab reports, patient reports — all
 // potentially patient PHI) are public static content with no auth check and
@@ -62,11 +70,23 @@ app.use('/api', (_req, res, next) => {
 // per-file endpoint is the real fix and is a larger change (every client
 // page linking straight to `/uploads/...` would need to switch to an API
 // call) — tracked as follow-up, not done here.
-const noStoreUploads = express.static(path.join(__dirname, 'uploads'), {
-  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
-});
-app.use('/uploads', noStoreUploads);
-app.use('/uploads/lab-reports', noStoreUploads);
+if (isS3Enabled()) {
+  // Same URL shape as the static mount below (/uploads/<subdir>/<filename>)
+  // so no client change is needed — only the backing store moves to S3.
+  app.get('/uploads/:subdir/:filename', async (req, res, next) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      const found = await streamUploadToResponse(res, req.params.subdir, req.params.filename);
+      if (!found) res.status(404).end();
+    } catch (err) { next(err); }
+  });
+} else {
+  const noStoreUploads = express.static(path.join(__dirname, 'uploads'), {
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+  });
+  app.use('/uploads', noStoreUploads);
+  app.use('/uploads/lab-reports', noStoreUploads);
+}
 
 import { registerOrganization, searchOwnerCandidates, searchHospitalsClinics } from './controllers/organizationController';
 

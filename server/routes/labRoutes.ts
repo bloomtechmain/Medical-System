@@ -1,31 +1,19 @@
 import { Router } from 'express';
 import path from 'path';
-import fs from 'fs';
 import multer from 'multer';
 import { body } from 'express-validator';
 import { protect, authorize } from '../middleware/auth';
 import { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove } from '../controllers/labController';
 import { getAll as getMessages, create as createMessage } from '../controllers/labRequestMessagesController';
-import { Request } from 'express';
 import { uploadLimiter } from '../middleware/rateLimiter';
-import { randomUploadName, verifyUploadSignature } from '../utils/uploadSecurity';
+import { verifyUploadSignature } from '../utils/uploadSecurity';
+import { createUploadStorage } from '../utils/fileStorage';
 import validate from '../middleware/validate';
 
 const router = Router();
 
-const labReportsDir = path.join(__dirname, '../uploads/lab-reports');
-if (!fs.existsSync(labReportsDir)) fs.mkdirSync(labReportsDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: labReportsDir,
-  filename: (req: Request, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, randomUploadName('lab', req.user?.id || 'u', ext));
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: createUploadStorage('lab-reports', 'lab'),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
   fileFilter: (_req, file, cb) => {
     const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'];
@@ -35,19 +23,8 @@ const upload = multer({
 });
 
 // Optional doctor's prescription/referral slip, attached when a patient self-books a test
-const labReferralsDir = path.join(__dirname, '../uploads/lab-referrals');
-if (!fs.existsSync(labReferralsDir)) fs.mkdirSync(labReferralsDir, { recursive: true });
-
-const referralStorage = multer.diskStorage({
-  destination: labReferralsDir,
-  filename: (req: Request, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, randomUploadName('referral', req.user?.id || 'u', ext));
-  },
-});
-
 const uploadReferral = multer({
-  storage: referralStorage,
+  storage: createUploadStorage('lab-referrals', 'referral'),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
   fileFilter: (_req, file, cb) => {
     const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'];

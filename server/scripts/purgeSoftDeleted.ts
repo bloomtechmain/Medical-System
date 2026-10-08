@@ -7,46 +7,54 @@
 // so this is a plain script for ops to run on a schedule of their choosing
 // (a Railway cron job, a manual monthly run, whatever fits), the same way
 // the DB-01/DB-11 diagnostic scripts are run on demand rather than
-// automatically. Deliberately does NOT delete the on-disk files for purged
-// consultations/reports — do that by hand after confirming the retention
-// policy, since this script has no record of which rows it purged once done.
+// automatically. Also removes each purged consultation's/report's uploaded
+// file (local disk or S3, via utils/fileStorage.ts, same backend the app
+// itself is configured to use) — do this before the row is gone, since
+// there's no record of which file belonged to which row afterwards.
 //
 // Run:  PURGE_RETENTION_DAYS=90 npx tsx server/scripts/purgeSoftDeleted.ts
 // Or (after build):  node dist/scripts/purgeSoftDeleted.js
 // Defaults to a dry run — pass --execute to actually delete.
 import 'dotenv/config';
 import { pool } from '../config/db';
+import { deleteUpload } from '../utils/fileStorage';
 
 const RETENTION_DAYS = parseInt(process.env.PURGE_RETENTION_DAYS || '90', 10);
 const EXECUTE = process.argv.includes('--execute');
 
-const TARGETS: Array<{ table: string; idCol: string }> = [
+const TARGETS: Array<{ table: string; idCol: string; fileCol?: string; fileSubdir?: string }> = [
   { table: 'public.users', idCol: 'id' },
   { table: 'public.medicines', idCol: 'id' },
-  { table: 'clinical.medical_consultations', idCol: 'id' },
-  { table: 'clinical.patient_reports', idCol: 'id' },
+  { table: 'clinical.medical_consultations', idCol: 'id', fileCol: 'prescription_file', fileSubdir: 'prescriptions' },
+  { table: 'clinical.patient_reports', idCol: 'id', fileCol: 'file_path', fileSubdir: 'patient-reports' },
 ];
 
 const run = async (): Promise<void> => {
-  console.log(`Retention window: ${RETENTION_DAYS} days. Mode: ${EXECUTE ? 'EXECUTE (will delete rows)' : 'DRY RUN (no changes — pass --execute to actually delete)'}\n`);
+  console.log(`Retention window: ${RETENTION_DAYS} days. Mode: ${EXECUTE ? 'EXECUTE (will delete rows and files)' : 'DRY RUN (no changes — pass --execute to actually delete)'}\n`);
 
-  for (const { table, idCol } of TARGETS) {
+  for (const { table, idCol, fileCol, fileSubdir } of TARGETS) {
+    const selectCols = fileCol ? `${idCol}, ${fileCol}` : idCol;
     const { rows: candidates } = await pool.query(
-      `SELECT ${idCol} FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - $1::interval`,
+      `SELECT ${selectCols} FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - $1::interval`,
       [`${RETENTION_DAYS} days`]
     );
     console.log(`${table}: ${candidates.length} row(s) past retention`);
 
     if (EXECUTE && candidates.length) {
+      if (fileCol && fileSubdir) {
+        for (const row of candidates) {
+          if (row[fileCol]) await deleteUpload(fileSubdir, row[fileCol]);
+        }
+      }
       const { rowCount } = await pool.query(
         `DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - $1::interval`,
         [`${RETENTION_DAYS} days`]
       );
-      console.log(`  -> deleted ${rowCount} row(s)`);
+      console.log(`  -> deleted ${rowCount} row(s)${fileCol ? ' and their files' : ''}`);
     }
   }
 
-  console.log('\nDone. Remember: on-disk files for purged consultations/patient reports are not removed by this script.');
+  console.log('\nDone.');
   await pool.end();
 };
 

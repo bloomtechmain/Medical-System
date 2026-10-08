@@ -1,10 +1,9 @@
-import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, getTenantSchema, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
 import { extractVitalsFromText, extractReportText } from '../utils/labVitalsParser';
 import { saveVitalsFromLab } from './patientVitalsController';
+import { readUploadToTempFile, deleteUpload } from '../utils/fileStorage';
 
 // lab_requests lives in the `clinical` schema behind row-level security —
 // every query against it must carry the acting user's identity. See
@@ -247,8 +246,13 @@ const finalizeReport = (
 
       // Priority 2: PDF text extraction (pdfjs) OR image OCR (tesseract)
       if (Object.keys(vitalsToSave).length === 0) {
-        const filePath   = path.join(__dirname, '../uploads/lab-reports', reportFilename);
-        const reportText = await extractReportText(filePath);
+        const { filePath, cleanup } = await readUploadToTempFile('lab-reports', reportFilename);
+        let reportText: string;
+        try {
+          reportText = await extractReportText(filePath);
+        } finally {
+          cleanup();
+        }
         if (reportText.trim().length > 20) {
           const extracted = extractVitalsFromText(reportText);
           if (Object.keys(extracted).length > 0) {
@@ -312,8 +316,7 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
 
     // Delete previous file if replacing
     if (existing[0].report_file) {
-      const oldPath = path.join(__dirname, '../uploads/lab-reports', existing[0].report_file);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      await deleteUpload('lab-reports', existing[0].report_file);
     }
 
     // Save the report record immediately
@@ -481,8 +484,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
     if (rows[0].report_file) {
-      const fp = path.join(__dirname, '../uploads/lab-reports', rows[0].report_file);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      await deleteUpload('lab-reports', rows[0].report_file);
     }
 
     await queryAs(actor(req), 'DELETE FROM lab_requests WHERE id=$1', [req.params.id]);

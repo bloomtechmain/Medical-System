@@ -1,30 +1,18 @@
 import { Router } from 'express';
 import path from 'path';
-import fs from 'fs';
 import multer from 'multer';
 import { body } from 'express-validator';
 import { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove } from '../controllers/consultationController';
 import { protect, authorize } from '../middleware/auth';
-import { Request } from 'express';
 import { uploadLimiter } from '../middleware/rateLimiter';
-import { randomUploadName, verifyUploadSignature } from '../utils/uploadSecurity';
+import { verifyUploadSignature } from '../utils/uploadSecurity';
+import { createUploadStorage } from '../utils/fileStorage';
 import validate from '../middleware/validate';
 
 const router = Router();
 
-const prescriptionsDir = path.join(__dirname, '../uploads/prescriptions');
-if (!fs.existsSync(prescriptionsDir)) fs.mkdirSync(prescriptionsDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: prescriptionsDir,
-  filename: (req: Request, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, randomUploadName('rx', req.user?.id || 'u', ext));
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: createUploadStorage('prescriptions', 'rx'),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'];
