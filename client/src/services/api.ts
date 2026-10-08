@@ -42,6 +42,7 @@ export const medicineApi = {
   getOne: (id: number): Promise<any>                => api.get(`/medicines/${id}`),
   create: (data: unknown): Promise<any>             => api.post('/medicines', data),
   update: (id: number, data: unknown): Promise<any> => api.put(`/medicines/${id}`, data),
+  adjustStock: (id: number, delta: number): Promise<any> => api.patch(`/medicines/${id}/stock`, { delta }),
   remove: (id: number): Promise<any>                => api.delete(`/medicines/${id}`),
 };
 

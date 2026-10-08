@@ -7,13 +7,24 @@ import { pool, queryAs, RLSActor } from '../config/db';
 // acting user's identity. See config/db.ts (queryAs).
 const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
+// PRO-03: admin's user list was never paginated. See medicineController.ts
+// for why the default is generous rather than "a page" — no page-through UI
+// exists client-side yet, so this bounds unbounded growth without silently
+// truncating what the admin list shows today.
+const DEFAULT_LIMIT = 500;
+const MAX_LIMIT = 1000;
+
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { role } = req.query as { role?: string };
-    let query = 'SELECT id, name, email, role, is_active, created_at FROM users';
-    const params: string[] = [];
-    if (role) { query += ' WHERE role = $1'; params.push(role); }
-    query += ' ORDER BY created_at DESC';
+    const { role, limit: limitQ, offset: offsetQ } = req.query as Record<string, string | undefined>;
+    const limit  = Math.min(Math.max(parseInt(limitQ as string, 10) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+    const offset = Math.max(parseInt(offsetQ as string, 10) || 0, 0);
+
+    let query = 'SELECT id, name, email, role, is_active, created_at FROM users WHERE deleted_at IS NULL';
+    const params: unknown[] = [];
+    if (role) { params.push(role); query += ` AND role = $${params.length}`; }
+    params.push(limit, offset);
+    query += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) { next(err); }
@@ -22,7 +33,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 const getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1 AND deleted_at IS NULL',
       [req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
@@ -294,9 +305,16 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
   } catch (err) { next(err); }
 };
 
+// PRO-25: users were hard-deleted. Soft-delete (deleted_at) instead, and
+// deactivate the login at the same time; a separate, ops-run purge script
+// removes rows for real after a retention window (see
+// server/scripts/purgeSoftDeleted.ts) rather than this doing it immediately.
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    const { rowCount } = await pool.query(
+      'UPDATE users SET deleted_at = NOW(), is_active = FALSE WHERE id = $1 AND deleted_at IS NULL',
+      [req.params.id]
+    );
     if (!rowCount) { res.status(404).json({ message: 'User not found' }); return; }
     res.status(204).end();
   } catch (err) { next(err); }
@@ -455,9 +473,15 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
   } catch (err) { next(err); }
 };
 
+// PRO-02: these searches relied entirely on the client debouncing and never
+// sending short queries — nothing server-side stopped a 1-character (or
+// empty) query from hitting the database directly.
+const MIN_SEARCH_LEN = 2;
+
 const searchPatients = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await queryAs(actor(req), `
       SELECT u.id, u.name, u.email, u.is_active,
              p.phone, p.date_of_birth, p.blood_type, p.gender
@@ -474,6 +498,7 @@ const searchPatients = async (req: Request, res: Response, next: NextFunction): 
 const searchPharmacists = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
              p.pharmacy_name, p.pharmacy_address, p.phone,
@@ -492,6 +517,7 @@ const searchPharmacists = async (req: Request, res: Response, next: NextFunction
 const searchDoctors = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
              p.specialization, p.hospital_affiliation, p.phone, p.license_number,
@@ -516,6 +542,7 @@ const searchDoctors = async (req: Request, res: Response, next: NextFunction): P
 const searchLaboratories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { q = '' } = req.query as { q?: string };
+    if (q.trim().length < MIN_SEARCH_LEN) { res.json([]); return; }
     const { rows } = await pool.query(`
       SELECT u.id, u.name, u.email, u.is_active,
              p.lab_name, p.lab_type, p.address, p.phone,

@@ -19,6 +19,22 @@ const pad2 = (n: number): string => String(n).padStart(2, '0');
 // Local calendar date (not UTC) — matches how a browser presents "today" to the user.
 const toDateStr = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
+// PRO-30: "today"/"past date" checks used the server's own local date. If the
+// server runs in UTC and the clinic is in Sri Lanka (UTC+5:30), the server's
+// date is a day behind between midnight and 05:30 local — a patient at
+// 00:30 Colombo time booking "today" would be told it's in the past, and an
+// override for "today" could be set for the wrong calendar day. Everything
+// that means "today" for booking purposes anchors to this business time
+// zone, not wherever the process happens to be deployed.
+const BUSINESS_TZ = 'Asia/Colombo';
+const businessTodayStr = (): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+// A Date object whose local getters (getFullYear/getMonth/getDate, as used by
+// toDateStr above) read back the business-timezone calendar date — lets the
+// rest of this file keep doing plain Date arithmetic (setDate, etc.) without
+// every call site needing to know about time zones.
+const businessToday = (): Date => new Date(`${businessTodayStr()}T00:00:00`);
+
 // Postgres TIME columns come back as "HH:MM:SS" — normalize to "HH:MM" for comparison/display.
 const normTime = (t: string): string => t.slice(0, 5);
 
@@ -49,7 +65,7 @@ interface DaySlots {
 // times here, never who booked them or why.
 const computeAvailableSlots = async (doctorId: number, organizationId: number | null, days: number): Promise<DaySlots[]> => {
   const doctorActor: RLSActor = { id: doctorId, role: 'doctor' };
-  const today   = new Date();
+  const today   = businessToday();
   const fromStr = toDateStr(today);
   const toDateObj = new Date(today);
   toDateObj.setDate(toDateObj.getDate() + days);
@@ -207,7 +223,7 @@ const setWeeklyAvailability = async (req: Request, res: Response, next: NextFunc
 
 const getOverrides = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const today = new Date();
+    const today = businessToday();
     const from = (req.query.from as string) && DAY_RE.test(req.query.from as string)
       ? req.query.from as string : toDateStr(today);
     const toObj = new Date(today);
@@ -230,7 +246,7 @@ const setOverride = async (req: Request, res: Response, next: NextFunction): Pro
     };
     if (!date || !DAY_RE.test(date))      { res.status(400).json({ message: 'Valid date is required' }); return; }
     if (typeof is_available !== 'boolean') { res.status(400).json({ message: 'is_available must be true or false' }); return; }
-    if (date < toDateStr(new Date()))     { res.status(400).json({ message: 'Cannot set availability for a past date' }); return; }
+    if (date < businessTodayStr())        { res.status(400).json({ message: 'Cannot set availability for a past date' }); return; }
 
     const orgId = organization_id ?? null;
     const { rows: [row] } = await queryAs(actor(req), `
@@ -267,7 +283,7 @@ const createAppointment = async (req: Request, res: Response, next: NextFunction
     if (!doctor_id)                              { res.status(400).json({ message: 'Doctor is required' }); return; }
     if (!appointment_date || !DAY_RE.test(appointment_date)) { res.status(400).json({ message: 'Valid appointment date is required' }); return; }
     if (!start_time || !TIME_RE.test(start_time)) { res.status(400).json({ message: 'Valid start time is required' }); return; }
-    if (appointment_date < toDateStr(new Date())) { res.status(400).json({ message: 'Cannot book a date in the past' }); return; }
+    if (appointment_date < businessTodayStr()) { res.status(400).json({ message: 'Cannot book a date in the past' }); return; }
 
     const { rows: dr } = await pool.query("SELECT id, name FROM users WHERE id=$1 AND role='doctor'", [doctor_id]);
     if (!dr.length) { res.status(404).json({ message: 'Doctor not found' }); return; }
@@ -401,4 +417,5 @@ export {
   getDoctorSlots, getWeeklyAvailability, setWeeklyAvailability,
   getOverrides, setOverride, deleteOverride,
   createAppointment, getAll, updateStatus,
+  businessTodayStr,
 };

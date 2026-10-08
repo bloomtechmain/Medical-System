@@ -143,17 +143,28 @@ const updateStatus = async (req: Request, res: Response, next: NextFunction): Pr
     );
     if (!currentRows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
-    if (ALLOWED_STATUS_TRANSITIONS[currentRows[0].status] !== status) {
-      res.status(400).json({ message: `Cannot move from "${currentRows[0].status}" to "${status}"` });
+    const previousStatus = currentRows[0].status;
+    if (ALLOWED_STATUS_TRANSITIONS[previousStatus] !== status) {
+      res.status(400).json({ message: `Cannot move from "${previousStatus}" to "${status}"` });
       return;
     }
 
+    // PRO-29: status was read, then updated in a separate statement with no
+    // lock — a concurrent update from the same pharmacist (two tabs, a
+    // retried request) could both pass the check above and both apply,
+    // skipping a step in the pipeline. The expected previous status goes in
+    // the WHERE clause so only the request that's still looking at the
+    // current state can win; the other gets 0 rows back and a 409.
     const { rows } = await queryAs(actor(req),
       `UPDATE prescription_assignments SET status=$1, updated_at=NOW()
-       WHERE id=$2 AND pharmacist_id=$3
+       WHERE id=$2 AND pharmacist_id=$3 AND status=$4
        RETURNING *`,
-      [status, req.params.id, req.user.id]
+      [status, req.params.id, req.user.id, previousStatus]
     );
+    if (!rows.length) {
+      res.status(409).json({ message: 'This assignment was already updated by another request. Please refresh and try again.' });
+      return;
+    }
     const assignment = rows[0];
 
     const { rows: cRows } = await queryAs(actor(req),

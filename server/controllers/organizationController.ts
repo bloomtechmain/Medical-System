@@ -97,7 +97,16 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
     `, [req.params.id]);
     if (!rows.length) { res.status(404).json({ message: 'Organization not found' }); return; }
 
-    const org = rows[0];
+    let org = rows[0];
+
+    // PRO-11: a self-registered org (see registerOrganization) has no
+    // schema_name yet — the tenant schema/role are only ever created here,
+    // the moment an admin actually approves it, not at public submission time.
+    if (org.is_active && !org.schema_name) {
+      await pool.query('SELECT public.provision_tenant($1, $2, $3, $4)', [org.slug, org.name, org.org_type, org.owner_user_id]);
+      const { rows: reloaded } = await pool.query('SELECT * FROM public.organizations WHERE id = $1', [org.id]);
+      org = reloaded[0];
+    }
     // Mirror the org's active state onto its owner's login so approving an
     // organization also unblocks the owner, and suspending one blocks them again.
     // An owner can now be an existing user shared across organizations (picked
@@ -242,35 +251,63 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
       owner = existingOwner;
     } else {
       const hash = await bcrypt.hash(owner_password as string, 10);
-      const { rows: [newUser] } = await client.query(
-        `INSERT INTO public.users (name, email, password, role, is_active)
-         VALUES ($1,$2,$3,$4, FALSE) RETURNING id, name, email, role`,
-        [owner_name, owner_email, hash, role]
-      );
+      let newUser: { id: number; name: string; email: string; role: string };
+      try {
+        ({ rows: [newUser] } = await client.query(
+          `INSERT INTO public.users (name, email, password, role, is_active)
+           VALUES ($1,$2,$3,$4, FALSE) RETURNING id, name, email, role`,
+          [owner_name, owner_email, hash, role]
+        ));
+      } catch (err) {
+        // PRO-29: the existing-email check above races with a second
+        // concurrent registration for the same email.
+        if ((err as { code?: string }).code === '23505') {
+          await client.query('ROLLBACK');
+          res.status(409).json({ message: 'Email already in use' });
+          return;
+        }
+        throw err;
+      }
       if (profile) await createProfile(client, role, newUser.id, profile);
       owner = newUser;
     }
 
-    await client.query('SELECT public.provision_tenant($1, $2, $3, $4)', [slug, org_name, org_type, owner.id]);
-
-    // provision_tenant() always creates the org with is_active = TRUE (the
-    // column default) — force it back to FALSE since this org is pending review.
-    await client.query('UPDATE public.organizations SET is_active = FALSE WHERE slug = $1', [slug]);
+    // PRO-11: provision_tenant() does real DDL — CREATE SCHEMA, and tries to
+    // CREATE ROLE — every time it runs. Calling it here, before any admin has
+    // looked at the application, meant anyone could flood this public,
+    // unauthenticated endpoint and force the database to create an unbounded
+    // number of schemas/roles for organizations that might never be approved
+    // (and might never even be real). The schema is now provisioned only when
+    // an admin approves the org (see toggleActive below) — this step just
+    // records the application itself: a plain row with no schema yet.
+    let org: { id: number };
+    try {
+      ({ rows: [org] } = await client.query(
+        `INSERT INTO public.organizations (slug, name, org_type, owner_user_id, is_active)
+         VALUES ($1,$2,$3,$4, FALSE) RETURNING id`,
+        [slug, org_name, org_type, owner.id]
+      ));
+    } catch (err) {
+      if ((err as { code?: string }).code === '23505') {
+        await client.query('ROLLBACK');
+        res.status(409).json({ message: 'That organization slug is already taken' });
+        return;
+      }
+      throw err;
+    }
 
     await client.query(
-      `INSERT INTO public.organization_members (organization_id, user_id, member_role)
-       SELECT id, $2, 'owner' FROM public.organizations WHERE slug = $1`,
-      [slug, owner.id]
+      `INSERT INTO public.organization_members (organization_id, user_id, member_role) VALUES ($1,$2,'owner')`,
+      [org.id, owner.id]
     );
 
     const cleanSpecs = (specializations || []).map(s => s.trim()).filter(Boolean);
     if (cleanSpecs.length) {
-      const { rows: [{ id: orgId }] } = await client.query('SELECT id FROM public.organizations WHERE slug = $1', [slug]);
       const values: string[] = [];
       const params: unknown[] = [];
       cleanSpecs.forEach((name, i) => {
         values.push(`($${i * 2 + 1},$${i * 2 + 2})`);
-        params.push(orgId, name);
+        params.push(org.id, name);
       });
       await client.query(
         `INSERT INTO public.organization_specializations (organization_id, name) VALUES ${values.join(',')} ON CONFLICT DO NOTHING`,

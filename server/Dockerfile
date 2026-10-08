@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # Canvas system libs (fallback if prebuilt binaries unavailable for this platform)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -28,6 +28,17 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 EXPOSE 5000
+
+# PRO-15: OCR (tesseract.js) and PDF parsing run inside this same API
+# process with no memory ceiling — a burst of large uploads could grow the
+# process until the container OOMs. This doesn't fix the underlying issue
+# (moving that work to a separate worker so it can't take the API down with
+# it — see PRO-15's suggested fix), but it bounds the damage: Node is killed
+# and restarted by the platform's health check instead of silently degrading
+# the whole instance. Override via the platform's env config if a given
+# deployment's container has a different memory limit than the 512 MB this
+# assumes.
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Run pending migrations before starting the server — node-pg-migrate exits
 # non-zero on failure, which fails the container's healthcheck and the

@@ -219,7 +219,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
                 FROM medical_consultations c
                 LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
                 LEFT JOIN users u   ON u.id  = c.doctor_id
-                WHERE c.patient_id = $1
+                WHERE c.patient_id = $1 AND c.deleted_at IS NULL
                 GROUP BY c.id, u.name
                 ORDER BY c.visit_date DESC, c.created_at DESC`;
       params = [id];
@@ -231,7 +231,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
                 FROM medical_consultations c
                 LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
                 LEFT JOIN users pt ON pt.id = c.patient_id
-                WHERE c.doctor_id = $1
+                WHERE c.doctor_id = $1 AND c.deleted_at IS NULL
                 GROUP BY c.id, pt.name, pt.email
                 ORDER BY c.visit_date DESC, c.created_at DESC`;
       params = [id];
@@ -270,7 +270,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
       LEFT JOIN users pt  ON pt.id  = c.patient_id
       LEFT JOIN users u   ON u.id   = c.doctor_id
       LEFT JOIN patient_profiles pat ON pat.user_id = c.patient_id
-      WHERE c.id = $1 AND ${condition}
+      WHERE c.id = $1 AND ${condition} AND c.deleted_at IS NULL
     `, [req.params.id, id]);
 
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
@@ -428,7 +428,7 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
       LEFT JOIN users u            ON u.id  = c.doctor_id
       LEFT JOIN doctor_profiles dp ON dp.user_id = c.doctor_id
       LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
-      WHERE c.patient_id = $1
+      WHERE c.patient_id = $1 AND c.deleted_at IS NULL
       GROUP BY c.id, u.name, dp.specialization
       ORDER BY c.visit_date DESC, c.created_at DESC
     `, [patientId]);
@@ -451,22 +451,20 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 };
 
+// PRO-25: consultations were hard-deleted (and the prescription file removed
+// immediately with them). Soft-delete instead — the file stays until the
+// retention-window purge script (server/scripts/purgeSoftDeleted.ts) removes
+// both for real, so a delete is recoverable up to that point.
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id, role } = req.user;
     const condition = role === 'doctor' ? 'doctor_id=$2' : 'patient_id=$2 AND doctor_id IS NULL';
     const { rows } = await queryAs(actor(req),
-      `SELECT prescription_file FROM medical_consultations WHERE id=$1 AND ${condition}`,
+      `UPDATE medical_consultations SET deleted_at = NOW()
+       WHERE id=$1 AND ${condition} AND deleted_at IS NULL RETURNING id`,
       [req.params.id, id]
     );
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
-
-    if (rows[0].prescription_file) {
-      const fp = path.join(__dirname, '../uploads/prescriptions', rows[0].prescription_file);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
-
-    await queryAs(actor(req), 'DELETE FROM medical_consultations WHERE id=$1', [req.params.id]);
     res.status(204).end();
   } catch (err) { next(err); }
 };

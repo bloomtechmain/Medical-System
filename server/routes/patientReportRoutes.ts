@@ -5,6 +5,8 @@ import multer from 'multer';
 import { protect, authorize } from '../middleware/auth';
 import { create, getAll, getOne, serveFile, serveFileForDoctor, remove } from '../controllers/patientReportController';
 import { Request } from 'express';
+import { uploadLimiter } from '../middleware/rateLimiter';
+import { randomUploadName, verifyUploadSignature } from '../utils/uploadSecurity';
 
 const router = Router();
 
@@ -15,7 +17,7 @@ const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req: Request, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `pr_${req.user?.id || 'u'}_${Date.now()}${ext}`);
+    cb(null, randomUploadName('pr', req.user?.id || 'u', ext));
   },
 });
 
@@ -33,7 +35,7 @@ router.get('/',                   protect, authorize('patient'), getAll);
 router.get('/:id',                protect, authorize('patient'), getOne);
 router.get('/:id/file',           protect, authorize('patient'), serveFile);
 router.get('/:id/doctor-file',    protect, authorize('doctor'),  serveFileForDoctor);
-router.post('/',                  protect, authorize('patient'), upload.single('file'), create);
+router.post('/',                  protect, authorize('patient'), uploadLimiter, upload.single('file'), verifyUploadSignature({ required: true }), create);
 router.delete('/:id',             protect, authorize('patient'), remove);
 
 export default router;
