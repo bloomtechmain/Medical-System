@@ -7,6 +7,8 @@ import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import OrgRegister from './pages/OrgRegister';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import HospitalDashboard from './pages/HospitalDashboard';
 import ClinicDashboard from './pages/ClinicDashboard';
 import AdminDashboard from './pages/AdminDashboard';
@@ -87,6 +89,8 @@ export default function App() {
       <Route path="/login"      element={token && user?.role ? <RoleHome /> : <Login />} />
       <Route path="/register"   element={token && user?.role ? <RoleHome /> : <Register />} />
       <Route path="/org-register" element={token && user?.role ? <RoleHome /> : <OrgRegister />} />
+      <Route path="/forgot-password" element={token && user?.role ? <RoleHome /> : <ForgotPassword />} />
+      <Route path="/reset-password"  element={token && user?.role ? <RoleHome /> : <ResetPassword />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={<PrivateRoute roles={['admin']}><Layout /></PrivateRoute>}>

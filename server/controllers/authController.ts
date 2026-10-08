@@ -5,6 +5,7 @@ import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, revokeRefreshTokens } from '../config/db';
+import { sendMail } from '../config/mailer';
 import { DbUser } from '../types';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
@@ -513,4 +514,72 @@ const changePassword = async (req: Request, res: Response, next: NextFunction): 
   } catch (err) { next(err); }
 };
 
-export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword };
+const PASSWORD_RESET_MINUTES = 60;
+
+// SEC-17 (auth): forgot-password, step 1 — always responds the same way
+// whether or not the email matches an account, so this can't be used to
+// enumerate registered emails. If it does match an active account, a
+// one-hour opaque token is generated (same hashed-at-rest pattern as
+// refresh tokens) and emailed via config/mailer (logs to console if SMTP
+// isn't configured, see that file).
+const forgotPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { email } = req.body as { email: string };
+    const generic = { message: 'If an account with that email exists, a password reset link has been sent.' };
+
+    const { rows } = await pool.query<DbUser>('SELECT id, name, email, is_active FROM users WHERE email = $1', [email]);
+    if (!rows.length || !rows[0].is_active) { res.json(generic); return; }
+    const user = rows[0];
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_MINUTES * 60 * 1000);
+    await pool.query(
+      'INSERT INTO public.password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+      [user.id, hashRefreshToken(token), expiresAt]
+    );
+
+    const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
+    await sendMail(
+      user.email,
+      'Reset your Core Health password',
+      `<p>Hi ${user.name},</p>
+       <p>Click the link below to reset your password. This link expires in ${PASSWORD_RESET_MINUTES} minutes and can only be used once.</p>
+       <p><a href="${resetUrl}">${resetUrl}</a></p>
+       <p>If you didn't request this, you can safely ignore this email.</p>`
+    );
+
+    res.json(generic);
+  } catch (err) { next(err); }
+};
+
+// SEC-17 (auth), step 2 — redeems a reset token. used_at is checked (not
+// just expires_at) so an already-redeemed link can't be replayed even
+// within its validity window. Revokes every refresh token for the account,
+// same as changePassword — a password reset is exactly the scenario where
+// you want every existing session killed, not just this one.
+const resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { token, newPassword } = req.body as { token: string; newPassword: string };
+    if (!token || !newPassword) { res.status(400).json({ message: 'Token and new password are required' }); return; }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      res.status(400).json({ message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+      return;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id, user_id FROM public.password_reset_tokens
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()`,
+      [hashRefreshToken(token)]
+    );
+    if (!rows.length) { res.status(400).json({ message: 'Invalid or expired reset link' }); return; }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hash, rows[0].user_id]);
+    await pool.query('UPDATE public.password_reset_tokens SET used_at = NOW() WHERE id = $1', [rows[0].id]);
+    await revokeRefreshTokens(rows[0].user_id);
+
+    res.json({ message: 'Password reset. Please log in with your new password.' });
+  } catch (err) { next(err); }
+};
+
+export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };
