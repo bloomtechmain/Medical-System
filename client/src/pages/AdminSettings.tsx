@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { authApi, userApi } from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import ChangePasswordPanel from '../components/common/ChangePasswordPanel';
 
 export default function AdminSettings() {
   const { t } = useTranslation('admin');
@@ -165,6 +166,8 @@ export default function AdminSettings() {
           </>
         )}
       </div>
+
+      <ChangePasswordPanel />
     </div>
   );
 }

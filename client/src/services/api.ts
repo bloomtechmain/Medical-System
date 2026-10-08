@@ -82,6 +82,9 @@ export const authApi = {
   mfaDisable:    (code: string): Promise<any>         => api.post('/auth/mfa/disable', { code }),
   refresh:       (refreshToken: string): Promise<any> => api.post('/auth/refresh', { refreshToken }),
   logoutSession: (refreshToken: string): Promise<any> => api.post('/auth/logout', { refreshToken }),
+  changePassword: (data: { currentPassword: string; newPassword: string }): Promise<any> => api.post('/auth/change-password', data),
+  forgotPassword: (email: string): Promise<any> => api.post('/auth/forgot-password', { email }),
+  resetPassword:  (data: { token: string; newPassword: string }): Promise<any> => api.post('/auth/reset-password', data),
 };
 
 export const medicineApi = {

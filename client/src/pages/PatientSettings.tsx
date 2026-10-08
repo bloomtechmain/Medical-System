@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { authApi, userApi } from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import ChangePasswordPanel from '../components/common/ChangePasswordPanel';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -132,6 +133,8 @@ export default function PatientSettings() {
           </button>
         </div>
       </form>
+
+      <ChangePasswordPanel />
     </div>
   );
 }
