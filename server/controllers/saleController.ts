@@ -34,7 +34,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 
     const items = await pool.query(
       `SELECT si.*, m.name AS medicine_name FROM "${schema}".sale_items si
-       JOIN medicines m ON si.medicine_id = m.id WHERE si.sale_id = $1`,
+       JOIN "${schema}".medicines m ON si.medicine_id = m.id WHERE si.sale_id = $1`,
       [req.params.id]
     );
     res.json({ ...sale.rows[0], items: items.rows });
@@ -57,7 +57,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     // Validate stock
     for (const item of items) {
       const { rows } = await client.query(
-        'SELECT stock_quantity FROM medicines WHERE id = $1 FOR UPDATE', [item.medicine_id]
+        `SELECT stock_quantity FROM "${schema}".medicines WHERE id = $1 FOR UPDATE`, [item.medicine_id]
       );
       if (!rows.length || rows[0].stock_quantity < item.quantity) {
         throw Object.assign(new Error(`Insufficient stock for medicine id ${item.medicine_id}`), { status: 400 });
@@ -78,7 +78,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
         [saleId, item.medicine_id, item.quantity, item.unit_price]
       );
       await client.query(
-        'UPDATE medicines SET stock_quantity = stock_quantity - $1 WHERE id = $2',
+        `UPDATE "${schema}".medicines SET stock_quantity = stock_quantity - $1 WHERE id = $2`,
         [item.quantity, item.medicine_id]
       );
     }
@@ -109,7 +109,7 @@ const getAnalytics = async (req: Request, res: Response, next: NextFunction): Pr
         SELECT m.id, m.name, SUM(si.quantity) AS quantity, SUM(si.quantity * si.unit_price) AS revenue
         FROM "${schema}".sale_items si
         JOIN "${schema}".sales s ON si.sale_id = s.id
-        JOIN medicines m ON si.medicine_id = m.id
+        JOIN "${schema}".medicines m ON si.medicine_id = m.id
         WHERE s.sold_at >= NOW() - INTERVAL '30 days'
         GROUP BY m.id, m.name
         ORDER BY revenue DESC
@@ -120,7 +120,7 @@ const getAnalytics = async (req: Request, res: Response, next: NextFunction): Pr
                COALESCE(SUM(si.quantity * m.cost_price), 0) AS cost
         FROM "${schema}".sale_items si
         JOIN "${schema}".sales s ON si.sale_id = s.id
-        JOIN medicines m ON si.medicine_id = m.id
+        JOIN "${schema}".medicines m ON si.medicine_id = m.id
         WHERE s.sold_at >= NOW() - INTERVAL '30 days'
       `),
       pool.query(`SELECT COALESCE(SUM(total_amount), 0) AS total FROM "${schema}".sales WHERE sold_at::date = CURRENT_DATE`),

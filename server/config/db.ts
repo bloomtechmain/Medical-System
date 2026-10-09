@@ -90,6 +90,33 @@ const getTenantSchema = async (userId: number): Promise<string | null> => {
   return schema;
 };
 
+// SEC-17 #4: medicines/suppliers moved from one shared public table into
+// each pharmacy's own tenant schema. A pharmacist is always scoped to their
+// own org (getTenantSchema, same as orders/sales). Admin has no pharmacy
+// membership of their own but legitimately needs to manage any pharmacy's
+// catalog (there's an /admin/medicines page) — they must pass an explicit
+// organization_id rather than getting an implicit "first org" or a merged
+// view, so a stray/mistyped id fails closed (404) instead of silently
+// showing the wrong pharmacy's stock and cost_price.
+const resolvePharmacySchema = async (
+  actor: { id: number; role: string },
+  organizationId: number | undefined
+): Promise<{ schema: string } | { error: string; status: number }> => {
+  if (actor.role === 'admin') {
+    if (!organizationId) return { error: 'organization_id is required', status: 400 };
+    const { rows } = await pool.query(
+      `SELECT schema_name FROM public.organizations
+       WHERE id = $1 AND org_type = 'pharmacy' AND schema_name IS NOT NULL`,
+      [organizationId]
+    );
+    if (!rows.length) return { error: 'Pharmacy organization not found', status: 404 };
+    return { schema: rows[0].schema_name };
+  }
+  const schema = await getTenantSchema(actor.id);
+  if (!schema) return { error: 'No pharmacy organization is linked to this account.', status: 400 };
+  return { schema };
+};
+
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const connectDB = async (retries = 8, baseDelay = 3000): Promise<void> => {
@@ -125,5 +152,5 @@ const revokeRefreshTokens = async (userId: number): Promise<void> => {
   );
 };
 
-export { pool, connectDB, queryAs, getTenantSchema, revokeRefreshTokens };
+export { pool, connectDB, queryAs, getTenantSchema, revokeRefreshTokens, resolvePharmacySchema };
 export type { RLSActor };

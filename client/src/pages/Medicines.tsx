@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { medicineApi, supplierApi } from '../services/api';
 import { useModal } from '../hooks/useModal';
 import { useDebounce } from '../hooks/useDebounce';
+import { usePharmacyScope } from '../hooks/usePharmacyScope';
 import { formatCurrency, formatDate, stockStatus } from '../utils/helpers';
 import PageHeader from '../components/common/PageHeader';
 import Table from '../components/common/Table';
@@ -23,12 +24,18 @@ export default function Medicines() {
   const navigate = useNavigate();
   const [search, setSearch] = useState((location.state as any)?.search || '');
   const debouncedSearch = useDebounce(search);
+  const { isAdmin, orgId, setOrgId, pharmacyOrgs, ready } = usePharmacyScope();
 
   const { data: medicines = [], isLoading } = useQuery({
-    queryKey: ['medicines', debouncedSearch],
-    queryFn: () => medicineApi.getAll({ search: debouncedSearch }),
+    queryKey: ['medicines', debouncedSearch, orgId],
+    queryFn: () => medicineApi.getAll({ search: debouncedSearch, organization_id: orgId || undefined }),
+    enabled: ready,
   });
-  const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: supplierApi.getAll });
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['suppliers', orgId],
+    queryFn: () => supplierApi.getAll(orgId || undefined),
+    enabled: ready,
+  });
 
   const { register, handleSubmit, reset } = useForm();
 
@@ -46,7 +53,9 @@ export default function Medicines() {
 
   const saveMutation = useMutation({
     mutationFn: (data: any) =>
-      formModal.data ? medicineApi.update(formModal.data.id, data) : medicineApi.create(data),
+      formModal.data
+        ? medicineApi.update(formModal.data.id, data, orgId || undefined)
+        : medicineApi.create(data, orgId || undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['medicines'] });
       toast.success(formModal.data ? t('medicines.toast.updated') : t('medicines.toast.added'));
@@ -57,7 +66,7 @@ export default function Medicines() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => medicineApi.remove(deleteModal.data.id),
+    mutationFn: () => medicineApi.remove(deleteModal.data.id, orgId || undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['medicines'] });
       toast.success(t('medicines.toast.deleted'));
@@ -91,14 +100,26 @@ export default function Medicines() {
       <PageHeader
         title={t('medicines.pageTitle')}
         description={t('medicines.pageDescription')}
-        action={<button className="btn-primary" onClick={handleAdd}>{t('medicines.addButton')}</button>}
+        action={<button className="btn-primary" onClick={handleAdd} disabled={!ready}>{t('medicines.addButton')}</button>}
       />
 
+      {isAdmin && (
+        <div className="mb-4">
+          <label className="label">Pharmacy</label>
+          <select className="input max-w-xs" value={orgId ?? ''} onChange={(e) => setOrgId(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Select a pharmacy...</option>
+            {pharmacyOrgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+      )}
+
       <div className="mb-4">
-        <input className="input max-w-xs" placeholder={t('medicines.searchPlaceholder')} value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} />
+        <input className="input max-w-xs" placeholder={t('medicines.searchPlaceholder')} value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} disabled={!ready} />
       </div>
 
-      <Table columns={columns} data={medicines} loading={isLoading} />
+      {ready ? <Table columns={columns} data={medicines} loading={isLoading} /> : (
+        <div className="text-center py-10 text-gray-400 text-sm">Select a pharmacy to view its medicines.</div>
+      )}
 
       <Modal isOpen={formModal.isOpen} onClose={formModal.close} title={formModal.data ? t('medicines.modal.editTitle') : t('medicines.modal.addTitle')} size="lg">
         <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="grid grid-cols-2 gap-4">

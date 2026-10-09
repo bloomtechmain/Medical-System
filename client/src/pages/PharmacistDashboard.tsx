@@ -45,9 +45,9 @@ export default function PharmacistDashboard() {
   const qc = useQueryClient();
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: authApi.me });
-  const { data: summary } = useQuery({ queryKey: ['inventory-summary'], queryFn: inventoryApi.summary });
+  const { data: summary } = useQuery({ queryKey: ['inventory-summary'], queryFn: () => inventoryApi.summary() });
   const { data: sales = [] } = useQuery({ queryKey: ['sales'], queryFn: saleApi.getAll });
-  const { data: lowStock = [] } = useQuery({ queryKey: ['low-stock'], queryFn: inventoryApi.lowStock });
+  const { data: lowStock = [] } = useQuery({ queryKey: ['low-stock'], queryFn: () => inventoryApi.lowStock() });
   const { data: expiring = [] } = useQuery({ queryKey: ['expiring', 30], queryFn: () => inventoryApi.expiring(30) });
   const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: orderApi.getAll });
   const { data: analytics } = useQuery({ queryKey: ['sales-analytics'], queryFn: saleApi.analytics });
