@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { supplierApi } from '../services/api';
 import { useModal } from '../hooks/useModal';
+import { usePharmacyScope } from '../hooks/usePharmacyScope';
 import PageHeader from '../components/common/PageHeader';
 import Table from '../components/common/Table';
 import Modal from '../components/common/Modal';
@@ -16,12 +17,19 @@ export default function Suppliers() {
   const formModal = useModal<any>();
   const deleteModal = useModal<any>();
 
-  const { data: suppliers = [], isLoading } = useQuery({ queryKey: ['suppliers'], queryFn: supplierApi.getAll });
+  const { isAdmin, orgId, setOrgId, pharmacyOrgs, ready } = usePharmacyScope();
+  const { data: suppliers = [], isLoading } = useQuery({
+    queryKey: ['suppliers', orgId],
+    queryFn: () => supplierApi.getAll(orgId || undefined),
+    enabled: ready,
+  });
   const { register, handleSubmit, reset } = useForm();
 
   const saveMutation = useMutation({
     mutationFn: (data: any) =>
-      formModal.data ? supplierApi.update(formModal.data.id, data) : supplierApi.create(data),
+      formModal.data
+        ? supplierApi.update(formModal.data.id, data, orgId || undefined)
+        : supplierApi.create(data, orgId || undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['suppliers'] });
       toast.success(formModal.data ? t('suppliers.toast.updated') : t('suppliers.toast.added'));
@@ -31,7 +39,7 @@ export default function Suppliers() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => supplierApi.remove(deleteModal.data.id),
+    mutationFn: () => supplierApi.remove(deleteModal.data.id, orgId || undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['suppliers'] });
       toast.success(t('suppliers.toast.deleted'));
@@ -57,9 +65,20 @@ export default function Suppliers() {
     <div>
       <PageHeader
         title={t('suppliers.pageTitle')}
-        action={<button className="btn-primary" onClick={() => { reset({}); formModal.open(null); }}>{t('suppliers.addButton')}</button>}
+        action={<button className="btn-primary" disabled={!ready} onClick={() => { reset({}); formModal.open(null); }}>{t('suppliers.addButton')}</button>}
       />
-      <Table columns={columns} data={suppliers} loading={isLoading} />
+      {isAdmin && (
+        <div className="mb-4">
+          <label className="label">Pharmacy</label>
+          <select className="input max-w-xs" value={orgId ?? ''} onChange={(e) => setOrgId(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Select a pharmacy...</option>
+            {pharmacyOrgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+      )}
+      {ready ? <Table columns={columns} data={suppliers} loading={isLoading} /> : (
+        <div className="text-center py-10 text-gray-400 text-sm">Select a pharmacy to view its suppliers.</div>
+      )}
 
       <Modal isOpen={formModal.isOpen} onClose={formModal.close} title={formModal.data ? t('suppliers.modal.editTitle') : t('suppliers.modal.addTitle')}>
         <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="space-y-4">

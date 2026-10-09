@@ -295,37 +295,12 @@ CREATE TABLE public.laboratory_profiles (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2.5 shared drug catalog + suppliers (commercial reference data, not PHI)
-CREATE TABLE public.suppliers (
-  id         SERIAL       PRIMARY KEY,
-  name       VARCHAR(150) NOT NULL,
-  contact    VARCHAR(100),
-  phone      VARCHAR(20),
-  email      VARCHAR(150),
-  address    TEXT,
-  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE public.medicines (
-  id             SERIAL        PRIMARY KEY,
-  name           VARCHAR(200)  NOT NULL,
-  generic_name   VARCHAR(200),
-  category       VARCHAR(100),
-  description    TEXT,
-  unit           VARCHAR(20)   NOT NULL DEFAULT 'tablet',
-  price          NUMERIC(10,2) NOT NULL DEFAULT 0,
-  cost_price     NUMERIC(10,2) NOT NULL DEFAULT 0,
-  stock_quantity INTEGER       NOT NULL DEFAULT 0,
-  reorder_level  INTEGER       NOT NULL DEFAULT 10,
-  expiry_date    DATE,
-  supplier_id    INTEGER       REFERENCES public.suppliers(id) ON DELETE SET NULL,
-  is_active      BOOLEAN       NOT NULL DEFAULT TRUE,
-  created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-  updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-);
-CREATE INDEX idx_medicines_name     ON public.medicines(name);
-CREATE INDEX idx_medicines_category ON public.medicines(category);
-CREATE INDEX idx_medicines_supplier ON public.medicines(supplier_id);
+-- 2.5 (SEC-17 #4) medicines/suppliers used to live here, shared across every
+-- pharmacy tenant with no isolation at all — any pharmacist could read and
+-- edit any other pharmacy's stock levels and cost_price. They're now
+-- created per-tenant inside provision_tenant()'s p_type = 'pharmacy' branch,
+-- same pattern as a laboratory's own test_catalog. See
+-- docs/sec-17-4-tenant-scope-inventory-plan.md for the full writeup.
 
 -- =============================================================================
 -- 3. CLINICAL SCHEMA — patient PHI, shared but RLS-protected
@@ -1000,7 +975,11 @@ BEGIN
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', v_schema, v_role);
     -- read shared catalog/identity it needs to operate
     EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', v_role);
-    EXECUTE format('GRANT SELECT ON public.medicines, public.suppliers, public.users TO %I', v_role);
+    -- medicines/suppliers moved into the tenant's own schema (SEC-17 #4) —
+    -- line 1209 below already grants this role full access to everything in
+    -- its own schema, which now includes those tables; public.users is the
+    -- only shared-catalog table this role still needs read access to.
+    EXECUTE format('GRANT SELECT ON public.users TO %I', v_role);
   EXCEPTION WHEN OTHERS THEN
     NULL;  -- role-level isolation unavailable; schema isolation still applies
   END;
@@ -1058,28 +1037,66 @@ BEGIN
 
   ELSIF p_type = 'pharmacy' THEN
 
+    -- SEC-17 #4: medicines/suppliers used to live in public, shared and
+    -- writable by every pharmacy tenant (confirmed live: any pharmacist
+    -- could read/edit any other pharmacy's stock and cost_price). Each
+    -- pharmacy now gets its own copy, same pattern as a lab's test_catalog
+    -- below. See docs/sec-17-4-tenant-scope-inventory-plan.md.
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.suppliers (
+        id         SERIAL       PRIMARY KEY,
+        name       VARCHAR(150) NOT NULL,
+        contact    VARCHAR(100),
+        phone      VARCHAR(20),
+        email      VARCHAR(150),
+        address    TEXT,
+        created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )$t$, v_schema);
+
+    EXECUTE format($t$
+      CREATE TABLE IF NOT EXISTS %I.medicines (
+        id             SERIAL        PRIMARY KEY,
+        name           VARCHAR(200)  NOT NULL,
+        generic_name   VARCHAR(200),
+        category       VARCHAR(100),
+        description    TEXT,
+        unit           VARCHAR(20)   NOT NULL DEFAULT 'tablet',
+        price          NUMERIC(10,2) NOT NULL DEFAULT 0,
+        cost_price     NUMERIC(10,2) NOT NULL DEFAULT 0,
+        stock_quantity INTEGER       NOT NULL DEFAULT 0,
+        reorder_level  INTEGER       NOT NULL DEFAULT 10,
+        expiry_date    DATE,
+        supplier_id    INTEGER       REFERENCES %I.suppliers(id) ON DELETE SET NULL,
+        is_active      BOOLEAN       NOT NULL DEFAULT TRUE,
+        created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      )$t$, v_schema, v_schema);
+    EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_name     ON %I.medicines(name)',     v_schema);
+    EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_category ON %I.medicines(category)', v_schema);
+    EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_supplier ON %I.medicines(supplier_id)', v_schema);
+
     -- Stock purchase orders from suppliers
     EXECUTE format($t$
       CREATE TABLE IF NOT EXISTS %I.orders (
         id           SERIAL        PRIMARY KEY,
-        supplier_id  INTEGER       REFERENCES public.suppliers(id) ON DELETE SET NULL,
-        ordered_by   INTEGER       REFERENCES public.users(id)     ON DELETE SET NULL,
+        supplier_id  INTEGER       REFERENCES %I.suppliers(id) ON DELETE SET NULL,
+        ordered_by   INTEGER       REFERENCES public.users(id) ON DELETE SET NULL,
         status       VARCHAR(20)   NOT NULL DEFAULT 'pending'
                      CHECK (status IN ('pending','received','cancelled')),
         total_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
         notes        TEXT,
         ordered_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
         received_at  TIMESTAMPTZ
-      )$t$, v_schema);
+      )$t$, v_schema, v_schema);
 
     EXECUTE format($t$
       CREATE TABLE IF NOT EXISTS %I.order_items (
         id          SERIAL        PRIMARY KEY,
-        order_id    INTEGER       NOT NULL REFERENCES %I.orders(id)         ON DELETE CASCADE,
-        medicine_id INTEGER       NOT NULL REFERENCES public.medicines(id)  ON DELETE CASCADE,
+        order_id    INTEGER       NOT NULL REFERENCES %I.orders(id)    ON DELETE CASCADE,
+        medicine_id INTEGER       NOT NULL REFERENCES %I.medicines(id) ON DELETE CASCADE,
         quantity    INTEGER       NOT NULL CHECK (quantity > 0),
         unit_cost   NUMERIC(10,2) NOT NULL CHECK (unit_cost >= 0)
-      )$t$, v_schema, v_schema);
+      )$t$, v_schema, v_schema, v_schema);
 
     -- Dispensing sales to customers / patients
     EXECUTE format($t$
@@ -1096,22 +1113,22 @@ BEGIN
     EXECUTE format($t$
       CREATE TABLE IF NOT EXISTS %I.sale_items (
         id          SERIAL        PRIMARY KEY,
-        sale_id     INTEGER       NOT NULL REFERENCES %I.sales(id)         ON DELETE CASCADE,
-        medicine_id INTEGER       NOT NULL REFERENCES public.medicines(id) ON DELETE CASCADE,
+        sale_id     INTEGER       NOT NULL REFERENCES %I.sales(id)     ON DELETE CASCADE,
+        medicine_id INTEGER       NOT NULL REFERENCES %I.medicines(id) ON DELETE CASCADE,
         quantity    INTEGER       NOT NULL CHECK (quantity > 0),
         unit_price  NUMERIC(10,2) NOT NULL CHECK (unit_price >= 0)
-      )$t$, v_schema, v_schema);
+      )$t$, v_schema, v_schema, v_schema);
 
     -- Manual stock corrections (damaged goods, expiry write-offs, etc.)
     EXECUTE format($t$
       CREATE TABLE IF NOT EXISTS %I.inventory_adjustments (
         id              SERIAL       PRIMARY KEY,
-        medicine_id     INTEGER      NOT NULL REFERENCES public.medicines(id) ON DELETE CASCADE,
+        medicine_id     INTEGER      NOT NULL REFERENCES %I.medicines(id) ON DELETE CASCADE,
         quantity_change INTEGER      NOT NULL,  -- positive = stock in, negative = write-off
         reason          VARCHAR(200),
         adjusted_by     INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
         adjusted_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-      )$t$, v_schema);
+      )$t$, v_schema, v_schema);
 
   ELSIF p_type = 'laboratory' THEN
 
@@ -1213,13 +1230,11 @@ $fn$;
 -- =============================================================================
 -- 9. REPORTING VIEWS (schema-qualified)
 -- =============================================================================
-CREATE OR REPLACE VIEW public.v_low_stock AS
-SELECT m.id, m.name, m.generic_name, m.category, m.stock_quantity, m.reorder_level,
-       (m.reorder_level - m.stock_quantity) AS shortage, s.name AS supplier_name, m.expiry_date
-FROM public.medicines m
-LEFT JOIN public.suppliers s ON s.id = m.supplier_id
-WHERE m.stock_quantity <= m.reorder_level AND m.is_active = TRUE
-ORDER BY shortage DESC;
+-- v_low_stock (used to select from public.medicines/suppliers) was removed
+-- under SEC-17 #4 — those tables are now per-tenant, so a single global
+-- view can't represent them the same way, and nothing in the app code ever
+-- queried this view anyway (inventoryController.getLowStock() already does
+-- the equivalent, schema-qualified per pharmacy).
 
 CREATE OR REPLACE VIEW clinical.v_active_prescriptions AS
 SELECT u.id AS patient_id, u.name AS patient_name, mc.id AS consultation_id, mc.visit_date,
@@ -1251,14 +1266,12 @@ ORDER BY lr.created_at;
 -- switch on security_invoker on PG15+ for defence-in-depth.
 ALTER VIEW clinical.v_active_prescriptions OWNER TO corehealth_app;
 ALTER VIEW clinical.v_pending_lab_requests OWNER TO corehealth_app;
-ALTER VIEW public.v_low_stock              OWNER TO corehealth_app;
-GRANT SELECT ON clinical.v_active_prescriptions, clinical.v_pending_lab_requests, public.v_low_stock TO corehealth_app;
+GRANT SELECT ON clinical.v_active_prescriptions, clinical.v_pending_lab_requests TO corehealth_app;
 
 DO $$
 BEGIN
   IF current_setting('server_version_num')::int >= 150000 THEN
     EXECUTE 'ALTER VIEW clinical.v_active_prescriptions SET (security_invoker = true)';
     EXECUTE 'ALTER VIEW clinical.v_pending_lab_requests SET (security_invoker = true)';
-    EXECUTE 'ALTER VIEW public.v_low_stock              SET (security_invoker = true)';
   END IF;
 END $$;

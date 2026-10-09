@@ -87,20 +87,24 @@ export const authApi = {
   resetPassword:  (data: { token: string; newPassword: string }): Promise<any> => api.post('/auth/reset-password', data),
 };
 
+// organization_id is only ever read server-side for an admin caller (see
+// resolvePharmacySchema in server/config/db.ts) — a pharmacist's own org is
+// always resolved from their membership regardless of what's sent here, so
+// passing undefined for non-admin callers is the normal, correct case.
 export const medicineApi = {
-  getAll: (params?: unknown): Promise<any>          => api.get('/medicines', { params }),
-  getOne: (id: number): Promise<any>                => api.get(`/medicines/${id}`),
-  create: (data: unknown): Promise<any>             => api.post('/medicines', data),
-  update: (id: number, data: unknown): Promise<any> => api.put(`/medicines/${id}`, data),
-  remove: (id: number): Promise<any>                => api.delete(`/medicines/${id}`),
+  getAll: (params?: unknown): Promise<any>                                => api.get('/medicines', { params }),
+  getOne: (id: number, organization_id?: number): Promise<any>            => api.get(`/medicines/${id}`, { params: { organization_id } }),
+  create: (data: unknown, organization_id?: number): Promise<any>         => api.post('/medicines', data, { params: { organization_id } }),
+  update: (id: number, data: unknown, organization_id?: number): Promise<any> => api.put(`/medicines/${id}`, data, { params: { organization_id } }),
+  remove: (id: number, organization_id?: number): Promise<any>            => api.delete(`/medicines/${id}`, { params: { organization_id } }),
 };
 
 export const supplierApi = {
-  getAll: (): Promise<any>                           => api.get('/suppliers'),
-  getOne: (id: number): Promise<any>                 => api.get(`/suppliers/${id}`),
-  create: (data: unknown): Promise<any>              => api.post('/suppliers', data),
-  update: (id: number, data: unknown): Promise<any>  => api.put(`/suppliers/${id}`, data),
-  remove: (id: number): Promise<any>                 => api.delete(`/suppliers/${id}`),
+  getAll: (organization_id?: number): Promise<any>                        => api.get('/suppliers', { params: { organization_id } }),
+  getOne: (id: number, organization_id?: number): Promise<any>            => api.get(`/suppliers/${id}`, { params: { organization_id } }),
+  create: (data: unknown, organization_id?: number): Promise<any>         => api.post('/suppliers', data, { params: { organization_id } }),
+  update: (id: number, data: unknown, organization_id?: number): Promise<any> => api.put(`/suppliers/${id}`, data, { params: { organization_id } }),
+  remove: (id: number, organization_id?: number): Promise<any>            => api.delete(`/suppliers/${id}`, { params: { organization_id } }),
 };
 
 export const orderApi = {
@@ -118,9 +122,9 @@ export const saleApi = {
 };
 
 export const inventoryApi = {
-  summary:  (): Promise<any>             => api.get('/inventory/summary'),
-  lowStock: (): Promise<any>             => api.get('/inventory/low-stock'),
-  expiring: (days: number): Promise<any> => api.get('/inventory/expiring', { params: { days } }),
+  summary:  (organization_id?: number): Promise<any>             => api.get('/inventory/summary', { params: { organization_id } }),
+  lowStock: (organization_id?: number): Promise<any>             => api.get('/inventory/low-stock', { params: { organization_id } }),
+  expiring: (days: number, organization_id?: number): Promise<any> => api.get('/inventory/expiring', { params: { days, organization_id } }),
 };
 
 export const consultationApi = {

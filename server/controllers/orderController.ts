@@ -18,7 +18,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
     const { rows } = await pool.query(`
       SELECT o.*, s.name AS supplier_name, u.name AS ordered_by_name
       FROM "${schema}".orders o
-      LEFT JOIN suppliers s ON o.supplier_id = s.id
+      LEFT JOIN "${schema}".suppliers s ON o.supplier_id = s.id
       LEFT JOIN users u ON o.ordered_by = u.id
       ORDER BY o.ordered_at DESC
     `);
@@ -33,14 +33,14 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 
     const order = await pool.query(
       `SELECT o.*, s.name AS supplier_name FROM "${schema}".orders o
-       LEFT JOIN suppliers s ON o.supplier_id = s.id WHERE o.id = $1`,
+       LEFT JOIN "${schema}".suppliers s ON o.supplier_id = s.id WHERE o.id = $1`,
       [req.params.id]
     );
     if (!order.rows.length) { res.status(404).json({ message: 'Order not found' }); return; }
 
     const items = await pool.query(
       `SELECT oi.*, m.name AS medicine_name FROM "${schema}".order_items oi
-       JOIN medicines m ON oi.medicine_id = m.id WHERE oi.order_id = $1`,
+       JOIN "${schema}".medicines m ON oi.medicine_id = m.id WHERE oi.order_id = $1`,
       [req.params.id]
     );
     res.json({ ...order.rows[0], items: items.rows });
@@ -96,7 +96,7 @@ const receive = async (req: Request, res: Response, next: NextFunction): Promise
     );
     for (const item of items) {
       await client.query(
-        'UPDATE medicines SET stock_quantity = stock_quantity + $1 WHERE id = $2',
+        `UPDATE "${schema}".medicines SET stock_quantity = stock_quantity + $1 WHERE id = $2`,
         [item.quantity, item.medicine_id]
       );
     }

@@ -339,6 +339,17 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
          FROM (${hospitalSchemas.map(s => `SELECT status FROM "${s}".appointments`).join(' UNION ALL ')}) _a`
       : `SELECT 0::bigint AS total_appointments, 0::bigint AS upcoming_appointments, 0::bigint AS completed_appointments`;
 
+    // SEC-17 #4: medicines moved from one shared public table into each
+    // pharmacy's own tenant schema — this admin-only system-wide count is
+    // the one place that legitimately needs to see across every pharmacy at
+    // once, so it's summed the same way salesSQL above already does.
+    const medSQL = pharmacySchemas.length
+      ? `SELECT COUNT(*)::bigint AS total_medicines,
+                COUNT(*) FILTER (WHERE stock_quantity <= reorder_level)::bigint AS low_stock,
+                COUNT(*) FILTER (WHERE expiry_date < NOW())::bigint AS expired
+         FROM (${pharmacySchemas.map(s => `SELECT stock_quantity, reorder_level, expiry_date FROM "${s}".medicines WHERE is_active = TRUE`).join(' UNION ALL ')}) _m`
+      : `SELECT 0::bigint AS total_medicines, 0::bigint AS low_stock, 0::bigint AS expired`;
+
     // Phase 2: run all stats in parallel
     const [userRes, orgRes, medRes, consultRes, labRes, salesRow, apptRow, recentRes] = await Promise.all([
       pool.query(`
@@ -363,13 +374,7 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
           COUNT(*) FILTER (WHERE is_active=FALSE AND approved_at IS NULL)   AS pending_organizations
         FROM public.organizations
       `),
-      pool.query(`
-        SELECT
-          COUNT(*)                                             AS total_medicines,
-          COUNT(*) FILTER (WHERE stock_quantity <= reorder_level) AS low_stock,
-          COUNT(*) FILTER (WHERE expiry_date < NOW())         AS expired
-        FROM public.medicines WHERE is_active=TRUE
-      `),
+      pool.query(medSQL),
       queryAs(actor(req), `
         SELECT
           COUNT(*)                                          AS total_consultations,

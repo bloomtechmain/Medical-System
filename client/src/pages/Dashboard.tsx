@@ -5,9 +5,9 @@ import PageHeader from '../components/common/PageHeader';
 import { formatCurrency, formatDate } from '../utils/helpers';
 
 export default function Dashboard() {
-  const { data: summary } = useQuery({ queryKey: ['inventory-summary'], queryFn: inventoryApi.summary });
+  const { data: summary } = useQuery({ queryKey: ['inventory-summary'], queryFn: () => inventoryApi.summary() });
   const { data: sales = [] } = useQuery({ queryKey: ['sales'], queryFn: saleApi.getAll });
-  const { data: lowStock = [] } = useQuery({ queryKey: ['low-stock'], queryFn: inventoryApi.lowStock });
+  const { data: lowStock = [] } = useQuery({ queryKey: ['low-stock'], queryFn: () => inventoryApi.lowStock() });
 
   const todaySales = sales.filter(
     (s: any) => new Date(s.sold_at).toDateString() === new Date().toDateString()

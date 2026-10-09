@@ -1,11 +1,29 @@
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { pool, resolvePharmacySchema } from '../config/db';
+
+// SEC-17 #4: medicines used to be a single public table shared (and
+// writable) by every pharmacy — any pharmacist could read/edit any other
+// pharmacy's stock and cost_price. Each pharmacy now has its own
+// medicines/suppliers tables in its tenant schema (see resolvePharmacySchema
+// in config/db.ts for how a pharmacist vs. an admin resolves which one).
+const requireSchema = async (req: Request, res: Response): Promise<string | null> => {
+  const orgId = parseInt((req.query.organization_id as string) ?? (req.body?.organization_id as string), 10);
+  const result = await resolvePharmacySchema(
+    { id: req.user.id, role: req.user.role },
+    Number.isNaN(orgId) ? undefined : orgId
+  );
+  if ('error' in result) { res.status(result.status).json({ message: result.error }); return null; }
+  return result.schema;
+};
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const { search, category, low_stock } = req.query as Record<string, string | undefined>;
-    let query = `SELECT m.*, s.name AS supplier_name FROM medicines m
-                 LEFT JOIN suppliers s ON m.supplier_id = s.id WHERE 1=1`;
+    let query = `SELECT m.*, s.name AS supplier_name FROM "${schema}".medicines m
+                 LEFT JOIN "${schema}".suppliers s ON m.supplier_id = s.id WHERE 1=1`;
     const params: unknown[] = [];
 
     if (search) {
@@ -30,9 +48,12 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 
 const getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const { rows } = await pool.query(
-      `SELECT m.*, s.name AS supplier_name FROM medicines m
-       LEFT JOIN suppliers s ON m.supplier_id = s.id WHERE m.id = $1`,
+      `SELECT m.*, s.name AS supplier_name FROM "${schema}".medicines m
+       LEFT JOIN "${schema}".suppliers s ON m.supplier_id = s.id WHERE m.id = $1`,
       [req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'Medicine not found' }); return; }
@@ -44,13 +65,16 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const {
       name, generic_name, category, description,
       unit, price, cost_price, stock_quantity,
       reorder_level, expiry_date, supplier_id,
     } = req.body;
     const { rows } = await pool.query(
-      `INSERT INTO medicines
+      `INSERT INTO "${schema}".medicines
          (name, generic_name, category, description, unit, price, cost_price,
           stock_quantity, reorder_level, expiry_date, supplier_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
@@ -65,13 +89,16 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
 const update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const {
       name, generic_name, category, description,
       unit, price, cost_price, stock_quantity,
       reorder_level, expiry_date, supplier_id, is_active,
     } = req.body;
     const { rows } = await pool.query(
-      `UPDATE medicines SET name=$1, generic_name=$2, category=$3, description=$4,
+      `UPDATE "${schema}".medicines SET name=$1, generic_name=$2, category=$3, description=$4,
         unit=$5, price=$6, cost_price=$7, stock_quantity=$8, reorder_level=$9,
         expiry_date=$10, supplier_id=$11, is_active=$12, updated_at=NOW()
        WHERE id=$13 RETURNING *`,
@@ -87,7 +114,10 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
 
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM medicines WHERE id = $1', [req.params.id]);
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
+    const { rowCount } = await pool.query(`DELETE FROM "${schema}".medicines WHERE id = $1`, [req.params.id]);
     if (!rowCount) { res.status(404).json({ message: 'Medicine not found' }); return; }
     res.status(204).end();
   } catch (err) {
