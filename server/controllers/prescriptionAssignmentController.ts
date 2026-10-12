@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
+import { parsePaging } from '../utils/pagination';
 
 const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
 
@@ -103,6 +104,12 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 
     if (req.user.role !== 'pharmacist') { res.json([]); return; }
 
+    // PERF-04: the pharmacist's own assignment list (across every
+    // consultation ever sent to them) was never paginated. See
+    // utils/pagination.ts for why the default is generous rather than "a
+    // page." The consultation-scoped branch above stays unpaginated — it's
+    // one visit's pharmacy assignments, inherently small.
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
     const { rows } = await queryAs(actor(req), `
       SELECT pa.*, c.visit_date, c.diagnosis, c.sick_description, c.treatment_description,
              c.prescription_file, c.lab_tests_requested,
@@ -114,7 +121,8 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       LEFT JOIN users dr ON dr.id = c.doctor_id
       WHERE pa.pharmacist_id = $1
       ORDER BY pa.status ASC, c.visit_date DESC
-    `, [req.user.id]);
+      LIMIT $2 OFFSET $3
+    `, [req.user.id, limit, offset]);
 
     const ids = rows.map((r: any) => r.consultation_id);
     const medsByConsultation: Record<number, any[]> = {};
@@ -143,20 +151,31 @@ const updateStatus = async (req: Request, res: Response, next: NextFunction): Pr
     );
     if (!currentRows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
-    if (ALLOWED_STATUS_TRANSITIONS[currentRows[0].status] !== status) {
-      res.status(400).json({ message: `Cannot move from "${currentRows[0].status}" to "${status}"` });
+    const previousStatus = currentRows[0].status;
+    if (ALLOWED_STATUS_TRANSITIONS[previousStatus] !== status) {
+      res.status(400).json({ message: `Cannot move from "${previousStatus}" to "${status}"` });
       return;
     }
 
+    // PRO-29: status was read, then updated in a separate statement with no
+    // lock — a concurrent update from the same pharmacist (two tabs, a
+    // retried request) could both pass the check above and both apply,
+    // skipping a step in the pipeline. The expected previous status goes in
+    // the WHERE clause so only the request that's still looking at the
+    // current state can win; the other gets 0 rows back and a 409.
     const { rows } = await queryAs(actor(req),
       `UPDATE prescription_assignments SET status=$1, updated_at=NOW()
-       WHERE id=$2 AND pharmacist_id=$3
+       WHERE id=$2 AND pharmacist_id=$3 AND status=$4
        RETURNING *`,
-      [status, req.params.id, req.user.id]
+      [status, req.params.id, req.user.id, previousStatus]
     );
+    if (!rows.length) {
+      res.status(409).json({ message: 'This assignment was already updated by another request. Please refresh and try again.' });
+      return;
+    }
     const assignment = rows[0];
 
-    const { rows: cRows } = await pool.query(
+    const { rows: cRows } = await queryAs(actor(req),
       'SELECT patient_id, doctor_id FROM medical_consultations WHERE id=$1', [assignment.consultation_id]
     );
     const consultation = cRows[0];

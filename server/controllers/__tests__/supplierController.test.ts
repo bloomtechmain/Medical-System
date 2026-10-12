@@ -19,7 +19,7 @@ describe('supplierController', () => {
       const res = mockResponse();
       await getAll(mockRequest(), res, next);
 
-      expect(query).toHaveBeenCalledWith('SELECT * FROM suppliers ORDER BY name');
+      expect(query).toHaveBeenCalledWith('SELECT * FROM suppliers ORDER BY name LIMIT $1 OFFSET $2', [500, 0]);
       expect(res.json).toHaveBeenCalledWith(suppliers);
     });
 

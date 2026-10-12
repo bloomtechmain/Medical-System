@@ -1,3 +1,7 @@
+// LEGACY — superseded by server/migrations/ (node-pg-migrate). Kept only for
+// BASELINE.md's production adoption history; do not run this again once
+// that procedure is complete, and do not add new scripts in this style.
+
 import 'dotenv/config';
 import { pool } from './db';
 
@@ -29,6 +33,7 @@ const run = async (): Promise<void> => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Addendum migration failed:', (err as Error).message);
+    process.exitCode = 1;
   } finally {
     client.release();
     pool.end();
