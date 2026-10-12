@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # PRO-22: "No update bot" — dependency bumps (including security patches)
+  # were entirely manual. Grouped into one weekly PR per ecosystem so this
+  # doesn't turn into a dozen single-package PRs a week; CI (ci.yml) still
+  # gates every one of them on lint/build/migration before merge.
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+    groups:
+      server-dependencies:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "npm"
+    directory: "/client"
+    schedule:
+      interval: "weekly"
+    groups:
+      client-dependencies:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

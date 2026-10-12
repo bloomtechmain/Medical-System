@@ -14,7 +14,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
       LEFT JOIN public.users u ON u.id = o.owner_user_id
       LEFT JOIN public.organization_members m ON m.organization_id = o.id
       GROUP BY o.id, u.name, u.email
-      ORDER BY o.org_type, o.name
+      ORDER BY o.created_at DESC, o.id DESC
     `);
     res.json(rows);
   } catch (err) { next(err); }
@@ -97,11 +97,36 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
     `, [req.params.id]);
     if (!rows.length) { res.status(404).json({ message: 'Organization not found' }); return; }
 
-    const org = rows[0];
+    let org = rows[0];
+
+    // PRO-11: a self-registered org (see registerOrganization) has no
+    // schema_name yet — the tenant schema/role are only ever created here,
+    // the moment an admin actually approves it, not at public submission time.
+    if (org.is_active && !org.schema_name) {
+      await pool.query('SELECT public.provision_tenant($1, $2, $3, $4)', [org.slug, org.name, org.org_type, org.owner_user_id]);
+      const { rows: reloaded } = await pool.query('SELECT * FROM public.organizations WHERE id = $1', [org.id]);
+      org = reloaded[0];
+    }
     // Mirror the org's active state onto its owner's login so approving an
     // organization also unblocks the owner, and suspending one blocks them again.
+    // An owner can now be an existing user shared across organizations (picked
+    // via the owner-search flow in registerOrganization below), so suspending
+    // this org must not lock them out of a different org they're still active on.
     if (org.owner_user_id) {
-      await pool.query('UPDATE public.users SET is_active = $1 WHERE id = $2', [org.is_active, org.owner_user_id]);
+      if (org.is_active) {
+        await pool.query('UPDATE public.users SET is_active = TRUE WHERE id = $1', [org.owner_user_id]);
+      } else {
+        const { rows: otherActive } = await pool.query(
+          `SELECT 1 FROM public.organization_members om
+           JOIN public.organizations o ON o.id = om.organization_id
+           WHERE om.user_id = $1 AND o.id != $2 AND o.is_active = TRUE
+           LIMIT 1`,
+          [org.owner_user_id, org.id]
+        );
+        if (!otherActive.length) {
+          await pool.query('UPDATE public.users SET is_active = FALSE WHERE id = $1', [org.owner_user_id]);
+        }
+      }
     }
     res.json(org);
   } catch (err) { next(err); }
@@ -119,51 +144,182 @@ const ORG_OWNER_ROLE: Record<string, string> = {
   laboratory: 'laboratory',
 };
 
+// Minimal, non-sensitive columns surfaced to the public owner-search box on
+// the org-register page, per owner role — enough to tell two same-named
+// people apart without exposing the full admin user record.
+const OWNER_SEARCH_PROFILE: Record<string, { table: string; extra: string[] }> = {
+  doctor:     { table: 'public.doctor_profiles',     extra: ['specialization', 'hospital_affiliation'] },
+  pharmacist: { table: 'public.pharmacist_profiles', extra: ['pharmacy_name', 'license_number'] },
+  laboratory: { table: 'public.laboratory_profiles', extra: ['lab_name', 'license_number'] },
+};
+
+// ── Public owner lookup ───────────────────────────────────────────────────
+// Lets the org-register page search for an existing, already-approved user
+// to reuse as the new organization's owner instead of creating a fresh login.
+// Unauthenticated (registration happens before any session exists), so the
+// query is deliberately narrow: requires org_type + a 2+ char query, and
+// returns only active users whose role matches that org type's owner role.
+const searchOwnerCandidates = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { org_type, q } = req.query as { org_type?: string; q?: string };
+    const role = ORG_OWNER_ROLE[org_type || ''];
+    if (!role) { res.status(400).json({ message: 'Invalid organization type' }); return; }
+    if (!q || q.trim().length < 2) { res.json([]); return; }
+
+    const { table, extra } = OWNER_SEARCH_PROFILE[role];
+    const extraCols = extra.map(c => `p.${c}`).join(', ');
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.email, ${extraCols}
+       FROM public.users u
+       LEFT JOIN ${table} p ON p.user_id = u.id
+       WHERE u.role = $1 AND u.is_active = TRUE
+         AND (u.name ILIKE $2 OR u.email ILIKE $2)
+       ORDER BY u.name LIMIT 10`,
+      [role, `%${q.trim()}%`]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
+// Lets a doctor (at self-registration, or later from Settings) search existing
+// hospital/clinic organizations to affiliate with. Public (no session at
+// registration time) but deliberately narrow: active orgs only, 2+ char query.
+const searchHospitalsClinics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { q } = req.query as { q?: string };
+    if (!q || q.trim().length < 2) { res.json([]); return; }
+
+    const { rows } = await pool.query(
+      `SELECT id, name, org_type, slug
+       FROM public.organizations
+       WHERE org_type IN ('hospital','clinic') AND is_active = TRUE
+         AND name ILIKE $1
+       ORDER BY name LIMIT 10`,
+      [`%${q.trim()}%`]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
 const registerOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let client;
   try {
     client = await pool.connect();
-    const { org_name, slug, org_type, owner_name, owner_email, owner_password, profile } = req.body as {
+    const {
+      org_name, slug, org_type, owner_user_id,
+      owner_name, owner_email, owner_password, profile, specializations,
+    } = req.body as {
       org_name: string; slug: string; org_type: string;
-      owner_name: string; owner_email: string; owner_password: string;
+      owner_user_id?: number;
+      owner_name?: string; owner_email?: string; owner_password?: string;
       profile?: Record<string, any>;
+      specializations?: string[];
     };
 
     const role = ORG_OWNER_ROLE[org_type];
     if (!role) { res.status(400).json({ message: 'Invalid organization type' }); return; }
 
-    const existingEmail = await client.query('SELECT id FROM public.users WHERE email = $1', [owner_email]);
-    if (existingEmail.rows.length) { res.status(409).json({ message: 'Email already in use' }); return; }
-
     const existingSlug = await client.query('SELECT id FROM public.organizations WHERE slug = $1', [slug]);
     if (existingSlug.rows.length) { res.status(409).json({ message: 'That organization slug is already taken' }); return; }
 
+    // Owner is either an existing, already-approved user picked via the
+    // search box (reused as-is, no new login created) or a brand-new account
+    // entered manually — same two paths the form offers.
+    let existingOwner: { id: number; name: string; email: string } | null = null;
+    if (owner_user_id) {
+      const { rows } = await client.query(
+        'SELECT id, name, email, role, is_active FROM public.users WHERE id = $1',
+        [owner_user_id]
+      );
+      if (!rows.length) { res.status(404).json({ message: 'Selected owner account not found' }); return; }
+      if (rows[0].role !== role) { res.status(400).json({ message: `Selected owner must be a registered ${role}` }); return; }
+      if (!rows[0].is_active) { res.status(400).json({ message: 'Selected owner account is not active' }); return; }
+      existingOwner = rows[0];
+    } else {
+      if (!owner_name || !owner_email || !owner_password) {
+        res.status(400).json({ message: 'Owner name, email, and password are required' });
+        return;
+      }
+      const existingEmail = await client.query('SELECT id FROM public.users WHERE email = $1', [owner_email]);
+      if (existingEmail.rows.length) { res.status(409).json({ message: 'Email already in use' }); return; }
+    }
+
     await client.query('BEGIN');
 
-    const hash = await bcrypt.hash(owner_password, 10);
-    const { rows: [owner] } = await client.query(
-      `INSERT INTO public.users (name, email, password, role, is_active)
-       VALUES ($1,$2,$3,$4, FALSE) RETURNING id, name, email, role`,
-      [owner_name, owner_email, hash, role]
-    );
+    let owner: { id: number; name: string; email: string };
+    if (existingOwner) {
+      owner = existingOwner;
+    } else {
+      const hash = await bcrypt.hash(owner_password as string, 10);
+      let newUser: { id: number; name: string; email: string; role: string };
+      try {
+        ({ rows: [newUser] } = await client.query(
+          `INSERT INTO public.users (name, email, password, role, is_active)
+           VALUES ($1,$2,$3,$4, FALSE) RETURNING id, name, email, role`,
+          [owner_name, owner_email, hash, role]
+        ));
+      } catch (err) {
+        // PRO-29: the existing-email check above races with a second
+        // concurrent registration for the same email.
+        if ((err as { code?: string }).code === '23505') {
+          await client.query('ROLLBACK');
+          res.status(409).json({ message: 'Email already in use' });
+          return;
+        }
+        throw err;
+      }
+      if (profile) await createProfile(client, role, newUser.id, profile);
+      owner = newUser;
+    }
 
-    if (profile) await createProfile(client, role, owner.id, profile);
-
-    await client.query('SELECT public.provision_tenant($1, $2, $3, $4)', [slug, org_name, org_type, owner.id]);
-
-    // provision_tenant() always creates the org with is_active = TRUE (the
-    // column default) — force it back to FALSE since this org is pending review.
-    await client.query('UPDATE public.organizations SET is_active = FALSE WHERE slug = $1', [slug]);
+    // PRO-11: provision_tenant() does real DDL — CREATE SCHEMA, and tries to
+    // CREATE ROLE — every time it runs. Calling it here, before any admin has
+    // looked at the application, meant anyone could flood this public,
+    // unauthenticated endpoint and force the database to create an unbounded
+    // number of schemas/roles for organizations that might never be approved
+    // (and might never even be real). The schema is now provisioned only when
+    // an admin approves the org (see toggleActive below) — this step just
+    // records the application itself: a plain row with no schema yet.
+    let org: { id: number };
+    try {
+      ({ rows: [org] } = await client.query(
+        `INSERT INTO public.organizations (slug, name, org_type, owner_user_id, is_active)
+         VALUES ($1,$2,$3,$4, FALSE) RETURNING id`,
+        [slug, org_name, org_type, owner.id]
+      ));
+    } catch (err) {
+      if ((err as { code?: string }).code === '23505') {
+        await client.query('ROLLBACK');
+        res.status(409).json({ message: 'That organization slug is already taken' });
+        return;
+      }
+      throw err;
+    }
 
     await client.query(
-      `INSERT INTO public.organization_members (organization_id, user_id, member_role)
-       SELECT id, $2, 'owner' FROM public.organizations WHERE slug = $1`,
-      [slug, owner.id]
+      `INSERT INTO public.organization_members (organization_id, user_id, member_role) VALUES ($1,$2,'owner')`,
+      [org.id, owner.id]
     );
+
+    const cleanSpecs = (specializations || []).map(s => s.trim()).filter(Boolean);
+    if (cleanSpecs.length) {
+      const values: string[] = [];
+      const params: unknown[] = [];
+      cleanSpecs.forEach((name, i) => {
+        values.push(`($${i * 2 + 1},$${i * 2 + 2})`);
+        params.push(org.id, name);
+      });
+      await client.query(
+        `INSERT INTO public.organization_specializations (organization_id, name) VALUES ${values.join(',')} ON CONFLICT DO NOTHING`,
+        params
+      );
+    }
 
     await client.query('COMMIT');
     res.status(201).json({
-      message: 'Registration submitted. An administrator will review your organization and you’ll be able to sign in once it’s approved.',
+      message: existingOwner
+        ? 'Registration submitted. An administrator will review your organization — your existing account will gain access to it once approved.'
+        : 'Registration submitted. An administrator will review your organization and you’ll be able to sign in once it’s approved.',
     });
   } catch (err) {
     if (client) await client.query('ROLLBACK').catch(() => {});
@@ -173,4 +329,4 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export { getAll, getMembers, addMember, removeMember, provision, toggleActive, registerOrganization };
+export { getAll, getMembers, addMember, removeMember, provision, toggleActive, registerOrganization, searchOwnerCandidates, searchHospitalsClinics };

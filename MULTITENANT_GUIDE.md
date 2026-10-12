@@ -435,6 +435,8 @@ res.sendFile(path.join(uploadsDir, rows[0].report_file));
 
 10. **Patients and admins have no org** — pass NULL for `org_id` in their `set_context` call.
 
+11. **Schema changes are new files under `server/migrations/`, run through node-pg-migrate** (`npm run db:migrate`) — never hand-run SQL against production, and never edit `server/migrations/001_initial_schema.sql` or `corehealth_database.sql`'s DDL once either has run anywhere. Add columns/tables in one migration first; only remove the old ones in a *later* migration, once nothing in the deployed server code still reads them — a compatible step now, not a drop that fails mid-deploy if the previous server version is still running. See `server/migrations/BASELINE.md`.
+
 ---
 
 ## Tenant Schema Summary

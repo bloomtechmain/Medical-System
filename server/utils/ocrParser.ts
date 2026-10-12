@@ -30,7 +30,7 @@ function extractMedicines(rawText: string): OcrMedicine[] {
     const freqs     = [...line.matchAll(FREQUENCY_RE)].map((m) => m[0]).join(', ');
     const durations = [...line.matchAll(DURATION_RE)] .map((m) => m[0]).join(', ');
 
-    let name = line
+    const name = line
       .replace(/^\d+[\.\)\-]\s*/, '')
       .replace(/^[Rr]\s*[\/x]\s*/i, '')
       .replace(/^Rx\.?\s*/i, '')
@@ -62,4 +62,21 @@ function extractMedicines(rawText: string): OcrMedicine[] {
   });
 }
 
-export { extractMedicines };
+// Moved here from consultationController.ts (PERF-06) when prescription OCR
+// moved off the request path — this is the only thing that actually runs
+// tesseract, and both the controller's old synchronous call and the new
+// queued job (queue/jobs/extractConsultationMedicines.ts) need it.
+async function runOCR(filePath: string): Promise<string> {
+  try {
+    const { createWorker } = await import('tesseract.js');
+    const worker = await createWorker('eng', 1, { logger: () => {} });
+    const { data: { text } } = await worker.recognize(filePath);
+    await worker.terminate();
+    return text || '';
+  } catch (err) {
+    console.error('OCR error:', (err as Error).message);
+    return '';
+  }
+}
+
+export { extractMedicines, runOCR };

@@ -6,5 +6,9 @@
 #   client service  →  Root Directory = /client  →  reads client/railway.toml
 #
 # Required Railway dashboard environment variables:
-#   server service:  DATABASE_URL, JWT_SECRET, CLIENT_URL (= client service public URL)
+#   server service:  DATABASE_URL (as corehealth_app), DATABASE_MIGRATOR_URL
+#                    (as corehealth_migrator — used only for the migration
+#                    step in the Dockerfile CMD), JWT_SECRET, CLIENT_URL
+#                    (= client service public URL). See server/.env.example
+#                    and server/migrations/BASELINE.md.
 #   client service:  VITE_API_URL (= server service public URL, e.g. https://server-xxx.up.railway.app)

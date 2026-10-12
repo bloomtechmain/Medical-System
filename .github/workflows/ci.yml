@@ -11,6 +11,21 @@ jobs:
     name: Server — Lint & Build
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: corehealth_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,13 +33,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: server/package-lock.json
 
       - name: Install server dependencies
         working-directory: ./server
         run: npm ci
+
+      # WARN-19: nothing reported known vulnerabilities in dependencies —
+      # no scan in the pipeline and no update bot (the update-bot half is
+      # .github/dependabot.yml, added separately). continue-on-error for the
+      # same reason as lint below: this repo's transitive dependencies
+      # already carry pre-existing findings unrelated to any one change, so
+      # a hard gate here would block every PR on pre-existing issues instead
+      # of surfacing new ones for review.
+      - name: Audit server dependencies for known vulnerabilities
+        working-directory: ./server
+        run: npm audit --audit-level=high
+        continue-on-error: true
 
       - name: Lint server
         working-directory: ./server
@@ -35,9 +62,35 @@ jobs:
         working-directory: ./server
         run: npm run build
 
-      - name: Run controller tests
+      # Fresh DB every run, so this always takes the "brand-new database" path
+      # (runs 001_initial_schema.sql for real) — never the BASELINE.md path.
+      - name: Run migrations against the CI database
+        working-directory: ./server
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/corehealth_ci
+
+      - name: Run controller tests (including real-DB RLS integration tests)
         working-directory: ./server
         run: npm test
+        env:
+          # corehealth_app — the non-superuser, non-BYPASSRLS role — not the
+          # postgres service's superuser used for migrations above. Running
+          # the RLS integration tests as a superuser would silently bypass
+          # the thing they're supposed to prove.
+          DATABASE_URL: postgresql://corehealth_app:change_me_in_prod@localhost:5432/corehealth_ci
+          DB_SSL: "false" # the postgres:16 service container has no TLS configured
+
+      # PERF-06: proves pg-boss can actually migrate its own schema (CREATE
+      # TABLE inside `pgboss`) under corehealth_app's limited privileges —
+      # the unit tests mock pg-boss entirely, so nothing else catches a
+      # missing/wrong grant from 003_job_queue_schema.sql before production does.
+      - name: Smoke-test the job queue as the app's own (non-superuser) role
+        working-directory: ./server
+        run: npx tsx scripts/smokeTestQueue.ts
+        env:
+          DATABASE_URL: postgresql://corehealth_app:change_me_in_prod@localhost:5432/corehealth_ci
+          DB_SSL: "false"
 
   check-client:
     name: Client — Lint & Build
@@ -50,13 +103,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: client/package-lock.json
 
       - name: Install client dependencies
         working-directory: ./client
         run: npm ci
+
+      # WARN-19 — see the server job's equivalent step for why this doesn't
+      # fail the build.
+      - name: Audit client dependencies for known vulnerabilities
+        working-directory: ./client
+        run: npm audit --audit-level=high
+        continue-on-error: true
 
       - name: Lint client
         working-directory: ./client

@@ -1,8 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { orgApi } from '../services/api';
+import { useDebounce } from '../hooks/useDebounce';
+import OperatingHoursPicker from '../components/common/OperatingHoursPicker';
+import MultiSelectWithCustom from '../components/common/MultiSelectWithCustom';
+
+interface OwnerCandidate {
+  id: number;
+  name: string;
+  email: string;
+  [key: string]: unknown;
+}
 
 const ORG_TYPES = [
   {
@@ -74,17 +84,77 @@ function slugify(str: string): string {
     .replace(/-+/g, '-');
 }
 
+const STEP3_FIELDS: Record<string, string[]> = {
+  hospital:   ['phone', 'specialization', 'license_number'],
+  clinic:     ['phone', 'specialization', 'license_number'],
+  pharmacy:   ['phone', 'license_number', 'pharmacy_name'],
+  laboratory: ['phone', 'license_number', 'lab_name', 'address'],
+};
+
+const STEP3_TITLE: Record<string, string> = {
+  hospital: 'Doctor / Director Profile',
+  clinic: 'Doctor / Director Profile',
+  pharmacy: 'Pharmacy Details',
+  laboratory: 'Laboratory Details',
+};
+
+const STEP_LABELS = ['Organization Type', 'Organization Details', 'Role Details', 'Owner Account'];
+
 export default function OrgRegister() {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [orgSpecializations, setOrgSpecializations] = useState<string[]>([]);
   const [showPwd, setShowPwd] = useState(false);
-  const navigate = useNavigate();
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm();
+  const { register, handleSubmit, watch, setValue, trigger, formState: { errors } } = useForm();
   const password = watch('owner_password');
   const orgName = watch('org_name', '');
+  const operatingHours = watch('operating_hours', '');
+
+  const goNext = async (fields: string[]) => {
+    const ok = await trigger(fields);
+    if (ok) setStep(s => (s + 1) as 1 | 2 | 3 | 4);
+  };
+
+  // Owner search — lets the form reuse an existing, already-approved user as
+  // the new org's owner instead of always creating a fresh login.
+  const [ownerUser, setOwnerUser] = useState<OwnerCandidate | null>(null);
+  const [ownerQuery, setOwnerQuery] = useState('');
+  const [ownerResults, setOwnerResults] = useState<OwnerCandidate[]>([]);
+  const [ownerSearching, setOwnerSearching] = useState(false);
+  const [showOwnerResults, setShowOwnerResults] = useState(false);
+  const debouncedOwnerQuery = useDebounce(ownerQuery, 350);
+
+  useEffect(() => {
+    setOwnerUser(null);
+    setOwnerQuery('');
+    setOwnerResults([]);
+  }, [selectedType]);
+
+  useEffect(() => {
+    if (!selectedType || debouncedOwnerQuery.trim().length < 2) {
+      setOwnerResults([]);
+      return;
+    }
+    let cancelled = false;
+    setOwnerSearching(true);
+    orgApi.searchOwner(selectedType, debouncedOwnerQuery.trim())
+      .then((rows: OwnerCandidate[]) => { if (!cancelled) setOwnerResults(rows); })
+      .catch(() => { if (!cancelled) setOwnerResults([]); })
+      .finally(() => { if (!cancelled) setOwnerSearching(false); });
+    return () => { cancelled = true; };
+  }, [debouncedOwnerQuery, selectedType]);
+
+  const selectOwner = (u: OwnerCandidate) => {
+    setOwnerUser(u);
+    setOwnerQuery('');
+    setOwnerResults([]);
+    setShowOwnerResults(false);
+  };
+
+  const clearOwner = () => setOwnerUser(null);
 
   const onOrgNameBlur = () => {
     const slug = slugify(orgName);
@@ -110,10 +180,13 @@ export default function OrgRegister() {
         org_name:       data.org_name,
         slug:           data.slug,
         org_type:       selectedType,
-        owner_name:     data.owner_name,
-        owner_email:    data.owner_email,
-        owner_password: data.owner_password,
+        owner_user_id:  ownerUser?.id,
+        owner_name:     ownerUser ? undefined : data.owner_name,
+        owner_email:    ownerUser ? undefined : data.owner_email,
+        owner_password: ownerUser ? undefined : data.owner_password,
         profile: Object.keys(profile).length ? profile : undefined,
+        specializations: (selectedType === 'hospital' || selectedType === 'clinic') && orgSpecializations.length
+          ? orgSpecializations : undefined,
       });
 
       setDone(true);
@@ -190,18 +263,18 @@ export default function OrgRegister() {
           <p className="text-gray-500 text-sm mt-1">Join the Core Health network as a verified healthcare organization</p>
 
           {/* Step indicator */}
-          <div className="flex items-center justify-center gap-3 mt-5">
-            {[1, 2].map(s => (
+          <div className="flex items-center justify-center gap-2 mt-5">
+            {[1, 2, 3, 4].map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                   step >= s ? 'bg-teal-600 text-white' : 'bg-gray-200 text-gray-500'
                 }`}>{s}</div>
-                {s < 2 && <div className={`w-16 h-0.5 transition-colors ${step > 1 ? 'bg-teal-600' : 'bg-gray-200'}`} />}
+                {s < 4 && <div className={`w-10 sm:w-14 h-0.5 transition-colors ${step > s ? 'bg-teal-600' : 'bg-gray-200'}`} />}
               </div>
             ))}
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            {step === 1 ? 'Step 1 — Choose organization type' : 'Step 2 — Organization & owner details'}
+            {`Step ${step} — ${step === 3 ? (STEP3_TITLE[selectedType] || STEP_LABELS[2]) : STEP_LABELS[step - 1]}`}
           </p>
         </div>
 
@@ -211,59 +284,40 @@ export default function OrgRegister() {
             <h2 className="text-lg font-bold text-gray-900 mb-1">What type of organization are you registering?</h2>
             <p className="text-sm text-gray-500 mb-6">Select the type that best describes your organization.</p>
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {ORG_TYPES.map(t => (
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setSelectedType(t.id)}
-                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                    selectedType === t.id ? t.color + ' shadow-sm' : 'border-gray-200 hover:border-gray-300 bg-white'
-                  }`}
+                  onClick={() => { setSelectedType(t.id); setStep(2); }}
+                  className={`group relative text-left p-6 rounded-2xl border-2 bg-white transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${t.color}`}
                 >
-                  <div className="flex items-center gap-4">
-                    <span className="text-3xl">{t.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <p className="font-semibold text-gray-900">{t.label}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.badge}`}>{t.badgeText}</span>
-                      </div>
-                      <p className="text-sm text-gray-500">{t.desc}</p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      selectedType === t.id ? 'border-teal-600 bg-teal-600' : 'border-gray-300'
-                    }`}>
-                      {selectedType === t.id && (
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
+                  <svg className="absolute top-5 right-5 w-5 h-5 text-gray-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">
+                    {t.icon}
                   </div>
+                  <p className="font-bold text-gray-900 text-lg mb-1.5">{t.label}</p>
+                  <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium mb-2.5 ${t.badge}`}>{t.badgeText}</span>
+                  <p className="text-sm text-gray-500 leading-relaxed">{t.desc}</p>
                 </button>
               ))}
             </div>
 
-            <button
-              onClick={() => selectedType && setStep(2)}
-              disabled={!selectedType}
-              className="w-full mt-6 py-2.5 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Continue
-            </button>
-            <p className="text-center text-sm text-gray-500 mt-4">
+            <p className="text-center text-sm text-gray-500 mt-6">
               Not an organization?{' '}
               <Link to="/register" className="text-teal-600 font-medium hover:text-teal-700">Register as an individual</Link>
             </p>
           </div>
         )}
 
-        {/* Step 2: Full form */}
-        {step === 2 && (
+        {/* Steps 2-4: Full form, one step shown at a time */}
+        {step >= 2 && (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {/* Back + type badge */}
             <div className="flex items-center justify-between mb-1">
-              <button type="button" onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+              <button type="button" onClick={() => setStep(s => (s === 2 ? 1 : s - 1) as 1 | 2 | 3 | 4)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
@@ -276,7 +330,8 @@ export default function OrgRegister() {
               )}
             </div>
 
-            {/* Organization details */}
+            {/* Step 2: Organization details */}
+            {step === 2 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Organization Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -311,8 +366,18 @@ export default function OrgRegister() {
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Role-specific profile fields */}
+            {step === 2 && (
+              <button type="button" onClick={() => goNext(['org_name', 'slug'])}
+                className="w-full py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors">
+                Continue
+              </button>
+            )}
+
+            {/* Step 3: Role-specific profile fields */}
+            {step === 3 && (
+            <>
             {(selectedType === 'hospital' || selectedType === 'clinic') && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Doctor / Director Profile</h3>
@@ -340,6 +405,19 @@ export default function OrgRegister() {
                     <input type="number" min="0" max="60" className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g., 15" {...register('years_experience')} />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {(selectedType === 'hospital' || selectedType === 'clinic') && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Organization Specializations</h3>
+                <p className="text-xs text-gray-400 mb-4">What medical specialties does your organization offer? Select any that apply, or add your own.</p>
+                <MultiSelectWithCustom
+                  options={SPECIALIZATIONS}
+                  selected={orgSpecializations}
+                  onChange={setOrgSpecializations}
+                  customPlaceholder="e.g., Sports Medicine"
+                />
               </div>
             )}
 
@@ -403,9 +481,9 @@ export default function OrgRegister() {
                       {LAB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Operating Hours</label>
-                    <input className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Mon–Sat 7:00 AM – 8:00 PM" {...register('operating_hours')} />
+                  <div className="sm:col-span-2">
+                    <input type="hidden" {...register('operating_hours')} />
+                    <OperatingHoursPicker value={operatingHours} onChange={v => setValue('operating_hours', v)} />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Address <span className="text-red-400">*</span></label>
@@ -420,7 +498,16 @@ export default function OrgRegister() {
               </div>
             )}
 
-            {/* Owner / Account */}
+            <button type="button" onClick={() => goNext(STEP3_FIELDS[selectedType] || [])}
+              className="w-full py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors">
+              Continue
+            </button>
+            </>
+            )}
+
+            {/* Step 4: Owner / Account */}
+            {step === 4 && (
+            <>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Owner Account</h3>
@@ -428,46 +515,98 @@ export default function OrgRegister() {
                   <span className="text-xs text-gray-400">— will be registered as {selectedTypeInfo.ownerRole}</span>
                 )}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name <span className="text-red-400">*</span></label>
-                  <input className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Dr. Jane Perera" {...register('owner_name', { required: 'Name is required' })} />
-                  {errors.owner_name && <p className="text-xs text-red-500 mt-1">{errors.owner_name.message as string}</p>}
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address <span className="text-red-400">*</span></label>
-                  <input type="email" className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="owner@yourhospital.lk" {...register('owner_email', { required: 'Email is required' })} />
-                  {errors.owner_email && <p className="text-xs text-red-500 mt-1">{errors.owner_email.message as string}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-400">*</span></label>
+
+              {!ownerUser && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Already on Core Health? <span className="text-gray-400 font-normal">(search by name or email)</span>
+                  </label>
                   <div className="relative">
                     <input
-                      type={showPwd ? 'text' : 'password'}
-                      className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
-                      placeholder="Min. 6 characters"
-                      {...register('owner_password', { required: 'Password is required', minLength: { value: 6, message: 'Min 6 characters' } })}
+                      className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      placeholder={`Search existing ${selectedTypeInfo?.ownerRole.toLowerCase() || 'owner'}s...`}
+                      value={ownerQuery}
+                      onChange={e => { setOwnerQuery(e.target.value); setShowOwnerResults(true); }}
+                      onFocus={() => setShowOwnerResults(true)}
+                      onBlur={() => setTimeout(() => setShowOwnerResults(false), 150)}
                     />
-                    <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      {showPwd ? '🙈' : '👁️'}
-                    </button>
+                    {showOwnerResults && ownerQuery.trim().length >= 2 && (
+                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        {ownerSearching && <div className="px-4 py-3 text-sm text-gray-400">Searching…</div>}
+                        {!ownerSearching && ownerResults.length === 0 && (
+                          <div className="px-4 py-3 text-sm text-gray-400">No matching account found — enter details below to create one.</div>
+                        )}
+                        {!ownerSearching && ownerResults.map(u => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => selectOwner(u)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-teal-50 border-b border-gray-50 last:border-0"
+                          >
+                            <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                            <p className="text-xs text-gray-500">{u.email}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {errors.owner_password && <p className="text-xs text-red-500 mt-1">{errors.owner_password.message as string}</p>}
+                  <p className="text-xs text-gray-400 mt-1.5">Not found? Fill in the fields below to create a new owner account.</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password <span className="text-red-400">*</span></label>
-                  <input
-                    type="password"
-                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    placeholder="Repeat password"
-                    {...register('confirm_password', {
-                      required: 'Please confirm password',
-                      validate: (v: string) => v === password || 'Passwords do not match',
-                    })}
-                  />
-                  {errors.confirm_password && <p className="text-xs text-red-500 mt-1">{errors.confirm_password.message as string}</p>}
+              )}
+
+              {ownerUser ? (
+                <div className="flex items-center justify-between gap-3 bg-teal-50 border border-teal-200 rounded-xl p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{ownerUser.name}</p>
+                    <p className="text-xs text-gray-500">{ownerUser.email}</p>
+                    <p className="text-xs text-teal-700 mt-1">Using this existing account as owner — no new password needed.</p>
+                  </div>
+                  <button type="button" onClick={clearOwner} className="text-xs font-medium text-gray-500 hover:text-gray-700 shrink-0">
+                    Change
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name <span className="text-red-400">*</span></label>
+                    <input className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Dr. Jane Perera" {...register('owner_name', { required: 'Name is required' })} />
+                    {errors.owner_name && <p className="text-xs text-red-500 mt-1">{errors.owner_name.message as string}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email Address <span className="text-red-400">*</span></label>
+                    <input type="email" className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="owner@yourhospital.lk" {...register('owner_email', { required: 'Email is required' })} />
+                    {errors.owner_email && <p className="text-xs text-red-500 mt-1">{errors.owner_email.message as string}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-400">*</span></label>
+                    <div className="relative">
+                      <input
+                        type={showPwd ? 'text' : 'password'}
+                        className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
+                        placeholder="Min. 6 characters"
+                        {...register('owner_password', { required: 'Password is required', minLength: { value: 6, message: 'Min 6 characters' } })}
+                      />
+                      <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        {showPwd ? '🙈' : '👁️'}
+                      </button>
+                    </div>
+                    {errors.owner_password && <p className="text-xs text-red-500 mt-1">{errors.owner_password.message as string}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password <span className="text-red-400">*</span></label>
+                    <input
+                      type="password"
+                      className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      placeholder="Repeat password"
+                      {...register('confirm_password', {
+                        required: 'Please confirm password',
+                        validate: (v: string) => v === password || 'Passwords do not match',
+                      })}
+                    />
+                    {errors.confirm_password && <p className="text-xs text-red-500 mt-1">{errors.confirm_password.message as string}</p>}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Notice */}
@@ -503,6 +642,8 @@ export default function OrgRegister() {
             <p className="text-center text-xs text-gray-400">
               By registering, you agree to Core Health's Terms of Service and Privacy Policy.
             </p>
+            </>
+            )}
           </form>
         )}
       </div>

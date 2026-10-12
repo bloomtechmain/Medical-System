@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Stethoscope, Activity, FolderOpen, Users, Pill,
   Truck, ShoppingCart, Receipt, BarChart2, ClipboardList, Microscope,
-  ShieldCheck, MoreHorizontal, X, LogOut,
+  ShieldCheck, MoreHorizontal, X, LogOut, CalendarClock, CalendarPlus, Settings,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { accessRequestApi, labViewRequestApi } from '../../services/api';
+import { accessRequestApi, labViewRequestApi, appointmentApi } from '../../services/api';
 
 interface NavItem {
   to: string;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
   exact?: boolean;
   badge?: string;
@@ -23,88 +24,108 @@ interface TabConfig {
   more: NavItem[];
 }
 
-// ── Primary tabs (max 4) + overflow items per role ────────────────────────────
+// ── Primary tabs (max 4) + overflow items per role — labelKey resolves
+// against the `common` i18n namespace's `navShort` section ─────────────────
 const TABS: Record<string, TabConfig> = {
   hospital: {
     primary: [
-      { to: '/hospital',               label: 'Home',     icon: LayoutDashboard, exact: true },
-      { to: '/hospital/consultations', label: 'Consult',  icon: Stethoscope },
-      { to: '/hospital/lab-requests',  label: 'Labs',     icon: Microscope },
-      { to: '/hospital/requests',      label: 'Requests', icon: ShieldCheck, badge: 'drRequests' },
+      { to: '/hospital',               labelKey: 'navShort.home',     icon: LayoutDashboard, exact: true },
+      { to: '/hospital/consultations', labelKey: 'navShort.consult',  icon: Stethoscope },
+      { to: '/hospital/lab-requests',  labelKey: 'navShort.labs',     icon: Microscope },
+      { to: '/hospital/requests',      labelKey: 'navShort.requests', icon: ShieldCheck, badge: 'drRequests' },
     ],
-    more: [],
+    more: [
+      { to: '/hospital/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
+      { to: '/hospital/settings',     labelKey: 'navShort.settings',     icon: Settings },
+    ],
   },
   clinic: {
     primary: [
-      { to: '/clinic',               label: 'Home',     icon: LayoutDashboard, exact: true },
-      { to: '/clinic/consultations', label: 'Consult',  icon: Stethoscope },
-      { to: '/clinic/lab-requests',  label: 'Labs',     icon: Microscope },
-      { to: '/clinic/requests',      label: 'Requests', icon: ShieldCheck, badge: 'drRequests' },
+      { to: '/clinic',               labelKey: 'navShort.home',     icon: LayoutDashboard, exact: true },
+      { to: '/clinic/consultations', labelKey: 'navShort.consult',  icon: Stethoscope },
+      { to: '/clinic/lab-requests',  labelKey: 'navShort.labs',     icon: Microscope },
+      { to: '/clinic/requests',      labelKey: 'navShort.requests', icon: ShieldCheck, badge: 'drRequests' },
     ],
-    more: [],
+    more: [
+      { to: '/clinic/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
+      { to: '/clinic/settings',     labelKey: 'navShort.settings',     icon: Settings },
+    ],
   },
   patient: {
     primary: [
-      { to: '/patient',               label: 'Home',     icon: LayoutDashboard, exact: true },
-      { to: '/patient/consultations', label: 'Consult',  icon: Stethoscope },
-      { to: '/patient/my-reports',    label: 'Reports',  icon: FolderOpen },
-      { to: '/patient/requests',      label: 'Requests', icon: ShieldCheck, badge: 'ptRequests' },
+      { to: '/patient',               labelKey: 'navShort.home',     icon: LayoutDashboard, exact: true },
+      { to: '/patient/consultations', labelKey: 'navShort.consult',  icon: Stethoscope },
+      { to: '/patient/my-reports',    labelKey: 'navShort.reports',  icon: FolderOpen },
+      { to: '/patient/requests',      labelKey: 'navShort.requests', icon: ShieldCheck, badge: 'ptRequests' },
     ],
     more: [
-      { to: '/patient/medical-flow',  label: 'Medical Flow', icon: Activity },
+      { to: '/patient/medical-flow',  labelKey: 'navShort.medicalFlow', icon: Activity },
+      { to: '/patient/lab-tests',     labelKey: 'navShort.labTests',    icon: Microscope },
+      { to: '/patient/book-doctor',   labelKey: 'navShort.bookDoctor',  icon: CalendarPlus },
+      { to: '/patient/settings',      labelKey: 'navShort.settings',    icon: Settings },
     ],
   },
   doctor: {
     primary: [
-      { to: '/doctor',               label: 'Home',       icon: LayoutDashboard, exact: true },
-      { to: '/doctor/consultations', label: 'Consult',    icon: Stethoscope },
-      { to: '/doctor/lab-requests',  label: 'Lab Reports',icon: Microscope },
-      { to: '/doctor/requests',      label: 'Requests',   icon: ShieldCheck, badge: 'drRequests' },
+      { to: '/doctor',               labelKey: 'navShort.home',       icon: LayoutDashboard, exact: true },
+      { to: '/doctor/consultations', labelKey: 'navShort.consult',    icon: Stethoscope },
+      { to: '/doctor/lab-requests',  labelKey: 'navShort.labReports', icon: Microscope },
+      { to: '/doctor/requests',      labelKey: 'navShort.requests',   icon: ShieldCheck, badge: 'drRequests' },
     ],
-    more: [],
+    more: [
+      { to: '/doctor/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
+      { to: '/doctor/settings',     labelKey: 'navShort.settings',     icon: Settings },
+    ],
   },
   admin: {
     primary: [
-      { to: '/admin',           label: 'Home',      icon: LayoutDashboard, exact: true },
-      { to: '/admin/medicines', label: 'Medicines', icon: Pill },
-      { to: '/admin/orders',    label: 'Orders',    icon: ShoppingCart },
-      { to: '/admin/users',     label: 'Users',     icon: Users },
+      { to: '/admin',           labelKey: 'navShort.home',      icon: LayoutDashboard, exact: true },
+      { to: '/admin/medicines', labelKey: 'navShort.medicines', icon: Pill },
+      { to: '/admin/orders',    labelKey: 'navShort.orders',    icon: ShoppingCart },
+      { to: '/admin/users',     labelKey: 'navShort.users',     icon: Users },
     ],
     more: [
-      { to: '/admin/suppliers', label: 'Suppliers', icon: Truck },
-      { to: '/admin/sales',     label: 'Sales',     icon: Receipt },
-      { to: '/admin/inventory', label: 'Inventory', icon: BarChart2 },
+      { to: '/admin/suppliers', labelKey: 'navShort.suppliers', icon: Truck },
+      { to: '/admin/sales',     labelKey: 'navShort.sales',     icon: Receipt },
+      { to: '/admin/inventory', labelKey: 'navShort.inventory', icon: BarChart2 },
+      { to: '/admin/settings',  labelKey: 'navShort.settings',  icon: Settings },
     ],
   },
   pharmacist: {
     primary: [
-      { to: '/pharmacist',               label: 'Home',    icon: LayoutDashboard, exact: true },
-      { to: '/pharmacist/consultations', label: 'Prescr.', icon: ClipboardList },
-      { to: '/pharmacist/medicines',     label: 'Meds',    icon: Pill },
-      { to: '/pharmacist/sales',         label: 'Sales',   icon: Receipt },
+      { to: '/pharmacist',               labelKey: 'navShort.home',               icon: LayoutDashboard, exact: true },
+      { to: '/pharmacist/consultations', labelKey: 'navShort.prescriptionsShort', icon: ClipboardList },
+      { to: '/pharmacist/medicines',     labelKey: 'navShort.medsShort',          icon: Pill },
+      { to: '/pharmacist/sales',         labelKey: 'navShort.sales',              icon: Receipt },
     ],
     more: [
-      { to: '/pharmacist/suppliers', label: 'Suppliers', icon: Truck },
-      { to: '/pharmacist/orders',    label: 'Orders',    icon: ShoppingCart },
-      { to: '/pharmacist/inventory', label: 'Inventory', icon: BarChart2 },
+      { to: '/pharmacist/suppliers', labelKey: 'navShort.suppliers', icon: Truck },
+      { to: '/pharmacist/orders',    labelKey: 'navShort.orders',    icon: ShoppingCart },
+      { to: '/pharmacist/inventory', labelKey: 'navShort.inventory', icon: BarChart2 },
+      { to: '/pharmacist/settings',  labelKey: 'navShort.settings',  icon: Settings },
     ],
   },
   laboratory: {
     primary: [
-      { to: '/laboratory',         label: 'Home',    icon: LayoutDashboard, exact: true },
-      { to: '/laboratory/reports', label: 'Reports', icon: ClipboardList },
+      { to: '/laboratory',         labelKey: 'navShort.home',    icon: LayoutDashboard, exact: true },
+      { to: '/laboratory/reports', labelKey: 'navShort.reports', icon: ClipboardList },
     ],
-    more: [],
+    more: [
+      { to: '/laboratory/catalog',  labelKey: 'navShort.catalog',  icon: Receipt },
+      { to: '/laboratory/settings', labelKey: 'navShort.settings', icon: Settings },
+    ],
   },
 };
 
 // ── More drawer (slide-up sheet) ──────────────────────────────────────────────
 interface MoreDrawerProps {
   items: NavItem[];
+  getBadge: (key: string) => number;
   onClose: () => void;
 }
 
-function MoreDrawer({ items, onClose }: MoreDrawerProps) {
+function MoreDrawer({ items, getBadge, onClose }: MoreDrawerProps) {
+  const { t }             = useTranslation('common');
   const { user, logout } = useAuth();
   const navigate         = useNavigate();
 
@@ -126,7 +147,7 @@ function MoreDrawer({ items, onClose }: MoreDrawerProps) {
         </div>
 
         <div className="flex items-center justify-between px-5 pb-3">
-          <p className="text-base font-bold text-gray-900">More</p>
+          <p className="text-base font-bold text-gray-900">{t('navShort.more')}</p>
           <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-xl flex items-center justify-center text-gray-500">
             <X size={15} strokeWidth={2.5} />
           </button>
@@ -136,6 +157,7 @@ function MoreDrawer({ items, onClose }: MoreDrawerProps) {
         <div className="px-4 space-y-1">
           {items.map(item => {
             const Icon = item.icon;
+            const badgeCount = item.badge ? getBadge(item.badge) : 0;
             return (
               <NavLink
                 key={item.to}
@@ -151,12 +173,18 @@ function MoreDrawer({ items, onClose }: MoreDrawerProps) {
               >
                 {({ isActive }) => (
                   <>
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                       isActive ? 'bg-primary-100' : 'bg-gray-100'
                     }`}>
                       <Icon size={18} strokeWidth={1.8} className={isActive ? 'text-primary-600' : 'text-gray-500'} />
+                      {badgeCount > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                      )}
                     </div>
-                    <span className="text-sm font-semibold">{item.label}</span>
+                    <span className="text-sm font-semibold flex-1">{t(item.labelKey)}</span>
+                    {badgeCount > 0 && (
+                      <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">{badgeCount}</span>
+                    )}
                   </>
                 )}
               </NavLink>
@@ -187,7 +215,7 @@ function MoreDrawer({ items, onClose }: MoreDrawerProps) {
             <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
               <LogOut size={18} strokeWidth={1.8} />
             </div>
-            <span className="text-sm font-semibold">Sign Out</span>
+            <span className="text-sm font-semibold">{t('navShort.signOut')}</span>
           </button>
         </div>
       </div>
@@ -197,6 +225,7 @@ function MoreDrawer({ items, onClose }: MoreDrawerProps) {
 
 // ── Bottom navigation bar ─────────────────────────────────────────────────────
 export default function MobileBottomNav() {
+  const { t }           = useTranslation('common');
   const { user }       = useAuth();
   const [showMore, setShowMore] = useState(false);
 
@@ -205,7 +234,16 @@ export default function MobileBottomNav() {
   const tabKey    = orgType && TABS[orgType] ? orgType : role;
   const tabConf   = TABS[tabKey] || TABS.patient;
   const primary   = tabConf.primary;
-  const moreItems = tabConf.more;
+  // Team (member management) only applies to org dashboards, and only when this
+  // user is the owner — user.organization is already owner-only, so its mere
+  // presence is the owner check (mirrors Sidebar.tsx's desktop nav).
+  const teamRoute: Record<string, string> = {
+    hospital: '/hospital/team', clinic: '/clinic/team',
+    pharmacist: '/pharmacist/team', laboratory: '/laboratory/team',
+  };
+  const moreItems = teamRoute[tabKey] && user?.organization
+    ? [...tabConf.more, { to: teamRoute[tabKey], labelKey: 'navShort.team', icon: Users }]
+    : tabConf.more;
   const hasMore   = moreItems.length > 0;
 
   const isRequestsRole = role === 'patient' || role === 'doctor';
@@ -222,12 +260,20 @@ export default function MobileBottomNav() {
     enabled:  isRequestsRole,
   });
 
+  const { data: appointments = [] } = useQuery({
+    queryKey: ['appointments'],
+    queryFn:  appointmentApi.getAll,
+    enabled:  role === 'doctor',
+  });
+
   const accessPending  = (accessRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
   const labViewPending = (labViewRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
+  const apptPending    = (appointments as Array<{ status: string }>).filter(r => r.status === 'pending').length;
 
   const getBadge = (badgeKey: string): number => {
     if (badgeKey === 'ptRequests') return accessPending + labViewPending;
     if (badgeKey === 'drRequests') return accessPending;
+    if (badgeKey === 'apptRequests') return apptPending;
     return 0;
   };
 
@@ -263,7 +309,7 @@ export default function MobileBottomNav() {
                       )}
                     </div>
                     <span className={`text-[10px] font-semibold leading-none ${isActive ? 'text-primary-600' : ''}`}>
-                      {item.label}
+                      {t(item.labelKey)}
                     </span>
                   </>
                 )}
@@ -277,10 +323,13 @@ export default function MobileBottomNav() {
               onClick={() => setShowMore(true)}
               className="flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-gray-400 active:text-gray-600"
             >
-              <div className="w-10 h-7 flex items-center justify-center">
+              <div className="relative w-10 h-7 flex items-center justify-center">
                 <MoreHorizontal size={20} strokeWidth={1.8} />
+                {moreItems.some(item => item.badge && getBadge(item.badge) > 0) && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                )}
               </div>
-              <span className="text-[10px] font-semibold leading-none">More</span>
+              <span className="text-[10px] font-semibold leading-none">{t('navShort.more')}</span>
             </button>
           )}
         </div>
@@ -288,7 +337,7 @@ export default function MobileBottomNav() {
 
       {/* More drawer */}
       {showMore && (
-        <MoreDrawer items={moreItems} onClose={() => setShowMore(false)} />
+        <MoreDrawer items={moreItems} getBadge={getBadge} onClose={() => setShowMore(false)} />
       )}
     </>
   );

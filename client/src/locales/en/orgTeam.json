@@ -1,0 +1,25 @@
+{
+  "title": "Team",
+  "subtitle": "Manage who has a login to this organization's dashboard.",
+  "inviteBtn": "+ Invite Member",
+  "notOwner": "Only the organization owner can manage the team.",
+  "emptyTitle": "No team members yet.",
+  "ownerBadge": "Owner",
+  "inactiveBadge": "Inactive",
+  "removeBtn": "Remove",
+  "removeConfirm": "Remove {{name}} from this organization? They will lose access immediately.",
+  "toastRemoved": "Member removed",
+  "toastRemoveFailed": "Failed to remove member",
+  "toastInvited": "Team member invited — they can sign in now",
+  "toastInviteFailed": "Failed to invite member",
+  "errors": {
+    "formInvalid": "Please fill in all fields — password must be at least 6 characters."
+  },
+  "inviteModal": {
+    "title": "Invite Team Member",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Min. 6 characters",
+    "makeOwner": "Make this person a co-owner",
+    "submitBtn": "Create Login"
+  }
+}

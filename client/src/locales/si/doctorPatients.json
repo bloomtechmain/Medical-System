@@ -1,0 +1,223 @@
+{
+  "patientView": {
+    "backToDashboard": "උපකරණ පුවරුවට ආපසු යන්න",
+    "loadingProfile": "රෝගී පැතිකඩ පූරණය වෙමින්…",
+    "notFound": "රෝගියා හමු නොවීය",
+    "goBack": "← ආපසු යන්න",
+    "ageYears": "අවුරුදු {{age}}",
+    "dob": "උපන් දිනය: {{date}}",
+    "knownAllergies": "දන්නා අසාත්මිකතා",
+    "chronicConditions": "දිගුකාලීන රෝග තත්ත්ව",
+    "noAllergiesOrConditions": "අසාත්මිකතා හෝ දිගුකාලීන රෝග තත්ත්ව සටහන් වී නැත.",
+    "activeMedications": "වත්මන් බෙහෙත්",
+    "medicinesPrescribedCount": "දැනට බෙහෙත් {{count}} ක් නියම කර ඇත",
+    "protectedPatientData": "සුරක්ෂිත රෝගී දත්ත",
+    "toastAccessRequestSent": "ප්‍රවේශ ඉල්ලීම යවන ලදී! රෝගියාට දැනුම් දෙනු ලැබේ.",
+    "doctorPrefix": "වෛද්‍ය",
+    "opening": "විවෘත වෙමින්…",
+    "fileOpenError": "ගොනුව විවෘත කිරීමට අසමත් විය. කරුණාකර නැවත උත්සාහ කරන්න.",
+    "accessTypes": {
+      "labReports": { "label": "රසායනාගාර වාර්තා", "desc": "රෝහල් හා සායන රසායනාගාර පරීක්ෂණ ප්‍රතිඵල" },
+      "medicationWorkflow": { "label": "බෙහෙත් වට්ටෝරු ක්‍රියාවලිය", "desc": "වෛද්‍ය හමුවීම් වාර්තා, රෝග විනිශ්චය සහ සම්පූර්ණ බෙහෙත් වට්ටෝරු" },
+      "personalReports": { "label": "පුද්ගලික සෞඛ්‍ය වාර්තා", "desc": "රෝගියා විසින් උඩුගත කළ වෛද්‍ය ලේඛන හා වාර්තා" },
+      "personalDetails": { "label": "පුද්ගලික තොරතුරු", "desc": "පුද්ගලික සම්බන්ධතා, ලිපිනය සහ රක්ෂණ විස්තර" },
+      "vitals": { "label": "රෝගී ජීවී සංඥා", "desc": "රුධිර පරීක්ෂණ, CBC, පරිවෘත්තීය සහ ජීවී සංඥා කියවීම්" },
+      "fullRecord": { "label": "සම්පූර්ණ සෞඛ්‍ය වාර්තාව" }
+    },
+    "fullAccess": {
+      "title": "සම්පූර්ණ ප්‍රවේශය ඉල්ලන්න",
+      "grantedTitle": "සම්පූර්ණ ප්‍රවේශය ලබා දී ඇත",
+      "grantedDesc": "ඔබට මෙම රෝගියාගේ සම්පූර්ණ සෞඛ්‍ය වාර්තාව පහතින් බැලිය හැක.",
+      "noneDesc": "රසායනාගාර වාර්තා, වෛද්‍ය ඉතිහාසය, පුද්ගලික වාර්තා, සම්බන්ධතා තොරතුරු සහ ජීවී සංඥා බැලීමට එක ඉල්ලීමක් එවන්න.",
+      "pendingDesc": "ඔබගේ ඉල්ලීම රෝගියා අනුමත කරනතුරු රැඳී සිටී, {{date}} දින එවන ලදී.",
+      "declinedDesc": "රෝගියා ඔබගේ අවසන් ඉල්ලීම ප්‍රතික්ෂේප කළේය.",
+      "requestButton": "සම්පූර්ණ ප්‍රවේශය ඉල්ලන්න",
+      "reRequestButton": "නැවත ඉල්ලන්න",
+      "pendingButton": "බලාපොරොත්තුවෙන්…"
+    },
+    "accessSection": {
+      "granted": "අවසර ලැබී ඇත",
+      "reRequest": "නැවත ඉල්ලන්න",
+      "requestAccess": "ප්‍රවේශය ඉල්ලන්න",
+      "waitingApproval": "ඉල්ලීම යවා ඇත — රෝගියාගේ අනුමැතිය බලාපොරොත්තුවෙන්",
+      "patientDeclined": "රෝගියා මෙම ඉල්ලීම ප්‍රතික්ෂේප කළේය",
+      "accessRequired": "මෙය අගුළු හැරීමට ඉහත සම්පූර්ණ ප්‍රවේශය ඉල්ලන්න",
+      "requestedOn": "{{date}} දින ඉල්ලා ඇත"
+    },
+    "requestModal": {
+      "descriptionPre": "ඔබ රෝගියාගේ",
+      "descriptionPost": "රෝගියාට දැනුම් දෙනු ලබන අතර, ඔබට මෙම දත්ත බැලීමට පෙර ඔවුන්ගේ අනුමැතිය ලබා ගත යුතුය.",
+      "errorDefault": "ඉල්ලීම යැවීමට අසමත් විය",
+      "reasonLabel": "ඉල්ලීමට හේතුව",
+      "optional": "(විකල්පයි)",
+      "reasonPlaceholder": "උදා: රෝග විනිශ්චය සහ ප්‍රතිකාර සැලසුම් කිරීම සඳහා අවශ්‍යයි…",
+      "sending": "යවමින්…",
+      "sendRequest": "ඉල්ලීම යවන්න"
+    },
+    "labReportsTab": {
+      "empty": "රසායනාගාර වාර්තා හමු නොවීය.",
+      "labFallback": "රසායනාගාරය",
+      "viewPdf": "PDF බලන්න"
+    },
+    "medicalHistoryTab": {
+      "empty": "වෛද්‍ය හමුවීම් ඉතිහාසයක් හමු නොවීය.",
+      "visitFallback": "වෛද්‍ය හමුවීම",
+      "statusDispensed": "බෙහෙත් නිකුත් කරන ලදී",
+      "symptoms": "රෝග ලක්ෂණ",
+      "diagnosis": "රෝග විනිශ්චය",
+      "treatmentPlan": "ප්‍රතිකාර සැලැස්ම",
+      "labTestsRequested": "ඉල්ලූ රසායනාගාර පරීක්ෂණ",
+      "prescribedMedications": "නියම කළ බෙහෙත් ({{count}})",
+      "ocrBadge": "OCR",
+      "noMedicinesPrescribed": "මෙම හමුවීම සඳහා බෙහෙත් නියම කර නැත."
+    },
+    "contactInfoTab": {
+      "empty": "සම්බන්ධතා විස්තර ලේඛනගත කර නැත.",
+      "emergencyContact": "හදිසි සම්බන්ධතාවය",
+      "emergencyPhone": "හදිසි දුරකථන අංකය",
+      "insurance": "රක්ෂණය",
+      "policyNumber": "ප්‍රතිපත්ති අංකය"
+    },
+    "personalReportsTab": {
+      "empty": "පුද්ගලික වාර්තා උඩුගත කර නැත.",
+      "types": {
+        "labReport": "රසායනාගාර වාර්තාව",
+        "prescription": "බෙහෙත් වට්ටෝරුව",
+        "imaging": "රූප ශිල්පීය පරීක්ෂණය",
+        "dischargeSummary": "පිටවීමේ සාරාංශය",
+        "vaccination": "එන්නත්කරණය",
+        "other": "වෙනත්"
+      }
+    },
+    "vitalsTab": {
+      "empty": "තවම ජීවී සංඥා සටහන් කර නැත.",
+      "recordedOn": "{{date}} දින සටහන් කරන ලදී",
+      "fromLabReport": "රසායනාගාර වාර්තාවෙන්",
+      "manualEntry": "අතින් ඇතුළත් කළ",
+      "entriesCount": "සටහන් {{count}}ක් — නවතම මුලින්",
+      "latest": "නවතම",
+      "lab": "රසායනාගාරය",
+      "manual": "අතින්",
+      "groups": {
+        "basicVitals": {
+          "label": "මූලික ජීවී සංඥා",
+          "fields": {
+            "bpSystolic": "සිස්ටලික් රුධිර පීඩනය",
+            "bpDiastolic": "ඩයස්ටලික් රුධිර පීඩනය",
+            "heartRate": "හෘද ස්පන්දන වේගය",
+            "temperature": "උෂ්ණත්වය",
+            "oxygenSaturation": "SpO₂"
+          }
+        },
+        "metabolicPanel": {
+          "label": "පරිවෘත්තීය පැනලය",
+          "fields": {
+            "bloodGlucose": "රුධිර ග්ලූකෝස්",
+            "hba1c": "HbA1c",
+            "creatinine": "ක්‍රියැටිනින්"
+          }
+        },
+        "lipidPanel": {
+          "label": "ලිපිඩ පැනලය",
+          "fields": {
+            "cholesterol": "මුළු කොලෙස්ටරෝල්",
+            "hdl": "HDL",
+            "ldl": "LDL",
+            "triglycerides": "ට්‍රයිග්ලිසරයිඩ"
+          }
+        },
+        "cbcPanel": {
+          "label": "CBC පැනලය",
+          "fields": {
+            "hemoglobin": "හීමොග්ලොබින්",
+            "wbc": "WBC",
+            "rbc": "RBC",
+            "platelets": "ප්ලේට්ලට්",
+            "hematocrit": "හීමැටොක්‍රිට්",
+            "mcv": "MCV",
+            "mch": "MCH",
+            "mchc": "MCHC",
+            "rdw": "RDW",
+            "mpv": "MPV"
+          }
+        }
+      }
+    }
+  },
+  "appointments": {
+    "pageTitle": "හමුවීම්",
+    "pageSubtitle": "වෙන් කිරීමේ ඉල්ලීම් කළමනාකරණය කර, රෝගීන්ට ඔබව වෙන් කර ගත හැකි වේලාවන් සකසන්න",
+    "tabs": {
+      "requestsBookings": "ඉල්ලීම් සහ වෙන් කිරීම්",
+      "availabilitySettings": "ලබා ගත හැකි වේලා සැකසුම්"
+    },
+    "weekdays": ["ඉරිදා", "සඳුදා", "අඟහරුවාදා", "බදාදා", "බ්‍රහස්පතින්දා", "සිකුරාදා", "සෙනසුරාදා"],
+    "weekdaysShort": ["ඉරි", "සඳු", "අඟ", "බදා", "බ්‍රහ", "සිකු", "සෙන"],
+    "status": {
+      "pendingResponse": "ප්‍රතිචාරය බලාපොරොත්තුවෙන්"
+    },
+    "stats": {
+      "pendingRequests": "පොරොත්තු ඉල්ලීම්"
+    },
+    "filters": {
+      "all": "සියල්ල"
+    },
+    "loading": "හමුවීම් පූරණය වෙමින්…",
+    "emptyTitle": "මෙහි හමුවීම් නොමැත",
+    "emptySubtitle": "රෝගීන්ගේ වෙන් කිරීමේ ඉල්ලීම් මෙහි පෙන්වනු ලැබේ.",
+    "yourNote": "ඔබේ සටහන: {{note}}",
+    "actions": {
+      "accept": "පිළිගන්න",
+      "decline": "ප්‍රතික්ෂේප කරන්න",
+      "markCompleted": "සම්පූර්ණ ලෙස සලකුණු කරන්න"
+    },
+    "confirmCancel": "මෙම තහවුරු කළ හමුවීම අවලංගු කරන්නද?",
+    "toast": {
+      "confirmed": "හමුවීම තහවුරු කරන ලදී",
+      "declined": "හමුවීම ප්‍රතික්ෂේප කරන ලදී",
+      "cancelled": "හමුවීම අවලංගු කරන ලදී",
+      "completed": "හමුවීම සම්පූර්ණ ලෙස සලකුණු කරන ලදී",
+      "updated": "යාවත්කාලීන කරන ලදී",
+      "updateFailed": "හමුවීම යාවත්කාලීන කිරීමට අසමත් විය"
+    },
+    "declineModal": {
+      "title": "හමුවීම ප්‍රතික්ෂේප කරන්න",
+      "placeholder": "රෝගියාට හේතුව දන්වන්න (විකල්පයි)…"
+    },
+    "availability": {
+      "defaultWeeklyHours": "සාමාන්‍ය සතිපතා වේලාවන්",
+      "defaultWeeklyHoursDesc": "ඔබ සාමාන්‍යයෙන් රෝගීන් හමුවන දින සක්‍රිය කර, එක් එක් දිනය සඳහා වේලාවන් සකසන්න.",
+      "toastWeeklySaved": "සතිපතා ලබා ගත හැකි වේලා සුරැකින ලදී",
+      "toastWeeklyFailed": "ලබා ගත හැකි වේලා සුරැකීමට අසමත් විය",
+      "toastDayUpdated": "එම දිනය සඳහා ලබා ගත හැකි වේලාව යාවත්කාලීන කරන ලදී",
+      "toastDayUpdateFailed": "එම දිනය යාවත්කාලීන කිරීමට අසමත් විය",
+      "toastDayReverted": "පෙරනිමි කාලසටහනට ආපසු හරවන ලදී",
+      "toastDayResetFailed": "එම දිනය යළි පිහිටුවීමට අසමත් විය",
+      "to": "දක්වා",
+      "minSlots": "මිනිත්තු {{count}} පරාසයන්",
+      "endTimeError": "අවසාන වේලාව ආරම්භක වේලාවට පසුව විය යුතුය",
+      "notAvailable": "ලබා ගත නොහැක",
+      "exceptionsTitle": "මෙම සතියේ විශේෂ දින",
+      "exceptionsDesc": "ඉදිරි නිශ්චිත දිනයක් සඳහා ඔබේ පෙරනිමි කාලසටහන අභිබවා යන්න — උදා: නිවාඩු දිනයක් අවහිර කරන්න, හෝ සාමාන්‍යයෙන් වසා ඇති දිනයක් විවෘත කරන්න.",
+      "available": "ලබා ගත හැක",
+      "overrideSuffix": " (අභිබවා ගිය)",
+      "defaultSuffix": " (පෙරනිමි)",
+      "open": "විවෘත කරන්න",
+      "block": "අවහිර කරන්න",
+      "reset": "යළි පිහිටුවන්න"
+    },
+    "hospitals": {
+      "title": "මගේ රෝහල් / සායන",
+      "description": "ඔබ සේවය කරන රෝහල් හෝ සායන සමඟ අනුබද්ධ වන්න — පහතින් එක් එක් සඳහා වෙනස් වේලාවන් සකසන්න.",
+      "searchPlaceholder": "රෝහලක් හෝ සායනයක් සොයන්න...",
+      "searching": "සොයමින්…",
+      "noResults": "ගැළපෙන රෝහල් හෝ සායන හමු නොවීය",
+      "toastAdded": "ඔබේ රෝහල් ලැයිස්තුවට එකතු කරන ලදී",
+      "toastAddFailed": "එම අනුබද්ධතාව එකතු කිරීමට අසමත් විය",
+      "toastRemoved": "ඔබේ රෝහල් ලැයිස්තුවෙන් ඉවත් කරන ලදී",
+      "toastRemoveFailed": "එම අනුබද්ධතාව ඉවත් කිරීමට අසමත් විය",
+      "editingHoursFor": "වේලාවන් සංස්කරණය කරමින්:",
+      "general": "සාමාන්‍ය (නිශ්චිත ස්ථානයක් නැත)"
+    }
+  }
+}

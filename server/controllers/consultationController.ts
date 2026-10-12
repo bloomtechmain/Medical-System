@@ -1,22 +1,21 @@
-import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
-import { extractMedicines } from '../utils/ocrParser';
+import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
+import { deleteUpload } from '../utils/fileStorage';
+import { parsePaging } from '../utils/pagination';
+import { enqueue as enqueueConsultationOcr } from '../queue/jobs/extractConsultationMedicines';
 
-const runOCR = async (filePath: string): Promise<string> => {
-  try {
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker('eng', 1, { logger: () => {} });
-    const { data: { text } } = await worker.recognize(filePath);
-    await worker.terminate();
-    return text || '';
-  } catch (err) {
-    console.error('OCR error:', (err as Error).message);
-    return '';
-  }
-};
+// medical_consultations / consultation_medicines / patient_profiles live in
+// the `clinical` schema and are gated by row-level security — every query
+// against them must run with the acting user's identity set via queryAs()
+// (or, inside an already-open transaction, a SELECT set_config(...) call
+// right after BEGIN). See config/db.ts for why.
+const actor = (req: Request): RLSActor => ({ id: req.user.id, role: req.user.role });
+const setRLSContext = (client: { query: (t: string, v?: unknown[]) => Promise<unknown> }, a: RLSActor) =>
+  client.query(
+    `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+    [a.id != null ? String(a.id) : '', a.role || '']
+  );
 
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
@@ -24,7 +23,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     const {
       visit_date, doctor_name, hospital_clinic,
       sick_description, diagnosis, treatment_description,
-      manual_medicines, patient_id, assigned_pharmacist_id,
+      manual_medicines, patient_id,
       lab_tests_requested, assigned_laboratory_id,
     } = req.body;
 
@@ -34,31 +33,28 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 
     if (!patientId) { res.status(400).json({ message: 'Patient is required' }); return; }
 
+    // PERF-06: prescription OCR no longer runs here (synchronously, blocking
+    // this request on tesseract) — the consultation saves with just its
+    // manually-entered medicines, and extractConsultationMedicines (queued
+    // below, once the row exists) fills in the OCR-extracted ones.
     const prescriptionFile = req.file ? req.file.filename : null;
-    const prescriptionPath = req.file ? req.file.path : null;
-
-    let ocrText = '', ocrMedicines: ReturnType<typeof extractMedicines> = [];
-    if (prescriptionPath) {
-      ocrText      = await runOCR(prescriptionPath);
-      ocrMedicines = extractMedicines(ocrText);
-    }
 
     await client.query('BEGIN');
+    await setRLSContext(client, actor(req));
 
     const labId = isDoctor ? (assigned_laboratory_id || null) : null;
 
     const { rows: [consultation] } = await client.query(`
       INSERT INTO medical_consultations
-        (patient_id, doctor_id, assigned_pharmacist_id,
+        (patient_id, doctor_id,
          visit_date, doctor_name, hospital_clinic,
          sick_description, diagnosis, treatment_description,
          prescription_file, ocr_text, lab_tests_requested, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active')
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active')
       RETURNING *
     `, [
       patientId,
       doctorId,
-      assigned_pharmacist_id || null,
       visit_date,
       doctor_name           || null,
       hospital_clinic       || null,
@@ -66,17 +62,16 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       diagnosis             || null,
       treatment_description || null,
       prescriptionFile,
-      ocrText || null,
+      null, // ocr_text — filled in by the queued job once it runs, see below
       lab_tests_requested || null,
     ]);
 
     let manualMeds: any[] = [];
     try { manualMeds = manual_medicines ? JSON.parse(manual_medicines) : []; } catch {}
 
-    const allMedicines = [
-      ...ocrMedicines,
-      ...manualMeds.filter((m: any) => m.medicine_name?.trim()).map((m: any) => ({ ...m, source: 'manual' })),
-    ];
+    const allMedicines = manualMeds
+      .filter((m: any) => m.medicine_name?.trim())
+      .map((m: any) => ({ ...m, source: 'manual' }));
 
     for (const med of allMedicines) {
       await client.query(`
@@ -138,16 +133,6 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
         { consultation_id: consultation.id }
       );
 
-      if (assigned_pharmacist_id) {
-        await sendNotification(
-          assigned_pharmacist_id,
-          'consultation_assigned',
-          'New Prescription Assigned',
-          `Dr. ${drName} has assigned a prescription for patient ${ptName}. Please dispense the medicines.`,
-          { consultation_id: consultation.id }
-        );
-      }
-
       if (directLabRequest) {
         await sendNotification(
           labId!,
@@ -159,12 +144,34 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       }
     }
 
-    const { rows: medicines } = await pool.query(
+    const { rows: medicines } = await queryAs(actor(req),
       'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY source DESC, id',
       [consultation.id]
     );
 
-    res.status(201).json({ ...consultation, medicines, ocr_medicines_found: ocrMedicines.length });
+    // ocr_medicines_found is always 0 here now — OCR hasn't run yet by the
+    // time this responds (see the queued job below), so there's nothing
+    // meaningful to report synchronously. The client already treats 0 the
+    // same as "none found"; the real extracted medicines show up on the
+    // next fetch of this consultation once the job completes.
+    res.status(201).json({ ...consultation, medicines, ocr_medicines_found: 0 });
+
+    // Enqueue after responding, in its own try/catch — the transaction is
+    // already committed and the response already sent at this point, so a
+    // queue failure here must not fall into the catch below (which assumes
+    // neither has happened yet and tries to ROLLBACK / call next(err)).
+    if (prescriptionFile) {
+      try {
+        await enqueueConsultationOcr({
+          consultationId: consultation.id,
+          prescriptionFilename: prescriptionFile,
+          actorId: req.user.id,
+          actorRole: req.user.role,
+        });
+      } catch (queueErr) {
+        console.error('[consultationController.create] failed to enqueue OCR job:', (queueErr as Error).message);
+      }
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
@@ -173,10 +180,30 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
   }
 };
 
+// PERF-04: never paginated. See utils/pagination.ts for why the default is
+// generous rather than "a page."
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { role, id } = req.user;
+    const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
     let query: string, params: unknown[];
+
+    // Correlated subquery (not a JOIN) so it never fans out against the medicines
+    // JSON_AGG above it — a consultation with 3 medicines and 2 pharmacy
+    // assignments would otherwise multiply into 6 rows before aggregation.
+    const pharmacyAssignmentsSelect = `
+      COALESCE(
+        (SELECT JSON_AGG(JSON_BUILD_OBJECT(
+           'id', pa.id, 'pharmacist_id', pa.pharmacist_id,
+           'pharmacy_name', COALESCE(pp2.pharmacy_name, phu.name),
+           'status', pa.status, 'created_at', pa.created_at
+         ) ORDER BY pa.created_at)
+         FROM prescription_assignments pa
+         JOIN users phu ON phu.id = pa.pharmacist_id
+         LEFT JOIN pharmacist_profiles pp2 ON pp2.user_id = pa.pharmacist_id
+         WHERE pa.consultation_id = c.id),
+        '[]'
+      ) AS pharmacy_assignments`;
 
     if (role === 'patient') {
       query  = `SELECT c.*,
@@ -196,52 +223,33 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
                   ) AS medicines,
                   COUNT(m.id)::int AS medicine_count,
                   u.name  AS doctor_display_name,
-                  ph.name AS pharmacist_name,
-                  pp.pharmacy_name,
-                  pp.pharmacy_address,
-                  pp.phone AS pharmacy_phone
+                  ${pharmacyAssignmentsSelect}
                 FROM medical_consultations c
                 LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
                 LEFT JOIN users u   ON u.id  = c.doctor_id
-                LEFT JOIN users ph  ON ph.id = c.assigned_pharmacist_id
-                LEFT JOIN pharmacist_profiles pp ON pp.user_id = c.assigned_pharmacist_id
-                WHERE c.patient_id = $1
-                GROUP BY c.id, u.name, ph.name, pp.pharmacy_name, pp.pharmacy_address, pp.phone
-                ORDER BY c.visit_date DESC, c.created_at DESC`;
-      params = [id];
+                WHERE c.patient_id = $1 AND c.deleted_at IS NULL
+                GROUP BY c.id, u.name
+                ORDER BY c.visit_date DESC, c.created_at DESC
+                LIMIT $2 OFFSET $3`;
+      params = [id, limit, offset];
     } else if (role === 'doctor') {
       query  = `SELECT c.*,
                   COUNT(m.id)::int AS medicine_count,
                   pt.name AS patient_name, pt.email AS patient_email,
-                  ph.name AS pharmacist_name,
-                  pp.pharmacy_name
+                  ${pharmacyAssignmentsSelect}
                 FROM medical_consultations c
                 LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
                 LEFT JOIN users pt ON pt.id = c.patient_id
-                LEFT JOIN users ph ON ph.id = c.assigned_pharmacist_id
-                LEFT JOIN pharmacist_profiles pp ON pp.user_id = c.assigned_pharmacist_id
-                WHERE c.doctor_id = $1
-                GROUP BY c.id, pt.name, pt.email, ph.name, pp.pharmacy_name
-                ORDER BY c.visit_date DESC, c.created_at DESC`;
-      params = [id];
-    } else if (role === 'pharmacist') {
-      query  = `SELECT c.*,
-                  COUNT(m.id)::int AS medicine_count,
-                  pt.name AS patient_name, pt.email AS patient_email,
-                  u.name AS doctor_display_name
-                FROM medical_consultations c
-                LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
-                LEFT JOIN users pt ON pt.id = c.patient_id
-                LEFT JOIN users u  ON u.id  = c.doctor_id
-                WHERE c.assigned_pharmacist_id = $1
-                GROUP BY c.id, pt.name, pt.email, u.name
-                ORDER BY c.status ASC, c.visit_date DESC`;
-      params = [id];
+                WHERE c.doctor_id = $1 AND c.deleted_at IS NULL
+                GROUP BY c.id, pt.name, pt.email
+                ORDER BY c.visit_date DESC, c.created_at DESC
+                LIMIT $2 OFFSET $3`;
+      params = [id, limit, offset];
     } else {
       res.json([]); return;
     }
 
-    const { rows } = await pool.query(query, params);
+    const { rows } = await queryAs(actor(req), query, params);
     res.json(rows);
   } catch (err) { next(err); }
 };
@@ -249,30 +257,35 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 const getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { role, id } = req.user;
-    let condition: string;
-    if (role === 'patient')    condition = 'c.patient_id = $2';
-    else if (role === 'doctor')condition = 'c.doctor_id  = $2';
-    else                       condition = 'c.assigned_pharmacist_id = $2';
+    const condition = role === 'patient' ? 'c.patient_id = $2' : 'c.doctor_id = $2';
 
-    const { rows } = await pool.query(`
+    const { rows } = await queryAs(actor(req), `
       SELECT c.*,
         pt.name AS patient_name, pt.email AS patient_email,
         u.name  AS doctor_display_name,
-        ph.name AS pharmacist_name,
-        pp.pharmacy_name, pp.pharmacy_address, pp.phone AS pharmacy_phone,
-        pat.phone AS patient_phone, pat.blood_type, pat.allergies
+        pat.phone AS patient_phone, pat.blood_type, pat.allergies,
+        COALESCE(
+          (SELECT JSON_AGG(JSON_BUILD_OBJECT(
+             'id', pa.id, 'pharmacist_id', pa.pharmacist_id,
+             'pharmacy_name', COALESCE(pp.pharmacy_name, phu.name),
+             'status', pa.status, 'created_at', pa.created_at
+           ) ORDER BY pa.created_at)
+           FROM prescription_assignments pa
+           JOIN users phu ON phu.id = pa.pharmacist_id
+           LEFT JOIN pharmacist_profiles pp ON pp.user_id = pa.pharmacist_id
+           WHERE pa.consultation_id = c.id),
+          '[]'
+        ) AS pharmacy_assignments
       FROM medical_consultations c
       LEFT JOIN users pt  ON pt.id  = c.patient_id
       LEFT JOIN users u   ON u.id   = c.doctor_id
-      LEFT JOIN users ph  ON ph.id  = c.assigned_pharmacist_id
-      LEFT JOIN pharmacist_profiles pp  ON pp.user_id  = c.assigned_pharmacist_id
-      LEFT JOIN patient_profiles    pat ON pat.user_id = c.patient_id
-      WHERE c.id = $1 AND ${condition}
+      LEFT JOIN patient_profiles pat ON pat.user_id = c.patient_id
+      WHERE c.id = $1 AND ${condition} AND c.deleted_at IS NULL
     `, [req.params.id, id]);
 
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
 
-    const { rows: medicines } = await pool.query(
+    const { rows: medicines } = await queryAs(actor(req),
       'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY source DESC, id',
       [req.params.id]
     );
@@ -281,53 +294,10 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
-const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const { status } = req.body;
-    const { rows } = await pool.query(
-      `UPDATE medical_consultations SET status=$1, updated_at=NOW()
-       WHERE id=$2 AND assigned_pharmacist_id=$3
-       RETURNING *`,
-      [status, req.params.id, req.user.id]
-    );
-    if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
-
-    if (status === 'dispensed') {
-      const c = rows[0];
-
-      const phRow = (await pool.query('SELECT name FROM users WHERE id=$1', [req.user.id])).rows[0];
-      const phName = phRow?.name || 'the pharmacy';
-
-      const ptRow = (await pool.query('SELECT name FROM users WHERE id=$1', [c.patient_id])).rows[0];
-      const ptName = ptRow?.name || 'the patient';
-
-      await sendNotification(
-        c.patient_id,
-        'prescription_dispensed',
-        'Prescription Dispensed ✅',
-        `Your prescription has been dispensed by ${phName}. Please collect your medicines.`,
-        { consultation_id: c.id }
-      );
-
-      if (c.doctor_id) {
-        await sendNotification(
-          c.doctor_id,
-          'prescription_dispensed',
-          'Prescription Dispensed ✅',
-          `The prescription for patient ${ptName} has been dispensed by ${phName}.`,
-          { consultation_id: c.id }
-        );
-      }
-    }
-
-    res.json(rows[0]);
-  } catch (err) { next(err); }
-};
-
 const update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       'SELECT * FROM medical_consultations WHERE id=$1 AND doctor_id=$2',
       [req.params.id, req.user.id]
     );
@@ -336,33 +306,36 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
     const prev = existing[0];
     const {
       visit_date, hospital_clinic, sick_description,
-      diagnosis, treatment_description, assigned_pharmacist_id,
+      diagnosis, treatment_description,
       manual_medicines,
     } = req.body;
 
     let prescriptionFile = prev.prescription_file;
-    let ocrText          = prev.ocr_text;
-    let ocrMedicines: ReturnType<typeof extractMedicines> = [];
+    let ocrText = prev.ocr_text;
+    let newFileUploaded = false;
 
+    // PERF-06: OCR no longer runs here (synchronously) when the prescription
+    // is replaced — ocr_text is cleared and the queued job (below) fills in
+    // the newly-extracted text/medicines once it's done.
     if (req.file) {
       if (prev.prescription_file) {
-        const oldPath = path.join(__dirname, '../uploads/prescriptions', prev.prescription_file);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        await deleteUpload('prescriptions', prev.prescription_file);
       }
       prescriptionFile = req.file.filename;
-      ocrText          = await runOCR(req.file.path);
-      ocrMedicines     = extractMedicines(ocrText);
+      ocrText = null;
+      newFileUploaded = true;
     }
 
     await client.query('BEGIN');
+    await setRLSContext(client, actor(req));
 
     const { rows: [consultation] } = await client.query(`
       UPDATE medical_consultations SET
         visit_date=$1, hospital_clinic=$2,
         sick_description=$3, diagnosis=$4, treatment_description=$5,
-        assigned_pharmacist_id=$6, prescription_file=$7, ocr_text=$8,
+        prescription_file=$6, ocr_text=$7,
         updated_at=NOW()
-      WHERE id=$9
+      WHERE id=$8
       RETURNING *
     `, [
       visit_date,
@@ -370,21 +343,24 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
       sick_description         || null,
       diagnosis                || null,
       treatment_description    || null,
-      assigned_pharmacist_id   || null,
       prescriptionFile,
       ocrText                  || null,
       req.params.id,
     ]);
 
+    // Clears every medicine, including OCR-sourced ones from a previous
+    // extraction — if a new prescription was uploaded, that's correct (the
+    // old file's medicines no longer apply); if not, this already matched
+    // the pre-existing behaviour here (the caller is expected to resend
+    // manual_medicines with whatever should remain).
     await client.query('DELETE FROM consultation_medicines WHERE consultation_id=$1', [req.params.id]);
 
     let manualMeds: any[] = [];
     try { manualMeds = manual_medicines ? JSON.parse(manual_medicines) : []; } catch {}
 
-    const allMedicines = [
-      ...ocrMedicines,
-      ...manualMeds.filter((m: any) => m.medicine_name?.trim()).map((m: any) => ({ ...m, source: 'manual' })),
-    ];
+    const allMedicines = manualMeds
+      .filter((m: any) => m.medicine_name?.trim())
+      .map((m: any) => ({ ...m, source: 'manual' }));
 
     for (const med of allMedicines) {
       await client.query(`
@@ -404,12 +380,28 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
 
     await client.query('COMMIT');
 
-    const { rows: medicines } = await pool.query(
+    const { rows: medicines } = await queryAs(actor(req),
       'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY source DESC, id',
       [req.params.id]
     );
 
-    res.json({ ...consultation, medicines, ocr_medicines_found: ocrMedicines.length });
+    res.json({ ...consultation, medicines, ocr_medicines_found: 0 });
+
+    // Own try/catch, same reasoning as create(): transaction is already
+    // committed and the response already sent, so a queue failure here
+    // must not fall into the catch below.
+    if (newFileUploaded) {
+      try {
+        await enqueueConsultationOcr({
+          consultationId: Number(req.params.id),
+          prescriptionFilename: prescriptionFile,
+          actorId: req.user.id,
+          actorRole: req.user.role,
+        });
+      } catch (queueErr) {
+        console.error('[consultationController.update] failed to enqueue OCR job:', (queueErr as Error).message);
+      }
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
@@ -422,7 +414,7 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
   try {
     const patientId = req.params.patientId;
 
-    const { rows: patRows } = await pool.query(`
+    const { rows: patRows } = await queryAs(actor(req), `
       SELECT u.id, u.name, u.email, u.created_at,
              p.phone, p.date_of_birth, p.gender,
              p.blood_type, p.allergies, p.chronic_conditions,
@@ -435,12 +427,10 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
 
     if (!patRows.length) { res.status(404).json({ message: 'Patient not found' }); return; }
 
-    const { rows: consultations } = await pool.query(`
+    const { rows: consultations } = await queryAs(actor(req), `
       SELECT c.*,
         u.name  AS doctor_display_name,
         dp.specialization AS doctor_specialization,
-        ph.name AS pharmacist_name,
-        pp.pharmacy_name,
         COALESCE(
           JSON_AGG(
             JSON_BUILD_OBJECT(
@@ -453,15 +443,25 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
             ) ORDER BY m.id
           ) FILTER (WHERE m.id IS NOT NULL),
           '[]'
-        ) AS medicines
+        ) AS medicines,
+        COALESCE(
+          (SELECT JSON_AGG(JSON_BUILD_OBJECT(
+             'id', pa.id, 'pharmacist_id', pa.pharmacist_id,
+             'pharmacy_name', COALESCE(pp.pharmacy_name, phu.name),
+             'status', pa.status, 'created_at', pa.created_at
+           ) ORDER BY pa.created_at)
+           FROM prescription_assignments pa
+           JOIN users phu ON phu.id = pa.pharmacist_id
+           LEFT JOIN pharmacist_profiles pp ON pp.user_id = pa.pharmacist_id
+           WHERE pa.consultation_id = c.id),
+          '[]'
+        ) AS pharmacy_assignments
       FROM medical_consultations c
       LEFT JOIN users u            ON u.id  = c.doctor_id
       LEFT JOIN doctor_profiles dp ON dp.user_id = c.doctor_id
-      LEFT JOIN users ph           ON ph.id = c.assigned_pharmacist_id
-      LEFT JOIN pharmacist_profiles pp ON pp.user_id = c.assigned_pharmacist_id
       LEFT JOIN consultation_medicines m ON m.consultation_id = c.id
-      WHERE c.patient_id = $1
-      GROUP BY c.id, u.name, dp.specialization, ph.name, pp.pharmacy_name
+      WHERE c.patient_id = $1 AND c.deleted_at IS NULL
+      GROUP BY c.id, u.name, dp.specialization
       ORDER BY c.visit_date DESC, c.created_at DESC
     `, [patientId]);
 
@@ -483,22 +483,20 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 };
 
+// PRO-25: consultations were hard-deleted (and the prescription file removed
+// immediately with them). Soft-delete instead — the file stays until the
+// retention-window purge script (server/scripts/purgeSoftDeleted.ts) removes
+// both for real, so a delete is recoverable up to that point.
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id, role } = req.user;
     const condition = role === 'doctor' ? 'doctor_id=$2' : 'patient_id=$2 AND doctor_id IS NULL';
-    const { rows } = await pool.query(
-      `SELECT prescription_file FROM medical_consultations WHERE id=$1 AND ${condition}`,
+    const { rows } = await queryAs(actor(req),
+      `UPDATE medical_consultations SET deleted_at = NOW()
+       WHERE id=$1 AND ${condition} AND deleted_at IS NULL RETURNING id`,
       [req.params.id, id]
     );
     if (!rows.length) { res.status(404).json({ message: 'Not found' }); return; }
-
-    if (rows[0].prescription_file) {
-      const fp = path.join(__dirname, '../uploads/prescriptions', rows[0].prescription_file);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
-
-    await pool.query('DELETE FROM medical_consultations WHERE id=$1', [req.params.id]);
     res.status(204).end();
   } catch (err) { next(err); }
 };
@@ -506,7 +504,7 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
 const updateByPatient = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const { rows: existing } = await pool.query(
+    const { rows: existing } = await queryAs(actor(req),
       'SELECT * FROM medical_consultations WHERE id=$1 AND patient_id=$2 AND doctor_id IS NULL',
       [req.params.id, req.user.id]
     );
@@ -520,6 +518,7 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
     } = req.body;
 
     await client.query('BEGIN');
+    await setRLSContext(client, actor(req));
 
     const { rows: [consultation] } = await client.query(`
       UPDATE medical_consultations SET
@@ -558,7 +557,7 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
 
     await client.query('COMMIT');
 
-    const { rows: updatedMeds } = await pool.query(
+    const { rows: updatedMeds } = await queryAs(actor(req),
       'SELECT * FROM consultation_medicines WHERE consultation_id=$1 ORDER BY id',
       [req.params.id]
     );
@@ -572,52 +571,4 @@ const updateByPatient = async (req: Request, res: Response, next: NextFunction):
   }
 };
 
-const assignPharmacy = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const { pharmacist_id } = req.body;
-    const patientId = req.user.id;
-
-    if (!pharmacist_id) { res.status(400).json({ message: 'pharmacist_id is required' }); return; }
-
-    const { rows: existing } = await pool.query(
-      'SELECT * FROM medical_consultations WHERE id=$1 AND patient_id=$2',
-      [req.params.id, patientId]
-    );
-    if (!existing.length) { res.status(404).json({ message: 'Consultation not found' }); return; }
-
-    const c = existing[0];
-    if (c.assigned_pharmacist_id) {
-      res.status(409).json({ message: 'A pharmacy is already assigned to this consultation' }); return;
-    }
-    if (c.status !== 'active') {
-      res.status(400).json({ message: 'Cannot reassign pharmacy after dispensing' }); return;
-    }
-
-    const { rows: phRows } = await pool.query(
-      "SELECT u.id, u.name, pp.pharmacy_name FROM users u LEFT JOIN pharmacist_profiles pp ON pp.user_id = u.id WHERE u.id=$1 AND u.role='pharmacist' AND u.is_active=TRUE",
-      [pharmacist_id]
-    );
-    if (!phRows.length) { res.status(404).json({ message: 'Pharmacist not found' }); return; }
-
-    const { rows: [updated] } = await pool.query(
-      'UPDATE medical_consultations SET assigned_pharmacist_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
-      [pharmacist_id, req.params.id]
-    );
-
-    const ptRow  = await pool.query('SELECT name FROM users WHERE id=$1', [patientId]);
-    const ptName = ptRow.rows[0]?.name || 'A patient';
-    const phName = phRows[0].pharmacy_name || phRows[0].name || 'Pharmacy';
-
-    await sendNotification(
-      pharmacist_id,
-      'consultation_assigned',
-      'New Prescription Forwarded',
-      `Patient ${ptName} has forwarded a prescription to ${phName}. Please prepare the medicines.`,
-      { consultation_id: c.id }
-    );
-
-    res.json(updated);
-  } catch (err) { next(err); }
-};
-
-export { create, update, updateByPatient, getAll, getOne, updateStatus, getPatientHistory, remove, assignPharmacy };
+export { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove };

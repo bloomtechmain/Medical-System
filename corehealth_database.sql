@@ -1,6 +1,22 @@
 -- =============================================================================
 -- Core Health — FULL DATABASE BUILD (single-file, Railway-ready)
 -- =============================================================================
+-- *** DEVELOPMENT / FRESH-INSTALL ONLY — NEVER RUN THIS AGAINST AN EXISTING,
+-- *** POPULATED DATABASE. Section 1 below DROPS every tenant_<slug> schema,
+-- *** the clinical schema, and the public application tables before rebuilding
+-- *** from scratch. On a database that already holds real data (staging,
+-- *** production) this is data loss, not a migration.
+--
+-- This file is still the single source of truth for the SCHEMA shape (it is
+-- copied, minus the drop block, into server/migrations/001_initial_schema.sql,
+-- which node-pg-migrate uses for genuinely fresh databases). Any schema change
+-- going forward must be added as a NEW file under server/migrations/ — add
+-- columns/tables first, remove old ones only in a later migration once nothing
+-- reads them (see server/migrations/BASELINE.md) — and mirrored here so this
+-- file keeps matching what a fresh install actually gets. Do not edit this
+-- file's DDL in a way that would change already-deployed schema; that belongs
+-- in a migration.
+--
 -- This file is the union of:
 --   1) corehealth_multitenant.sql  — schema: public + clinical (RLS) + the
 --      provision_tenant() function that creates tenant_<slug> schemas
@@ -8,7 +24,7 @@
 --      provision_tenant() that physically create every tenant_<slug> schema
 --      (tenant schemas do not exist until those calls run)
 --
--- HOW TO RUN ON RAILWAY
+-- HOW TO RUN (local/dev database, or a brand-new Railway Postgres instance)
 --   Option A (recommended) — from your machine, using the DATABASE_URL Railway
 --   shows on the Postgres service's "Connect" tab:
 --     psql "$DATABASE_URL" -f corehealth_database.sql
@@ -20,6 +36,10 @@
 --   Option C — via Railway CLI from the project directory:
 --     railway connect postgres
 --     \i corehealth_database.sql
+--
+-- For the existing production database, see server/migrations/BASELINE.md —
+-- it is brought up to date (and onto node-pg-migrate) incrementally, not by
+-- running this file.
 --
 -- IDEMPOTENCY
 --   Safe to re-run from scratch: section 1 below drops every tenant_<slug>
@@ -78,6 +98,7 @@ END $$;
 DROP SCHEMA IF EXISTS clinical CASCADE;
 
 -- public clinical/operational tables from a previous run
+DROP TABLE IF EXISTS public.impersonation_log      CASCADE;
 DROP TABLE IF EXISTS public.notifications          CASCADE;
 DROP TABLE IF EXISTS public.lab_view_requests      CASCADE;
 DROP TABLE IF EXISTS public.data_access_requests   CASCADE;
@@ -120,6 +141,20 @@ CREATE TABLE public.users (
 CREATE INDEX idx_users_email ON public.users(email);
 CREATE INDEX idx_users_role  ON public.users(role);
 
+-- Admin "View As" session-start audit trail — not per-action logging, just
+-- who viewed as whom and when. Admin-only operational record, not patient
+-- PHI, so it lives in `public` with no RLS (read via an admin-only endpoint).
+CREATE TABLE public.impersonation_log (
+  id              SERIAL       PRIMARY KEY,
+  admin_id        INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  target_user_id  INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  target_name     VARCHAR(150) NOT NULL,
+  target_role     VARCHAR(20)  NOT NULL,
+  started_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_impersonation_admin ON public.impersonation_log(admin_id);
+CREATE INDEX idx_impersonation_started ON public.impersonation_log(started_at);
+
 -- 2.2 organizations  (the TENANT REGISTRY — the thing leaks must not cross)
 --
 -- org_type values:
@@ -161,6 +196,18 @@ CREATE TABLE public.organization_members (
 );
 CREATE INDEX idx_orgmem_user ON public.organization_members(user_id);
 CREATE INDEX idx_orgmem_org  ON public.organization_members(organization_id);
+
+-- What medical specialties a hospital/clinic organization offers (distinct from
+-- the single owning doctor's own personal doctor_profiles.specialization) —
+-- a free-form tag list, multi-select + custom entries at registration time.
+CREATE TABLE public.organization_specializations (
+  id              SERIAL       PRIMARY KEY,
+  organization_id INTEGER      NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  name            VARCHAR(150) NOT NULL,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  UNIQUE (organization_id, name)
+);
+CREATE INDEX idx_orgspec_org ON public.organization_specializations(organization_id);
 
 -- 2.4 staff profiles (professional info — not patient PHI -> public)
 CREATE TABLE public.doctor_profiles (
@@ -239,6 +286,40 @@ CREATE INDEX idx_medicines_name     ON public.medicines(name);
 CREATE INDEX idx_medicines_category ON public.medicines(category);
 CREATE INDEX idx_medicines_supplier ON public.medicines(supplier_id);
 
+-- 2.6 pg_trgm GIN indexes — every user/medicine/profile search in the app uses
+-- ILIKE '%text%' (see userController.searchDoctors/searchPharmacists/
+-- searchLaboratories/searchPatients and medicineController.getAll), which a
+-- plain btree index (idx_users_email, idx_medicines_name above) cannot serve.
+-- These let Postgres use a trigram GIN index for those lookups instead.
+CREATE INDEX idx_users_name_trgm       ON public.users USING GIN (name gin_trgm_ops);
+CREATE INDEX idx_users_email_trgm      ON public.users USING GIN (email gin_trgm_ops);
+CREATE INDEX idx_medicines_name_trgm         ON public.medicines USING GIN (name gin_trgm_ops);
+CREATE INDEX idx_medicines_generic_name_trgm ON public.medicines USING GIN (generic_name gin_trgm_ops);
+CREATE INDEX idx_doctor_profiles_specialization_trgm       ON public.doctor_profiles USING GIN (specialization gin_trgm_ops);
+CREATE INDEX idx_doctor_profiles_hospital_affiliation_trgm ON public.doctor_profiles USING GIN (hospital_affiliation gin_trgm_ops);
+CREATE INDEX idx_pharmacist_profiles_pharmacy_name_trgm    ON public.pharmacist_profiles USING GIN (pharmacy_name gin_trgm_ops);
+CREATE INDEX idx_pharmacist_profiles_pharmacy_address_trgm ON public.pharmacist_profiles USING GIN (pharmacy_address gin_trgm_ops);
+CREATE INDEX idx_laboratory_profiles_lab_name_trgm ON public.laboratory_profiles USING GIN (lab_name gin_trgm_ops);
+CREATE INDEX idx_laboratory_profiles_address_trgm  ON public.laboratory_profiles USING GIN (address gin_trgm_ops);
+CREATE INDEX idx_laboratory_profiles_lab_type_trgm ON public.laboratory_profiles USING GIN (lab_type gin_trgm_ops);
+
+-- 2.7 platform stats cache — userController.getStats() used to run a UNION ALL
+-- across every tenant_<slug> schema's sales/appointments on every admin
+-- dashboard load, so the query grew with the number of organisations. It now
+-- recomputes into this single-row cache at most once per staleness window
+-- (see refreshPlatformStatsIfStale in userController.ts) instead of on every
+-- request.
+CREATE TABLE IF NOT EXISTS public.platform_stats_cache (
+  id                      INTEGER      PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- enforce single row
+  total_sales             BIGINT       NOT NULL DEFAULT 0,
+  total_revenue           NUMERIC(14,2) NOT NULL DEFAULT 0,
+  sales_this_month        BIGINT       NOT NULL DEFAULT 0,
+  total_appointments      BIGINT       NOT NULL DEFAULT 0,
+  upcoming_appointments   BIGINT       NOT NULL DEFAULT 0,
+  completed_appointments  BIGINT       NOT NULL DEFAULT 0,
+  computed_at             TIMESTAMPTZ  NOT NULL DEFAULT '-infinity'
+);
+
 -- =============================================================================
 -- 3. CLINICAL SCHEMA — patient PHI, shared but RLS-protected
 -- =============================================================================
@@ -277,7 +358,12 @@ CREATE TABLE clinical.medical_consultations (
   ocr_text               TEXT,
   lab_tests_requested    TEXT,
   status                 VARCHAR(20) NOT NULL DEFAULT 'active'
-                         CHECK (status IN ('active','dispensed','completed')),
+                         -- Pharmacy fulfilment pipeline: active (prescription received) ->
+                         -- preparing (pharmacist gathering stock) -> dispensed (ready for
+                         -- pickup/delivery) -> delivered (patient has received it).
+                         -- 'completed' is a separate, unused-by-UI terminal value kept for
+                         -- forward compatibility with an eventual "treatment closed" action.
+                         CHECK (status IN ('active','preparing','dispensed','delivered','completed')),
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -301,6 +387,42 @@ CREATE TABLE clinical.consultation_medicines (
 );
 CREATE INDEX idx_cm_consultation ON clinical.consultation_medicines(consultation_id);
 
+-- A prescription can be sent to several pharmacies at once (and later cancelled/re-sent
+-- to any of them independently) — one row per (consultation, pharmacist) pair carries its
+-- own fulfilment pipeline, replacing the old single assigned_pharmacist_id/status columns
+-- on medical_consultations (which stay in place, unused by new code, for backward compat).
+CREATE TABLE clinical.prescription_assignments (
+  id              SERIAL      PRIMARY KEY,
+  consultation_id INTEGER     NOT NULL REFERENCES clinical.medical_consultations(id) ON DELETE CASCADE,
+  pharmacist_id   INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  assigned_by     INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
+  status          VARCHAR(20) NOT NULL DEFAULT 'active'
+                  CHECK (status IN ('active','preparing','dispensed','delivered','cancelled')),
+  cancelled_by    INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
+  cancelled_at    TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (consultation_id, pharmacist_id)
+);
+CREATE INDEX idx_pa_consultation ON clinical.prescription_assignments(consultation_id);
+CREATE INDEX idx_pa_pharmacist   ON clinical.prescription_assignments(pharmacist_id);
+CREATE INDEX idx_pa_status       ON clinical.prescription_assignments(status);
+
+-- Free-text chat between a patient and a pharmacy on one prescription assignment
+-- (e.g. "that medicine isn't in stock" / patient replies) — same shape and RLS
+-- convention as lab_request_messages below.
+CREATE TABLE clinical.prescription_assignment_messages (
+  id             SERIAL      PRIMARY KEY,
+  assignment_id  INTEGER     NOT NULL REFERENCES clinical.prescription_assignments(id) ON DELETE CASCADE,
+  patient_id     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  pharmacist_id  INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_id      INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_role    VARCHAR(20) NOT NULL,
+  body           TEXT        NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_pam_assignment ON clinical.prescription_assignment_messages(assignment_id);
+
 -- lab_requests holds both the REQUEST and the RESULT in one place.
 -- This is the correct design because the report is patient PHI — it belongs to the
 -- patient, not to the lab organisation. Keeping it here means:
@@ -318,14 +440,22 @@ CREATE TABLE clinical.lab_requests (
   organization_id  INTEGER     REFERENCES public.organizations(id) ON DELETE SET NULL,
   consultation_id  INTEGER,
   test_description TEXT        NOT NULL,
+  report_type      VARCHAR(100),          -- e.g. one of the lab's own services_offered (Full Blood Count, X-Ray, ...)
   notes            TEXT,
   status           VARCHAR(20) NOT NULL DEFAULT 'pending'
-                   CHECK (status IN ('pending','in_progress','completed')),
+                   CHECK (status IN ('pending','in_progress','completed','rejected')),
   -- Result fields — populated by the lab when uploading the completed report
   report_file      VARCHAR(500),
   report_mimetype  VARCHAR(100),
   report_notes     TEXT,
   vitals_extracted BOOLEAN     NOT NULL DEFAULT FALSE,  -- TRUE once backend ran OCR/PDF extraction
+  -- Sample intake metadata — logged by the lab when it starts processing (pending -> in_progress)
+  sample_id            VARCHAR(100),
+  sample_collected_at  TIMESTAMPTZ,
+  -- Patient self-booking metadata (set at booking time, before the lab ever touches the request)
+  scheduled_at         TIMESTAMPTZ,     -- patient's preferred walk-in / home-collection date-time
+  referral_file        VARCHAR(500),    -- optional doctor's prescription/referral slip
+  referral_mimetype    VARCHAR(100),
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_lr_consultation FOREIGN KEY (consultation_id)
@@ -337,6 +467,26 @@ CREATE INDEX idx_lr_laboratory   ON clinical.lab_requests(laboratory_id);
 CREATE INDEX idx_lr_org          ON clinical.lab_requests(organization_id);
 CREATE INDEX idx_lr_consultation ON clinical.lab_requests(consultation_id);
 CREATE INDEX idx_lr_status       ON clinical.lab_requests(status);
+
+-- Free-text chat thread between patient and laboratory (and the ordering
+-- doctor, if any) on a single lab request — e.g. "please bring a clearer
+-- prescription". Owner ids are denormalized from the parent lab_requests row
+-- at insert time (same convention as lab_view_requests below) so RLS stays a
+-- simple column check instead of a subquery.
+CREATE TABLE clinical.lab_request_messages (
+  id             SERIAL      PRIMARY KEY,
+  lab_request_id INTEGER     NOT NULL REFERENCES clinical.lab_requests(id) ON DELETE CASCADE,
+  patient_id     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  doctor_id      INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
+  laboratory_id  INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_id      INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_role    VARCHAR(20) NOT NULL,
+  body           TEXT        NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_lrm_lab_request ON clinical.lab_request_messages(lab_request_id);
+CREATE INDEX idx_lrm_patient     ON clinical.lab_request_messages(patient_id);
+CREATE INDEX idx_lrm_laboratory  ON clinical.lab_request_messages(laboratory_id);
 
 CREATE TABLE clinical.lab_view_requests (
   id             SERIAL      PRIMARY KEY,
@@ -360,7 +510,7 @@ CREATE TABLE clinical.data_access_requests (
   doctor_id    INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   patient_id   INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   access_type  VARCHAR(50) NOT NULL
-               CHECK (access_type IN ('lab_reports','medical_history','personal_reports','contact_info','vitals')),
+               CHECK (access_type IN ('lab_reports','medical_history','personal_reports','contact_info','vitals','all')),
   reason       TEXT,
   status       VARCHAR(20) NOT NULL DEFAULT 'pending'
                CHECK (status IN ('pending','accepted','declined')),
@@ -371,6 +521,79 @@ CREATE TABLE clinical.data_access_requests (
 CREATE INDEX idx_dar_doctor  ON clinical.data_access_requests(doctor_id);
 CREATE INDEX idx_dar_patient ON clinical.data_access_requests(patient_id);
 CREATE INDEX idx_dar_status  ON clinical.data_access_requests(status);
+
+-- Doctor-initiated appointment booking: a patient books a specific date/time slot
+-- directly with a doctor and the doctor accepts/declines. organization_id is
+-- nullable: NULL means "no specific location tagged" (a private/general-practice
+-- doctor with no hospital affiliation), so existing rows need no backfill. A
+-- doctor can have a different weekly pattern per organization_id (different
+-- hours at different hospitals on the same weekday) — only the booked-slot
+-- busy-check stays doctor-wide across all orgs, since a doctor can't physically
+-- be in two places at once regardless of which location a slot belongs to.
+-- This is distinct from the per-organization tenant_<slug>.appointments table (that's
+-- an org's own front-desk record, seeded/aggregated for the admin dashboard only).
+-- Like data_access_requests, this is patient-doctor-owned relationship data, so it
+-- lives here rather than in any one organization's tenant schema.
+CREATE TABLE clinical.doctor_weekly_availability (
+  id                    SERIAL      PRIMARY KEY,
+  doctor_id             INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  organization_id       INTEGER     REFERENCES public.organizations(id) ON DELETE CASCADE,
+  day_of_week           SMALLINT    NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sunday .. 6=Saturday
+  start_time            TIME        NOT NULL,
+  end_time              TIME        NOT NULL,
+  slot_duration_minutes SMALLINT    NOT NULL DEFAULT 30 CHECK (slot_duration_minutes BETWEEN 5 AND 240),
+  is_active             BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (end_time > start_time)
+);
+CREATE INDEX idx_dwa_doctor ON clinical.doctor_weekly_availability(doctor_id);
+CREATE INDEX idx_dwa_org    ON clinical.doctor_weekly_availability(organization_id);
+
+-- Per-date exceptions to the weekly pattern: a doctor can close a normally-open day
+-- (holiday/leave) or open a normally-closed one (extra clinic hours) for one date,
+-- scoped per organization the same way the weekly pattern is.
+CREATE TABLE clinical.doctor_availability_overrides (
+  id              SERIAL      PRIMARY KEY,
+  doctor_id       INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  organization_id INTEGER     REFERENCES public.organizations(id) ON DELETE CASCADE,
+  override_date   DATE        NOT NULL,
+  is_available    BOOLEAN     NOT NULL,
+  reason          VARCHAR(255),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_dao_doctor_date ON clinical.doctor_availability_overrides(doctor_id, override_date);
+CREATE INDEX idx_dao_org         ON clinical.doctor_availability_overrides(organization_id);
+-- NULL-safe via COALESCE so two NULL-org overrides for the same doctor+date still collide.
+CREATE UNIQUE INDEX idx_dao_doctor_org_date
+  ON clinical.doctor_availability_overrides (doctor_id, COALESCE(organization_id, 0), override_date);
+
+CREATE TABLE clinical.doctor_appointments (
+  id               SERIAL      PRIMARY KEY,
+  doctor_id        INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  patient_id       INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  organization_id  INTEGER     REFERENCES public.organizations(id) ON DELETE SET NULL,
+  appointment_date DATE        NOT NULL,
+  start_time       TIME        NOT NULL,
+  end_time         TIME        NOT NULL,
+  reason           TEXT,
+  status           VARCHAR(20) NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','confirmed','declined','cancelled','completed')),
+  doctor_notes     TEXT,
+  responded_at     TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_da_doctor  ON clinical.doctor_appointments(doctor_id);
+CREATE INDEX idx_da_patient ON clinical.doctor_appointments(patient_id);
+CREATE INDEX idx_da_status  ON clinical.doctor_appointments(status);
+CREATE INDEX idx_da_date    ON clinical.doctor_appointments(appointment_date);
+CREATE INDEX idx_da_org     ON clinical.doctor_appointments(organization_id);
+-- One active (pending/confirmed) booking per doctor per date+time slot, doctor-wide
+-- across every organization — prevents double-booking regardless of location.
+CREATE UNIQUE INDEX idx_da_slot_unique ON clinical.doctor_appointments(doctor_id, appointment_date, start_time)
+  WHERE status IN ('pending','confirmed');
 
 CREATE TABLE clinical.patient_reports (
   id                 SERIAL       PRIMARY KEY,
@@ -428,15 +651,17 @@ CREATE TABLE clinical.patient_vitals (
   oxygen_saturation NUMERIC(5,2),
   -- Metadata
   source            VARCHAR(20)   NOT NULL DEFAULT 'manual'
-                    CHECK (source IN ('manual','lab_report')),
+                    CHECK (source IN ('manual','lab_report','patient_upload')),
   lab_request_id    INTEGER,                            -- soft ref: clinical.lab_requests(id)
+  patient_report_id INTEGER,                            -- soft ref: clinical.patient_reports(id)
   notes             TEXT,
   recorded_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_pv_patient    ON clinical.patient_vitals(patient_id);
-CREATE INDEX idx_pv_recorded   ON clinical.patient_vitals(recorded_at DESC);
-CREATE INDEX idx_pv_lab_req    ON clinical.patient_vitals(lab_request_id);
+CREATE INDEX idx_pv_patient      ON clinical.patient_vitals(patient_id);
+CREATE INDEX idx_pv_recorded     ON clinical.patient_vitals(recorded_at DESC);
+CREATE INDEX idx_pv_lab_req      ON clinical.patient_vitals(lab_request_id);
+CREATE INDEX idx_pv_patient_rept ON clinical.patient_vitals(patient_report_id);
 
 CREATE TABLE clinical.notifications (
   id         SERIAL       PRIMARY KEY,
@@ -503,8 +728,10 @@ DO $$
 DECLARE t text;
 BEGIN
   FOR t IN SELECT unnest(ARRAY[
-      'patient_profiles','medical_consultations','consultation_medicines',
-      'lab_requests','lab_view_requests','data_access_requests',
+      'patient_profiles','medical_consultations','consultation_medicines','prescription_assignments',
+      'prescription_assignment_messages',
+      'lab_requests','lab_request_messages','lab_view_requests','data_access_requests',
+      'doctor_weekly_availability','doctor_availability_overrides','doctor_appointments',
       'patient_reports','patient_vitals','notifications'])
   LOOP
     EXECUTE format('ALTER TABLE clinical.%I ENABLE ROW LEVEL SECURITY', t);
@@ -546,6 +773,39 @@ CREATE POLICY cm_all ON clinical.consultation_medicines FOR ALL USING (
   EXISTS (SELECT 1 FROM clinical.medical_consultations mc WHERE mc.id = consultation_id)
 );
 
+-- prescription_assignments: the pharmacist assigned to that row; the patient/doctor who owns
+-- the parent consultation (both can write — assign/cancel); admin. Written out explicitly
+-- rather than copied from mc_mod, which omits the pharmacist from write access entirely.
+CREATE POLICY pa_sel ON clinical.prescription_assignments FOR SELECT USING (
+  public.app_role() = 'admin'
+  OR pharmacist_id = public.app_uid()
+  OR EXISTS (SELECT 1 FROM clinical.medical_consultations c
+             WHERE c.id = prescription_assignments.consultation_id
+               AND (c.patient_id = public.app_uid() OR c.doctor_id = public.app_uid()))
+);
+CREATE POLICY pa_ins ON clinical.prescription_assignments FOR INSERT WITH CHECK (
+  public.app_role() = 'admin'
+  OR EXISTS (SELECT 1 FROM clinical.medical_consultations c
+             WHERE c.id = consultation_id
+               AND (c.patient_id = public.app_uid() OR c.doctor_id = public.app_uid()))
+);
+CREATE POLICY pa_upd_party ON clinical.prescription_assignments FOR UPDATE USING (
+  public.app_role() = 'admin'
+  OR EXISTS (SELECT 1 FROM clinical.medical_consultations c
+             WHERE c.id = prescription_assignments.consultation_id
+               AND (c.patient_id = public.app_uid() OR c.doctor_id = public.app_uid()))
+) WITH CHECK (true);
+CREATE POLICY pa_upd_pharmacist ON clinical.prescription_assignments FOR UPDATE USING (
+  pharmacist_id = public.app_uid()
+) WITH CHECK (pharmacist_id = public.app_uid());
+
+-- prescription_assignment_messages: the patient or pharmacist party; admin
+CREATE POLICY pam_all ON clinical.prescription_assignment_messages FOR ALL USING (
+  public.app_role() = 'admin' OR patient_id = public.app_uid() OR pharmacist_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR patient_id = public.app_uid() OR pharmacist_id = public.app_uid()
+);
+
 -- lab_requests: patient own; ordering doctor; the lab itself (by user id or org); doctor with accepted lab view; admin
 CREATE POLICY lr_sel ON clinical.lab_requests FOR SELECT USING (
   public.app_role() = 'admin'
@@ -576,8 +836,42 @@ CREATE POLICY lvr_all ON clinical.lab_view_requests FOR ALL USING (
   public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
 );
 
+-- lab_request_messages: the patient, the ordering doctor (if any), or the
+-- laboratory on the parent request; admin
+CREATE POLICY lrm_all ON clinical.lab_request_messages FOR ALL USING (
+  public.app_role() = 'admin' OR patient_id = public.app_uid()
+  OR doctor_id = public.app_uid() OR laboratory_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR patient_id = public.app_uid()
+  OR doctor_id = public.app_uid() OR laboratory_id = public.app_uid()
+);
+
 -- data_access_requests: the doctor or patient party; admin
 CREATE POLICY dar_all ON clinical.data_access_requests FOR ALL USING (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
+);
+
+-- doctor_weekly_availability / doctor_availability_overrides: readable by anyone
+-- (booking hours aren't PHI — a patient must see them to pick a slot); only the
+-- owning doctor (or admin) can create/change them.
+CREATE POLICY dwa_sel ON clinical.doctor_weekly_availability FOR SELECT USING (true);
+CREATE POLICY dwa_mod ON clinical.doctor_weekly_availability FOR ALL USING (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid()
+);
+
+CREATE POLICY dao_sel ON clinical.doctor_availability_overrides FOR SELECT USING (true);
+CREATE POLICY dao_mod ON clinical.doctor_availability_overrides FOR ALL USING (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid()
+) WITH CHECK (
+  public.app_role() = 'admin' OR doctor_id = public.app_uid()
+);
+
+-- doctor_appointments: the doctor or patient party; admin
+CREATE POLICY da_all ON clinical.doctor_appointments FOR ALL USING (
   public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
 ) WITH CHECK (
   public.app_role() = 'admin' OR doctor_id = public.app_uid() OR patient_id = public.app_uid()
@@ -624,7 +918,10 @@ CREATE POLICY notif_all ON clinical.notifications FOR ALL USING (
 -- 6. APPLICATION ROLE + GRANTS
 -- =============================================================================
 -- One login role the app uses for clinical + shared access. RLS does the row
--- filtering; this role is deliberately NOT a superuser (superusers bypass RLS).
+-- filtering; this role is deliberately NOT a superuser (superusers bypass RLS)
+-- and is never granted BYPASSRLS. This is the role the running server (and
+-- DATABASE_URL in production) should connect as — never the bootstrap/owner
+-- role used to run this file, and never a superuser.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'corehealth_app') THEN
@@ -640,6 +937,27 @@ GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA clinical TO core
 GRANT EXECUTE ON FUNCTION clinical.set_context(int,int,text) TO corehealth_app;
 -- Unqualified table names keep working because clinical is on the search_path:
 ALTER ROLE corehealth_app SET search_path = public, clinical;
+
+-- Second login role, used ONLY to run migrations (this file and anything under
+-- server/migrations/) and as the owner of public.provision_tenant() below. It
+-- is deliberately kept separate from corehealth_app: it is the one role allowed
+-- to CREATE SCHEMA / CREATE ROLE (needed for tenant_<slug> provisioning and for
+-- future migrations), while corehealth_app — what the running server actually
+-- connects as — never gets those rights. It is still NOT a superuser and is
+-- never granted BYPASSRLS, so it remains subject to clinical's RLS policies.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'corehealth_migrator') THEN
+    CREATE ROLE corehealth_migrator LOGIN PASSWORD 'change_me_in_prod' CREATEROLE;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  EXECUTE format('GRANT CREATE ON DATABASE %I TO corehealth_migrator', current_database());
+END $$;
+GRANT ALL ON SCHEMA public, clinical TO corehealth_migrator;
+ALTER ROLE corehealth_migrator SET search_path = public, clinical;
 
 -- =============================================================================
 -- 7. TENANT PROVISIONING  (physical schema-per-tenant for org-owned operations)
@@ -660,13 +978,19 @@ ALTER ROLE corehealth_app SET search_path = public, clinical;
 --   • Both memberships are tracked via organization_members.
 --   • A personal clinic is just an org with org_type = 'clinic' and
 --     owner_user_id pointing to the owning doctor.
+-- SECURITY DEFINER: runs with the privileges of its OWNER (corehealth_migrator,
+-- set below), not the caller's. This is what lets corehealth_app — the
+-- low-privilege role the running server connects as — call this function
+-- (CREATE SCHEMA / CREATE ROLE inside it) without itself needing CREATE on the
+-- database or CREATEROLE. search_path is pinned so a caller cannot hijack name
+-- resolution inside a SECURITY DEFINER function.
 CREATE OR REPLACE FUNCTION public.provision_tenant(
     p_slug     text,
     p_name     text,
     p_type     text,
     p_owner_id int DEFAULT NULL          -- doctor user_id, for clinic type only
 )
-  RETURNS text LANGUAGE plpgsql AS
+  RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, clinical, pg_temp AS
 $fn$
 DECLARE
   v_schema text := 'tenant_' || regexp_replace(lower(p_slug), '[^a-z0-9_]', '_', 'g');
@@ -902,6 +1226,14 @@ BEGIN
 END;
 $fn$;
 
+-- Ownership makes the SECURITY DEFINER above run as corehealth_migrator (which
+-- has CREATE on the database + CREATEROLE), not as whoever created the
+-- function. Only corehealth_app (the running server) and corehealth_migrator
+-- itself may call it — no other role, and not PUBLIC.
+ALTER FUNCTION public.provision_tenant(text, text, text, int) OWNER TO corehealth_migrator;
+REVOKE ALL ON FUNCTION public.provision_tenant(text, text, text, int) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.provision_tenant(text, text, text, int) TO corehealth_app, corehealth_migrator;
+
 -- =============================================================================
 -- Core Health – Seed Migration of existing sample data into the new layout
 -- Run AFTER corehealth_multitenant.sql, in the same database.
@@ -911,7 +1243,7 @@ SET search_path = public, clinical;
 
 -- 8.1 Users (same order -> ids 1..12, matching all downstream references)
 INSERT INTO public.users (name, email, password, role) VALUES
-  ('System Admin',        'admin@gmail.com',        '$2a$10$iRvGN/NlfdNmjgNU10wJNOYgd4nWE74bwQ11DuTzZR3bg5PZ5Vvee', 'admin'),
+  ('System Admin',        'admin@corehealth.lk',    '$2a$10$iRvGN/NlfdNmjgNU10wJNOYgd4nWE74bwQ11DuTzZR3bg5PZ5Vvee', 'admin'),
   ('Dr. Janaka Perera',   'dr.janaka@corehealth.lk','$2a$10$k0ySTFcD6IepYSDihy6OOuISQsBtIIhMwTeQ6w55DXomF7Qsit8GK', 'doctor'),
   ('Dr. Nimal Fernando',  'dr.nimal@corehealth.lk', '$2a$10$k0ySTFcD6IepYSDihy6OOuISQsBtIIhMwTeQ6w55DXomF7Qsit8GK', 'doctor'),
   ('Dr. Kamani Silva',    'dr.kamani@corehealth.lk','$2a$10$k0ySTFcD6IepYSDihy6OOuISQsBtIIhMwTeQ6w55DXomF7Qsit8GK', 'doctor'),
@@ -1067,6 +1399,14 @@ INSERT INTO clinical.consultation_medicines (consultation_id, medicine_name, dos
   (4,'Cetirizine 10mg','10mg','Once at night','5 days','manual'),
   (5,'Azithromycin 250mg','500mg','Once daily','5 days','manual'),
   (5,'Salbutamol 2mg','2mg','As needed','14 days','manual');
+
+-- Pharmacy assignments, mirroring the single assigned_pharmacist_id each demo consultation
+-- above already carries (consultation 4 has none — private self-recorded visit, no pharmacy).
+INSERT INTO clinical.prescription_assignments (consultation_id, pharmacist_id, assigned_by, status) VALUES
+  (1, 5, 2, 'dispensed'),
+  (2, 5, 3, 'active'),
+  (3, 6, 4, 'active'),
+  (5, 5, 2, 'active');
 
 -- 8.8 Lab requests (PHI -> clinical).
 -- The report file + notes for completed requests live HERE in clinical.lab_requests
