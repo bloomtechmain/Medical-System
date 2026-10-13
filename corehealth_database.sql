@@ -144,11 +144,19 @@ CREATE TABLE public.users (
   -- see authController's mfaSetup/mfaVerifySetup.
   mfa_secret   VARCHAR(64),
   mfa_enabled  BOOLEAN      NOT NULL DEFAULT FALSE,
+  -- PRO-25: users used to be hard-deleted, taking their clinical history with
+  -- them via ON DELETE CASCADE and leaving no way back from a mistaken click.
+  -- The application sets this instead of issuing DELETE and excludes
+  -- deleted_at IS NOT NULL rows from every read;
+  -- server/scripts/purgeSoftDeleted.ts removes them for real after the
+  -- retention window (see docs/data-retention.md).
+  deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_users_email ON public.users(email);
 CREATE INDEX idx_users_role  ON public.users(role);
+CREATE INDEX idx_users_deleted_at ON public.users(deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- SEC-17 (auth): the JWT access token is now short-lived (15m default, see
 -- JWT_EXPIRES_IN) and carries no server-side state, so there's still nothing
@@ -322,15 +330,21 @@ CREATE TABLE public.laboratory_profiles (
 -- same pattern as a laboratory's own test_catalog. See
 -- docs/sec-17-4-tenant-scope-inventory-plan.md for the full writeup.
 
--- 2.6 pg_trgm GIN indexes — every user/medicine/profile search in the app uses
+-- 2.6 pg_trgm GIN indexes — every user/profile search in the app uses
 -- ILIKE '%text%' (see userController.searchDoctors/searchPharmacists/
--- searchLaboratories/searchPatients and medicineController.getAll), which a
--- plain btree index (idx_users_email, idx_medicines_name above) cannot serve.
--- These let Postgres use a trigram GIN index for those lookups instead.
+-- searchLaboratories/searchPatients), which a plain btree index
+-- (idx_users_email above) cannot serve. These let Postgres use a trigram GIN
+-- index for those lookups instead.
+--
+-- The two medicine trigram indexes that used to be here were left behind by
+-- SEC-17 #4: it dropped public.medicines without removing them, so this file
+-- failed on a fresh install at "relation public.medicines does not exist" —
+-- for every install since. A pharmacy's catalogue now lives in its own tenant
+-- schema with the btree indexes provision_tenant() creates, which is adequate
+-- at per-pharmacy scale; the DB-06 concern was one shared table holding every
+-- pharmacy's stock.
 CREATE INDEX idx_users_name_trgm       ON public.users USING GIN (name gin_trgm_ops);
 CREATE INDEX idx_users_email_trgm      ON public.users USING GIN (email gin_trgm_ops);
-CREATE INDEX idx_medicines_name_trgm         ON public.medicines USING GIN (name gin_trgm_ops);
-CREATE INDEX idx_medicines_generic_name_trgm ON public.medicines USING GIN (generic_name gin_trgm_ops);
 CREATE INDEX idx_doctor_profiles_specialization_trgm       ON public.doctor_profiles USING GIN (specialization gin_trgm_ops);
 CREATE INDEX idx_doctor_profiles_hospital_affiliation_trgm ON public.doctor_profiles USING GIN (hospital_affiliation gin_trgm_ops);
 CREATE INDEX idx_pharmacist_profiles_pharmacy_name_trgm    ON public.pharmacist_profiles USING GIN (pharmacy_name gin_trgm_ops);
@@ -355,6 +369,72 @@ CREATE TABLE IF NOT EXISTS public.platform_stats_cache (
   completed_appointments  BIGINT       NOT NULL DEFAULT 0,
   computed_at             TIMESTAMPTZ  NOT NULL DEFAULT '-infinity'
 );
+
+-- 2.8 idempotency keys (PRO-12) — a double-clicked "complete sale" or a
+-- retried request used to create two sales and take stock twice. The client
+-- sends an Idempotency-Key header; the check-and-record happens inside the
+-- same transaction as the sale/order it protects, so two identical concurrent
+-- requests are decided by the unique index below rather than a check-then-act
+-- race. One shared table, not per-tenant: the (key, user, endpoint) triple is
+-- globally unique. See saleController.create / orderController.create.
+CREATE TABLE IF NOT EXISTS public.idempotency_keys (
+  id              BIGSERIAL    PRIMARY KEY,
+  idempotency_key VARCHAR(200) NOT NULL,
+  user_id         INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  endpoint        VARCHAR(100) NOT NULL,
+  resource_id     INTEGER      NOT NULL,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  UNIQUE (idempotency_key, user_id, endpoint)
+);
+CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created_at ON public.idempotency_keys(created_at);
+
+-- 2.9 audit log (MON-12) — append-only record of security- and
+-- privacy-relevant actions: logins and failed logins, password and role
+-- changes, deletions, and who viewed which patient's record. The last one is
+-- the reason this exists for a health application. BIGSERIAL because this
+-- table grows with every request that touches patient data, not with the
+-- number of users (PRO-04).
+--
+-- NULL actor_id is meaningful and must stay allowed: a failed login for an
+-- address that does not exist has no user to point at, and that is exactly
+-- the event worth keeping. ON DELETE SET NULL rather than CASCADE — deleting
+-- a user must never erase the record of what they did.
+--
+-- Append-only is enforced by privilege in section 6, not by convention.
+CREATE TABLE IF NOT EXISTS public.audit_log (
+  id              BIGSERIAL    PRIMARY KEY,
+  occurred_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  actor_id        INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
+  actor_email     VARCHAR(254),
+  actor_role      VARCHAR(30),
+  -- The admin behind an impersonated session, from the token's impersonatedBy
+  -- claim, so "the doctor did it" and "an admin did it while impersonating
+  -- the doctor" stay distinguishable after the fact.
+  impersonated_by INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
+  action          VARCHAR(60)  NOT NULL,
+  target_type     VARCHAR(40),
+  target_id       INTEGER,
+  -- The patient whose data was involved, when that is not the target itself.
+  patient_user_id INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
+  outcome         VARCHAR(20)  NOT NULL DEFAULT 'success'
+                  CHECK (outcome IN ('success', 'failure', 'denied')),
+  ip_address      INET,
+  user_agent      TEXT,
+  request_id      UUID,
+  -- Identifiers and changed field names only — never clinical content or
+  -- credentials. server/utils/auditLog.ts enforces that on the way in.
+  metadata        JSONB        NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor_time
+  ON public.audit_log (actor_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_patient_time
+  ON public.audit_log (patient_user_id, occurred_at DESC)
+  WHERE patient_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_audit_log_action_time
+  ON public.audit_log (action, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_failures
+  ON public.audit_log (occurred_at DESC)
+  WHERE outcome <> 'success';
 
 -- =============================================================================
 -- 3. CLINICAL SCHEMA — patient PHI, shared but RLS-protected
@@ -400,6 +480,8 @@ CREATE TABLE clinical.medical_consultations (
                          -- 'completed' is a separate, unused-by-UI terminal value kept for
                          -- forward compatibility with an eventual "treatment closed" action.
                          CHECK (status IN ('active','preparing','dispensed','delivered','completed')),
+  -- PRO-25: clinical records are soft-deleted, not removed. See public.users.
+  deleted_at             TIMESTAMPTZ,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -645,6 +727,8 @@ CREATE TABLE clinical.patient_reports (
   file_path          VARCHAR(500) NOT NULL,
   file_mimetype      VARCHAR(100),
   file_original_name VARCHAR(255),
+  -- PRO-25: clinical records are soft-deleted, not removed. See public.users.
+  deleted_at         TIMESTAMPTZ,
   created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -971,6 +1055,22 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA clinical TO core
 GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA public   TO corehealth_app;
 GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA clinical TO corehealth_app;
 GRANT EXECUTE ON FUNCTION clinical.set_context(int,int,text) TO corehealth_app;
+
+-- MON-12: the audit log is append-only, enforced here rather than by
+-- convention. The blanket grant above already gave corehealth_app UPDATE and
+-- DELETE on every public table including this one, so these two statements
+-- must come after it. A bug — or someone who has taken over the application's
+-- credentials — then cannot rewrite or erase history. Retention trimming is a
+-- separate, deliberate act performed by corehealth_migrator (COMP-04).
+REVOKE UPDATE, DELETE ON public.audit_log FROM corehealth_app;
+
+-- PERF-06: pg-boss (server/queue/boss.ts) creates and migrates its own tables
+-- inside this schema on boss.start(), so the app role needs CREATE here. The
+-- queue is what moved OCR and PDF extraction out of the request path and gave
+-- that work real retries instead of setImmediate's "lost on restart".
+CREATE SCHEMA IF NOT EXISTS pgboss;
+GRANT ALL ON SCHEMA pgboss TO corehealth_app;
+
 -- Unqualified table names keep working because clinical is on the search_path:
 ALTER ROLE corehealth_app SET search_path = public, clinical;
 
@@ -993,6 +1093,16 @@ BEGIN
   EXECUTE format('GRANT CREATE ON DATABASE %I TO corehealth_migrator', current_database());
 END $$;
 GRANT ALL ON SCHEMA public, clinical TO corehealth_migrator;
+-- GRANT ALL ON SCHEMA grants USAGE and CREATE on the *schema* — it does not
+-- grant anything on the tables inside it. Without the table grants below,
+-- provision_tenant() fails with "permission denied for table organizations"
+-- the first time it runs: it is SECURITY DEFINER owned by corehealth_migrator
+-- (see the end of section 7), so its INSERT INTO public.organizations is
+-- executed with this role's privileges, not the caller's. That breaks both
+-- public organisation self-registration and the provision_tenant() calls in
+-- this file's own seed section.
+GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public, clinical TO corehealth_migrator;
+GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA public, clinical TO corehealth_migrator;
 ALTER ROLE corehealth_migrator SET search_path = public, clinical;
 
 -- =============================================================================
@@ -1152,12 +1262,24 @@ BEGIN
         expiry_date    DATE,
         supplier_id    INTEGER       REFERENCES %I.suppliers(id) ON DELETE SET NULL,
         is_active      BOOLEAN       NOT NULL DEFAULT TRUE,
+        -- PRO-25 (soft delete) and PRO-29 (non-negative money/stock) were
+        -- added to the then-shared public.medicines by migration 002, which
+        -- landed *before* SEC-17 #4 moved medicines into each tenant's own
+        -- schema. Without them here, the per-tenant copy is missing the
+        -- deleted_at column every read in medicineController.ts filters on
+        -- ("WHERE m.deleted_at IS NULL"), and loses the constraints that stop
+        -- stock and prices going negative.
+        deleted_at     TIMESTAMPTZ,
         created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-        updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+        updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        CONSTRAINT medicines_price_nonneg      CHECK (price >= 0),
+        CONSTRAINT medicines_cost_price_nonneg CHECK (cost_price >= 0),
+        CONSTRAINT medicines_stock_nonneg      CHECK (stock_quantity >= 0)
       )$t$, v_schema, v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_name     ON %I.medicines(name)',     v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_category ON %I.medicines(category)', v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_supplier ON %I.medicines(supplier_id)', v_schema);
+    EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_deleted_at ON %I.medicines(deleted_at) WHERE deleted_at IS NOT NULL', v_schema);
 
     -- Stock purchase orders from suppliers
     EXECUTE format($t$
