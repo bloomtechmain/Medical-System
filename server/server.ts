@@ -13,7 +13,7 @@ import { ALLOWED_ORIGINS } from './config/corsOrigins';
 import errorHandler from './middleware/errorHandler';
 import validate from './middleware/validate';
 import { generalApiLimiter, publicFormLimiter, searchLimiter } from './middleware/rateLimiter';
-import { isS3Enabled, streamUploadToResponse } from './utils/fileStorage';
+import { isS3Enabled } from './utils/fileStorage';
 import { startQueue, stopQueue } from './queue/boss';
 import { register as registerLabReportVitalsWorker } from './queue/jobs/extractLabReportVitals';
 import { register as registerPatientReportVitalsWorker } from './queue/jobs/extractPatientReportVitals';
@@ -205,7 +205,14 @@ if (clientDist) {
   app.use(express.static(clientDist));
   // Express 5 (path-to-regexp v8) rejects a bare '*' path — it has to be a
   // *named* wildcard. Same SPA fallback as before, new spelling.
-  app.get('/*splat', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  //
+  // generalApiLimiter: this is an unauthenticated handler that touches the
+  // filesystem on every request, and unlike /api it had no limit at all
+  // (flagged by CodeQL as js/missing-rate-limiting). It only ever serves one
+  // fixed file, so the ceiling is generous enough to be invisible to real
+  // navigation — static assets are served by express.static above and never
+  // reach here.
+  app.get('/*splat', generalApiLimiter, (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
 app.use(errorHandler);

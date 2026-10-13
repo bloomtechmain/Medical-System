@@ -12,7 +12,11 @@ interface AppError extends Error {
 // different case — those messages are safe and meant to reach the client.
 const errorHandler = (err: AppError, req: Request, res: Response, _next: NextFunction): void => {
   const status = err.status || 500;
-  console.error(`[${req.method}] ${req.path} → ${err.message}`, err.stack);
+  // req.method/req.path are attacker-controlled, so they must never sit in
+  // console.error's *format string* position — a '%s' in the URL would
+  // consume the next argument, and a newline would let a request forge
+  // extra log lines. Passing them as arguments makes them inert data.
+  console.error('[%s] %s → %s', req.method, req.path, err.message, err.stack);
 
   const clientMessage = status === 500 ? 'Internal server error' : (err.message || 'Internal server error');
 
