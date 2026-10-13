@@ -133,6 +133,33 @@ const getTenantSchema = async (userId: number): Promise<string | null> => {
   return schema;
 };
 
+// SEC-17 #4: medicines/suppliers moved from one shared public table into
+// each pharmacy's own tenant schema. A pharmacist is always scoped to their
+// own org (getTenantSchema, same as orders/sales). Admin has no pharmacy
+// membership of their own but legitimately needs to manage any pharmacy's
+// catalog (there's an /admin/medicines page) — they must pass an explicit
+// organization_id rather than getting an implicit "first org" or a merged
+// view, so a stray/mistyped id fails closed (404) instead of silently
+// showing the wrong pharmacy's stock and cost_price.
+const resolvePharmacySchema = async (
+  actor: { id: number; role: string },
+  organizationId: number | undefined
+): Promise<{ schema: string } | { error: string; status: number }> => {
+  if (actor.role === 'admin') {
+    if (!organizationId) return { error: 'organization_id is required', status: 400 };
+    const { rows } = await pool.query(
+      `SELECT schema_name FROM public.organizations
+       WHERE id = $1 AND org_type = 'pharmacy' AND schema_name IS NOT NULL`,
+      [organizationId]
+    );
+    if (!rows.length) return { error: 'Pharmacy organization not found', status: 404 };
+    return { schema: rows[0].schema_name };
+  }
+  const schema = await getTenantSchema(actor.id);
+  if (!schema) return { error: 'No pharmacy organization is linked to this account.', status: 400 };
+  return { schema };
+};
+
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const connectDB = async (retries = 8, baseDelay = 3000): Promise<void> => {
@@ -157,5 +184,16 @@ const connectDB = async (retries = 8, baseDelay = 3000): Promise<void> => {
   }
 };
 
-export { pool, connectDB, queryAs, getTenantSchema, ssl as dbSsl };
+// SEC-17 (auth): called wherever a user is deactivated (admin toggle/edit,
+// org suspension) so a revoked account's outstanding refresh tokens die
+// immediately instead of staying silently renewable until their natural
+// 7-day expiry — the thing a short-lived access token alone can't fix.
+const revokeRefreshTokens = async (userId: number): Promise<void> => {
+  await pool.query(
+    'UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
+    [userId]
+  );
+};
+
+export { pool, connectDB, queryAs, getTenantSchema, revokeRefreshTokens, resolvePharmacySchema, ssl as dbSsl };
 export type { RLSActor };

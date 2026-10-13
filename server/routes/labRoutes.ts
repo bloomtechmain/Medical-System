@@ -3,7 +3,7 @@ import path from 'path';
 import multer from 'multer';
 import { body } from 'express-validator';
 import { protect, authorize } from '../middleware/auth';
-import { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove } from '../controllers/labController';
+import { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove, serveReportFile, serveReferralFile } from '../controllers/labController';
 import { getAll as getMessages, create as createMessage } from '../controllers/labRequestMessagesController';
 import { uploadLimiter } from '../middleware/rateLimiter';
 import { verifyUploadSignature } from '../utils/uploadSecurity';
@@ -57,6 +57,9 @@ const createDirectValidators = [
 
 router.get('/',    protect, authorize('doctor', 'patient', 'laboratory', 'admin'), getAll);
 router.get('/:id', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), getOne);
+// SEC-28: replaces the removed unauthenticated /uploads/... static route.
+router.get('/:id/report-file',   protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReportFile);
+router.get('/:id/referral-file', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReferralFile);
 router.post('/',   protect, authorize('doctor', 'patient'), uploadLimiter, uploadReferral.single('referral'), verifyUploadSignature(), createValidators, validate, create);
 router.post('/direct', protect, authorize('laboratory'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), createDirectValidators, validate, createDirect);
 router.patch('/:id/report',  protect, authorize('laboratory'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), uploadReport);

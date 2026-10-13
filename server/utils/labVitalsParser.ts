@@ -333,12 +333,19 @@ export function extractVitalsFromText(rawText: string): ParsedVitals {
   return v;
 }
 
+/** Accepts either a file path or an already-in-memory buffer (ARCH-06: uploads
+ *  may come straight from a multer memory buffer, not a local-disk path). */
+async function resolveBuffer(input: string | Buffer): Promise<Buffer> {
+  if (Buffer.isBuffer(input)) return input;
+  const fs = await import('fs');
+  return fs.readFileSync(input);
+}
+
 /** Extract text from a PDF using pdfjs-dist (handles text-based PDFs). */
-export async function extractTextFromPDF(filePath: string): Promise<string> {
+export async function extractTextFromPDF(input: string | Buffer): Promise<string> {
   try {
-    const fs  = await import('fs');
     const pdf = await import('pdfjs-dist/legacy/build/pdf.mjs') as any;
-    const buf = fs.readFileSync(filePath);
+    const buf = await resolveBuffer(input);
 
     const doc = await pdf.getDocument({
       data: new Uint8Array(buf),
@@ -370,12 +377,10 @@ async function ocrRecognize(input: string | Buffer): Promise<string> {
   } catch { return ''; }
 }
 
-/** Run OCR on an image file; returns '' for non-image extensions. */
-async function runOCROnImage(filePath: string): Promise<string> {
-  const path = await import('path');
-  const ext  = path.extname(filePath).toLowerCase();
-  if (!['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'].includes(ext)) return '';
-  return ocrRecognize(filePath);
+/** Run OCR on an image; returns '' for non-image extensions. `ext` includes the dot. */
+async function runOCROnImage(input: string | Buffer, ext: string): Promise<string> {
+  if (!['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'].includes(ext.toLowerCase())) return '';
+  return ocrRecognize(input);
 }
 
 // A scanned PDF (e.g. a phone/scanner-app export) has no text layer at all —
@@ -407,11 +412,10 @@ async function renderPdfPageToPNG(doc: any, pageNum: number, scale = 2.0): Promi
 }
 
 /** Fallback for scanned (image-only) PDFs: rasterize each page and OCR it. */
-async function extractTextFromScannedPDF(filePath: string): Promise<string> {
+async function extractTextFromScannedPDF(input: string | Buffer): Promise<string> {
   try {
-    const fs  = await import('fs');
     const pdf = await import('pdfjs-dist/legacy/build/pdf.mjs') as any;
-    const buf = fs.readFileSync(filePath);
+    const buf = await resolveBuffer(input);
 
     const doc = await pdf.getDocument({
       data: new Uint8Array(buf),
@@ -436,14 +440,18 @@ async function extractTextFromScannedPDF(filePath: string): Promise<string> {
 /**
  * Extract text from any report file: pdfjs for text-based PDFs, falling back
  * to rendering + OCR for scanned/image-only PDFs, and direct OCR for images.
+ *
+ * `input` can be a local file path or an in-memory buffer (ARCH-06 — uploads
+ * may come straight from a multer memory buffer, never touching disk). When
+ * passing a buffer, `extHint` (e.g. ".pdf") must be supplied since there's no
+ * path to infer it from.
  */
-export async function extractReportText(filePath: string): Promise<string> {
-  const path = await import('path');
-  const ext  = path.extname(filePath).toLowerCase();
+export async function extractReportText(input: string | Buffer, extHint?: string): Promise<string> {
+  const ext = extHint ?? (typeof input === 'string' ? (await import('path')).extname(input).toLowerCase() : '');
   if (ext === '.pdf') {
-    const text = await extractTextFromPDF(filePath);
+    const text = await extractTextFromPDF(input);
     if (text.trim().length >= 20) return text;
-    return extractTextFromScannedPDF(filePath);
+    return extractTextFromScannedPDF(input);
   }
-  return runOCROnImage(filePath);
+  return runOCROnImage(input, ext);
 }

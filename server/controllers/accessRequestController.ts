@@ -1,8 +1,8 @@
 import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
+import { streamUploadToResponse } from '../utils/fileStorage';
 
 // data_access_requests / patient_profiles / medical_consultations /
 // lab_requests / patient_reports / patient_vitals all live in the
@@ -149,7 +149,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 const getPatientView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const doctorId  = req.user.id;
-    const patientId = parseInt(req.params.patientId, 10);
+    const patientId = parseInt(String(req.params.patientId), 10);
 
     const { rows: ptRows } = await queryAs(actor(req), `
       SELECT u.id, u.name, u.email, u.created_at,
@@ -271,8 +271,8 @@ const searchPatients = async (req: Request, res: Response, next: NextFunction): 
 const serveLabReportFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const doctorId     = req.user.id;
-    const patientId    = parseInt(req.params.patientId, 10);
-    const labRequestId = parseInt(req.params.labRequestId, 10);
+    const patientId    = parseInt(String(req.params.patientId), 10);
+    const labRequestId = parseInt(String(req.params.labRequestId), 10);
 
     const { rows: accessRows } = await queryAs(actor(req),
       `SELECT id FROM data_access_requests
@@ -297,17 +297,11 @@ const serveLabReportFile = async (req: Request, res: Response, next: NextFunctio
       res.status(404).json({ message: 'Report file not yet available.' }); return;
     }
 
-    const filePath = path.join(__dirname, '../uploads/lab-reports', labReq.report_file);
-    if (!fs.existsSync(filePath)) {
-      res.status(404).json({ message: 'File not found on disk.' }); return;
-    }
-
-    res.setHeader('Content-Type', labReq.report_mimetype || 'application/octet-stream');
-    res.setHeader(
-      'Content-Disposition',
-      `inline; filename="lab-report-${labRequestId}${path.extname(labReq.report_file)}"`
-    );
-    res.sendFile(filePath);
+    const found = await streamUploadToResponse(res, 'lab-reports', labReq.report_file, {
+      mimetype: labReq.report_mimetype || 'application/octet-stream',
+      originalName: `lab-report-${labRequestId}${path.extname(labReq.report_file)}`,
+    });
+    if (!found) res.status(404).json({ message: 'Report file not found.' });
   } catch (err) { next(err); }
 };
 

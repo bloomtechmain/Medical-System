@@ -13,6 +13,8 @@ const Landing               = lazy(() => import('./pages/Landing'));
 const Login                 = lazy(() => import('./pages/Login'));
 const Register               = lazy(() => import('./pages/Register'));
 const OrgRegister           = lazy(() => import('./pages/OrgRegister'));
+const ForgotPassword        = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword         = lazy(() => import('./pages/ResetPassword'));
 const HospitalDashboard     = lazy(() => import('./pages/HospitalDashboard'));
 const ClinicDashboard       = lazy(() => import('./pages/ClinicDashboard'));
 const AdminDashboard        = lazy(() => import('./pages/AdminDashboard'));
@@ -98,6 +100,8 @@ export default function App() {
       <Route path="/login"      element={token && user?.role ? <RoleHome /> : <Login />} />
       <Route path="/register"   element={token && user?.role ? <RoleHome /> : <Register />} />
       <Route path="/org-register" element={token && user?.role ? <RoleHome /> : <OrgRegister />} />
+      <Route path="/forgot-password" element={token && user?.role ? <RoleHome /> : <ForgotPassword />} />
+      <Route path="/reset-password"  element={token && user?.role ? <RoleHome /> : <ResetPassword />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={<PrivateRoute roles={['admin']}><Layout /></PrivateRoute>}>

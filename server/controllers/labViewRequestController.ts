@@ -1,8 +1,8 @@
 import path from 'path';
-import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
+import { streamUploadToResponse } from '../utils/fileStorage';
 
 // lab_requests / lab_view_requests live in the `clinical` schema behind
 // row-level security — every query against them must carry the acting
@@ -176,12 +176,11 @@ const serveFile = async (req: Request, res: Response, next: NextFunction): Promi
     if (!viewReq) { res.status(403).json({ message: 'Access denied or request not accepted.' }); return; }
     if (!viewReq.report_file) { res.status(404).json({ message: 'Report file not yet available.' }); return; }
 
-    const filePath = path.join(__dirname, '../uploads/lab-reports', viewReq.report_file);
-    if (!fs.existsSync(filePath)) { res.status(404).json({ message: 'File not found on disk.' }); return; }
-
-    res.setHeader('Content-Type', viewReq.report_mimetype || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="lab-report-${viewReq.lab_request_id}${path.extname(viewReq.report_file)}"`);
-    res.sendFile(filePath);
+    const found = await streamUploadToResponse(res, 'lab-reports', viewReq.report_file, {
+      mimetype: viewReq.report_mimetype || 'application/octet-stream',
+      originalName: `lab-report-${viewReq.lab_request_id}${path.extname(viewReq.report_file)}`,
+    });
+    if (!found) res.status(404).json({ message: 'Report file not found.' });
   } catch (err) { next(err); }
 };
 

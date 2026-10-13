@@ -7,6 +7,20 @@ on:
     branches: [main]
 
 jobs:
+  # SEC-07: catches secrets committed anywhere in history, not just the
+  # current tree — a .env accidentally added-then-removed still leaks via
+  # `git log`/`git show` otherwise.
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   check-server:
     name: Server — Lint & Build
     runs-on: ubuntu-latest
@@ -41,22 +55,16 @@ jobs:
         working-directory: ./server
         run: npm ci
 
-      # WARN-19: nothing reported known vulnerabilities in dependencies —
-      # no scan in the pipeline and no update bot (the update-bot half is
-      # .github/dependabot.yml, added separately). continue-on-error for the
-      # same reason as lint below: this repo's transitive dependencies
-      # already carry pre-existing findings unrelated to any one change, so
-      # a hard gate here would block every PR on pre-existing issues instead
-      # of surfacing new ones for review.
-      - name: Audit server dependencies for known vulnerabilities
+      # SEC-18/WARN-19: critical is a hard gate (no continue-on-error) —
+      # true criticals are rare enough that this doesn't generate the kind
+      # of pre-existing-noise problem a `high` threshold would.
+      - name: Audit server dependencies (critical)
         working-directory: ./server
-        run: npm audit --audit-level=high
-        continue-on-error: true
+        run: npm audit --audit-level=critical
 
       - name: Lint server
         working-directory: ./server
         run: npm run lint
-        continue-on-error: true
 
       - name: Build server
         working-directory: ./server
@@ -111,17 +119,13 @@ jobs:
         working-directory: ./client
         run: npm ci
 
-      # WARN-19 — see the server job's equivalent step for why this doesn't
-      # fail the build.
-      - name: Audit client dependencies for known vulnerabilities
+      - name: Audit client dependencies (critical)
         working-directory: ./client
-        run: npm audit --audit-level=high
-        continue-on-error: true
+        run: npm audit --audit-level=critical
 
       - name: Lint client
         working-directory: ./client
         run: npm run lint
-        continue-on-error: true
 
       - name: Build client
         working-directory: ./client
@@ -129,3 +133,35 @@ jobs:
         env:
           VITE_API_URL: http://localhost:5000
           VITE_WS_URL: ws://localhost:5000
+
+  # SEC-19: scans the actual built images, not just source dependencies —
+  # catches vulnerable OS packages baked into the base image too.
+  image-scan:
+    name: Docker image scan (Trivy)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: server
+            context: ./server
+          - name: client
+            context: ./client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: false
+          load: true
+          tags: corehealth-${{ matrix.name }}:ci
+
+      - name: Scan ${{ matrix.name }} image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: corehealth-${{ matrix.name }}:ci
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true

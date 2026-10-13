@@ -38,7 +38,7 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 
     const items = await pool.query(
       `SELECT si.*, m.name AS medicine_name FROM "${schema}".sale_items si
-       JOIN medicines m ON si.medicine_id = m.id WHERE si.sale_id = $1`,
+       JOIN "${schema}".medicines m ON si.medicine_id = m.id WHERE si.sale_id = $1`,
       [req.params.id]
     );
     res.json({ ...sale.rows[0], items: items.rows });
@@ -102,7 +102,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     // PRO-06 point 1: price comes from the database, never from the client —
     // the request's unit_price (if sent) is ignored entirely.
     const { rows: stockRows } = await client.query<{ id: number; stock_quantity: number; price: string }>(
-      'SELECT id, stock_quantity, price FROM medicines WHERE id = ANY($1::int[]) FOR UPDATE',
+      `SELECT id, stock_quantity, price FROM "${schema}".medicines WHERE id = ANY($1::int[]) FOR UPDATE`,
       [uniqueMedicineIds]
     );
     const byId = new Map<number, { id: number; stock_quantity: number; price: string }>(
@@ -134,7 +134,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       [saleId, medicineIds, quantities, unitPrices]
     );
     await client.query(
-      `UPDATE medicines m SET stock_quantity = stock_quantity - v.qty
+      `UPDATE "${schema}".medicines m SET stock_quantity = stock_quantity - v.qty
        FROM UNNEST($1::int[], $2::int[]) AS v(id, qty)
        WHERE m.id = v.id`,
       [uniqueMedicineIds, combinedQuantities]
@@ -188,7 +188,7 @@ const getAnalytics = async (req: Request, res: Response, next: NextFunction): Pr
         SELECT m.id, m.name, SUM(si.quantity) AS quantity, SUM(si.quantity * si.unit_price) AS revenue
         FROM "${schema}".sale_items si
         JOIN "${schema}".sales s ON si.sale_id = s.id
-        JOIN medicines m ON si.medicine_id = m.id
+        JOIN "${schema}".medicines m ON si.medicine_id = m.id
         WHERE s.sold_at >= NOW() - INTERVAL '30 days'
         GROUP BY m.id, m.name
         ORDER BY revenue DESC
@@ -199,7 +199,7 @@ const getAnalytics = async (req: Request, res: Response, next: NextFunction): Pr
                COALESCE(SUM(si.quantity * m.cost_price), 0) AS cost
         FROM "${schema}".sale_items si
         JOIN "${schema}".sales s ON si.sale_id = s.id
-        JOIN medicines m ON si.medicine_id = m.id
+        JOIN "${schema}".medicines m ON si.medicine_id = m.id
         WHERE s.sold_at >= NOW() - INTERVAL '30 days'
       `),
       pool.query(`SELECT COALESCE(SUM(total_amount), 0) AS total FROM "${schema}".sales WHERE sold_at::date = CURRENT_DATE`),

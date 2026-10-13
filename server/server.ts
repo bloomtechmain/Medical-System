@@ -2,12 +2,14 @@ import 'dotenv/config';
 import http from 'http';
 import fs from 'fs';
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
 import path from 'path';
 import { body } from 'express-validator';
 import { connectDB } from './config/db';
 import { initSocket } from './config/socket';
+import { ALLOWED_ORIGINS } from './config/corsOrigins';
 import errorHandler from './middleware/errorHandler';
 import validate from './middleware/validate';
 import { generalApiLimiter, publicFormLimiter, searchLimiter } from './middleware/rateLimiter';
@@ -17,7 +19,32 @@ import { register as registerLabReportVitalsWorker } from './queue/jobs/extractL
 import { register as registerPatientReportVitalsWorker } from './queue/jobs/extractPatientReportVitals';
 import { register as registerConsultationOcrWorker } from './queue/jobs/extractConsultationMedicines';
 
+// Fail fast with a clear message instead of starting in a broken state
+// (ARCH-04) — e.g. a missing JWT_SECRET would otherwise only surface later,
+// confusingly, the first time someone tries to log in.
+const requireEnv = (names: string[]): void => {
+  const missing = names.filter(n => !process.env[n]);
+  if (missing.length) {
+    console.error(`Missing required environment variable(s): ${missing.join(', ')}`);
+    process.exit(1);
+  }
+};
+// SEC-21: an unset NODE_ENV previously meant stack traces and raw error
+// detail went to the client by default (errorHandler.ts's check only hides
+// them when NODE_ENV === 'production', so "unset" silently behaved like
+// development in production). Require it explicitly instead of assuming.
+const VALID_NODE_ENVS = ['development', 'production', 'test'];
+if (!VALID_NODE_ENVS.includes(process.env.NODE_ENV || '')) {
+  console.error(`NODE_ENV must be one of: ${VALID_NODE_ENVS.join(', ')} (got: ${process.env.NODE_ENV || '<unset>'})`);
+  process.exit(1);
+}
+
+requireEnv(['JWT_SECRET']);
+requireEnv(process.env.DATABASE_URL ? [] : ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']);
+if (process.env.NODE_ENV === 'production') requireEnv(['CLIENT_URL']);
+
 const app    = express();
+app.disable('x-powered-by'); // SEC-21: don't advertise the framework/version
 const server = http.createServer(app);
 initSocket(server);
 
@@ -28,12 +55,26 @@ initSocket(server);
 // deployment (default 1 hop, the common single-reverse-proxy case).
 app.set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS || '1', 10));
 
-const ALLOWED_ORIGINS: (string | undefined)[] = [
-  process.env.CLIENT_URL,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-];
+// SEC-20: no security headers at all previously (HSTS, nosniff, frame
+// options, CSP). This server is mostly a JSON API — CSP has no real effect
+// there — but it also serves the built client as a fallback (see
+// `clientDist` below), where it matters for real. The CSP intentionally
+// stays broad on connect-src/img-src rather than pinning this build to one
+// backend domain, matching the same "one image, any environment" goal as
+// the runtime config.js (ARCH-04) — a stricter, environment-specific CSP
+// is set on the client's own static hosting instead (client/public/serve.json).
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https:', 'wss:'],
+    },
+  },
+}));
 
 app.use(cors({
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) =>
@@ -72,30 +113,14 @@ if (!isS3Enabled()) {
   });
 }
 
-// PRO-17: uploaded files (prescriptions, lab reports, patient reports — all
-// potentially patient PHI) are public static content with no auth check and
-// were served with no cache header at all. no-store is a safe, no-risk
-// improvement; replacing direct static serving with an authenticated
-// per-file endpoint is the real fix and is a larger change (every client
-// page linking straight to `/uploads/...` would need to switch to an API
-// call) — tracked as follow-up, not done here.
-if (isS3Enabled()) {
-  // Same URL shape as the static mount below (/uploads/<subdir>/<filename>)
-  // so no client change is needed — only the backing store moves to S3.
-  app.get('/uploads/:subdir/:filename', async (req, res, next) => {
-    try {
-      res.setHeader('Cache-Control', 'no-store');
-      const found = await streamUploadToResponse(res, req.params.subdir, req.params.filename);
-      if (!found) res.status(404).end();
-    } catch (err) { next(err); }
-  });
-} else {
-  const noStoreUploads = express.static(path.join(__dirname, 'uploads'), {
-    setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
-  });
-  app.use('/uploads', noStoreUploads);
-  app.use('/uploads/lab-reports', noStoreUploads);
-}
+// SEC-28: the old /uploads/:subdir/:filename route (both the S3 streaming
+// variant and the local express.static mount) served any file — prescriptions,
+// lab reports, patient reports, all potentially PHI — to anyone with no login
+// check at all, with guessable-ish filenames. Removed entirely. Files are now
+// only reachable through authenticated, ownership-checked routes: GET
+// /api/consultations/:id/prescription-file, GET /api/lab-requests/:id/report-file,
+// GET /api/lab-requests/:id/referral-file, GET /api/patient-reports/:id/file,
+// plus the pre-existing access-requests/lab-view-requests equivalents.
 
 import { registerOrganization, searchOwnerCandidates, searchHospitalsClinics } from './controllers/organizationController';
 
@@ -106,7 +131,7 @@ const registerOrgValidators = [
   body('owner_user_id').optional({ nullable: true }).isInt({ min: 1 }),
   body('owner_name').optional({ nullable: true }).isString().isLength({ max: 150 }),
   body('owner_email').optional({ nullable: true }).isEmail().isLength({ max: 254 }).normalizeEmail(),
-  body('owner_password').optional({ nullable: true }).isLength({ min: 6, max: 128 }),
+  body('owner_password').optional({ nullable: true }).isLength({ min: 10, max: 128 }),
   body('specializations').optional({ nullable: true }).isArray({ max: 30 }),
   body('specializations.*').optional().isString().isLength({ max: 100 }),
 ];
@@ -178,7 +203,9 @@ console.log(`[boot] client/dist: ${clientDist ?? 'NOT FOUND'}`);
 
 if (clientDist) {
   app.use(express.static(clientDist));
-  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  // Express 5 (path-to-regexp v8) rejects a bare '*' path — it has to be a
+  // *named* wildcard. Same SPA fallback as before, new spelling.
+  app.get('/*splat', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
 app.use(errorHandler);

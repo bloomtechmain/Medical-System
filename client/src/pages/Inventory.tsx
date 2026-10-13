@@ -5,12 +5,26 @@ import { formatCurrency, formatDate } from '../utils/helpers';
 import PageHeader from '../components/common/PageHeader';
 import StatCard from '../components/common/StatCard';
 import Table from '../components/common/Table';
+import { usePharmacyScope } from '../hooks/usePharmacyScope';
 
 export default function Inventory() {
   const { t } = useTranslation('pharmacist');
-  const { data: summary } = useQuery({ queryKey: ['inventory-summary'], queryFn: inventoryApi.summary });
-  const { data: lowStock = [], isLoading: loadingLow } = useQuery({ queryKey: ['low-stock'], queryFn: inventoryApi.lowStock });
-  const { data: expiring = [], isLoading: loadingExp } = useQuery({ queryKey: ['expiring'], queryFn: () => inventoryApi.expiring(60) });
+  const { isAdmin, orgId, setOrgId, pharmacyOrgs, ready } = usePharmacyScope();
+  const { data: summary } = useQuery({
+    queryKey: ['inventory-summary', orgId],
+    queryFn: () => inventoryApi.summary(orgId || undefined),
+    enabled: ready,
+  });
+  const { data: lowStock = [], isLoading: loadingLow } = useQuery({
+    queryKey: ['low-stock', orgId],
+    queryFn: () => inventoryApi.lowStock(orgId || undefined),
+    enabled: ready,
+  });
+  const { data: expiring = [], isLoading: loadingExp } = useQuery({
+    queryKey: ['expiring', orgId],
+    queryFn: () => inventoryApi.expiring(60, orgId || undefined),
+    enabled: ready,
+  });
 
   const lowStockCols = [
     { key: 'name', header: t('inventory.columns.medicine') },
@@ -35,6 +49,20 @@ export default function Inventory() {
     <div>
       <PageHeader title={t('inventory.pageTitle')} description={t('inventory.pageDescription')} />
 
+      {isAdmin && (
+        <div className="mb-4">
+          <label className="label">Pharmacy</label>
+          <select className="input max-w-xs" value={orgId ?? ''} onChange={(e) => setOrgId(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Select a pharmacy...</option>
+            {pharmacyOrgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {!ready ? (
+        <div className="text-center py-10 text-gray-400 text-sm">Select a pharmacy to view its inventory.</div>
+      ) : (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         <StatCard label={t('inventory.stats.totalMedicines')} value={summary?.total_medicines ?? '—'} icon="💊" color="blue" />
         <StatCard label={t('inventory.stats.lowStock')} value={summary?.low_stock_count ?? '—'} icon="⚠️" color="yellow" />
@@ -52,6 +80,8 @@ export default function Inventory() {
           <Table columns={expiringCols} data={expiring} loading={loadingExp} emptyText={t('inventory.noExpiring')} />
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

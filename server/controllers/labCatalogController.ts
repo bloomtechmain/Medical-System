@@ -85,7 +85,7 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
 // to show tests + prices when a patient is booking with that lab.
 const getForLab = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const labId = parseInt(req.params.laboratoryId, 10);
+    const labId = parseInt(String(req.params.laboratoryId), 10);
     const schema = await getTenantSchema(labId);
     if (!schema) { res.json([]); return; }
 

@@ -29,12 +29,12 @@ const getMembers = async (req: Request, res: Response, next: NextFunction): Prom
 const inviteMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const orgId = parseInt(req.params.orgId, 10);
+    const orgId = parseInt(String(req.params.orgId), 10);
     const { name, email, password, is_owner } = req.body as {
       name?: string; email?: string; password?: string; is_owner?: boolean;
     };
     if (!name || !email || !password) { res.status(400).json({ message: 'Name, email, and password are required' }); return; }
-    if (password.length < 6) { res.status(400).json({ message: 'Password must be at least 6 characters' }); return; }
+    if (password.length < 10) { res.status(400).json({ message: 'Password must be at least 10 characters' }); return; }
 
     const { rows: [org] } = await client.query('SELECT org_type FROM public.organizations WHERE id=$1', [orgId]);
     if (!org) { res.status(404).json({ message: 'Organization not found' }); return; }
@@ -77,8 +77,8 @@ const inviteMember = async (req: Request, res: Response, next: NextFunction): Pr
 
 const removeMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const orgId = parseInt(req.params.orgId, 10);
-    const targetUserId = parseInt(req.params.userId, 10);
+    const orgId = parseInt(String(req.params.orgId), 10);
+    const targetUserId = parseInt(String(req.params.userId), 10);
 
     const { rows: [target] } = await pool.query(
       'SELECT member_role FROM public.organization_members WHERE organization_id=$1 AND user_id=$2',

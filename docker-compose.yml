@@ -1,0 +1,67 @@
+# Local, production-shaped stack for load-testing (ARCH-09) without AWS —
+# builds the same Dockerfiles used for the real deployment, running
+# NODE_ENV=production so the same CORS/env-validation code paths are
+# exercised as the real thing, just on this machine instead of AWS.
+#
+# Usage:
+#   docker compose up --build
+#   # once healthy:
+#   TARGET_URL=http://localhost:5000 node scripts/loadtest/run.js
+#
+# This is a closer approximation of production than the `npm run dev`
+# servers (compiled build, not nodemon/vite-dev; production CORS behavior),
+# but it's still one container on one laptop — see docs/capacity-plan.md
+# for what this can and can't tell you.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-corehealth}
+      POSTGRES_USER: ${DB_USER:-corehealth}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-corehealth_dev_only}
+    volumes:
+      - ./corehealth_database.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # offset from 5432 so this doesn't collide with a local Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-corehealth}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: ./server
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-corehealth}
+      DB_USER: ${DB_USER:-corehealth}
+      DB_PASSWORD: ${DB_PASSWORD:-corehealth_dev_only}
+      JWT_SECRET: ${JWT_SECRET:-local_loadtest_only_not_for_real_use}
+      CLIENT_URL: http://localhost:3000
+      # AWS_S3_BUCKET / REDIS_URL intentionally unset — exercises the local-disk
+      # and in-memory-adapter fallback paths (ARCH-06, ARCH-05), same as today.
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./client
+      args: {}
+    environment:
+      API_URL: http://localhost:5000
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+
+volumes:
+  pgdata:
