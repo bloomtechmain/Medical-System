@@ -3,6 +3,7 @@ import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
 import { deleteUpload, streamUploadToResponse } from '../utils/fileStorage';
 import { parsePaging } from '../utils/pagination';
+import { audit, AuditAction } from '../utils/auditLog';
 import { enqueue as enqueueConsultationOcr } from '../queue/jobs/extractConsultationMedicines';
 
 // medical_consultations / consultation_medicines / patient_profiles live in
@@ -483,9 +484,33 @@ const getPatientHistory = async (req: Request, res: Response, next: NextFunction
     // two cases aren't distinguishable from the outside (no enumeration
     // signal).
     if (!isAdmin && consultations.length === 0) {
+      // A doctor asking for a patient they have never treated. Recorded as
+      // 'denied' rather than dropped: a doctor walking patient ids looking
+      // for one that answers is the single most important thing this log can
+      // surface, and the 404 above deliberately makes it invisible to them.
+      audit(req, {
+        action: AuditAction.PATIENT_RECORD_VIEWED,
+        outcome: 'denied',
+        targetType: 'patient',
+        targetId: Number(patientId),
+        patientUserId: Number(patientId),
+        metadata: { reason: 'no_treating_relationship' },
+      });
       res.status(404).json({ message: 'Patient not found' });
       return;
     }
+
+    // MON-12: "who viewed which patient's record", the entry the audit calls
+    // out as important for a health application. This is the endpoint that
+    // returns a patient's demographics, contact details and full consultation
+    // history, so it is the one that most needs to leave a trace.
+    audit(req, {
+      action: AuditAction.PATIENT_RECORD_VIEWED,
+      targetType: 'patient',
+      targetId: Number(patientId),
+      patientUserId: Number(patientId),
+      metadata: { consultationCount: consultations.length, asAdmin: isAdmin },
+    });
 
     const allMedicines  = consultations.flatMap((c: any) => c.medicines || []);
     const uniqueMeds    = [...new Set(allMedicines.map((m: any) => m.medicine_name.toLowerCase()))];

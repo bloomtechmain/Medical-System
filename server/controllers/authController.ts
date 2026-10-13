@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, revokeRefreshTokens } from '../config/db';
 import { sendMail } from '../config/mailer';
+import { audit, AuditAction } from '../utils/auditLog';
 import { DbUser } from '../types';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
@@ -237,13 +238,45 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
   try {
     const { email, password } = req.body as { email: string; password: string };
     const { rows } = await pool.query<DbUser>('SELECT * FROM users WHERE email = $1', [email]);
-    if (!rows.length) { res.status(401).json({ message: 'Invalid credentials' }); return; }
+    if (!rows.length) {
+      // MON-12/WARN-11: failed logins were not recorded anywhere, so neither
+      // "this account is being brute-forced" nor "one address is trying
+      // hundreds of accounts" was answerable. actorId is null here on purpose
+      // — there is no user to point at, and that is itself the signal. The
+      // attempted address goes in metadata so the pattern is still visible.
+      audit(req, {
+        action: AuditAction.LOGIN_FAILURE,
+        outcome: 'failure',
+        actorId: null,
+        actorEmail: email,
+        metadata: { reason: 'unknown_email' },
+      });
+      res.status(401).json({ message: 'Invalid credentials' }); return;
+    }
 
     const user = rows[0];
     const match = await bcrypt.compare(password, user.password);
-    if (!match) { res.status(401).json({ message: 'Invalid credentials' }); return; }
+    if (!match) {
+      audit(req, {
+        action: AuditAction.LOGIN_FAILURE,
+        outcome: 'failure',
+        actorId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
+        metadata: { reason: 'wrong_password' },
+      });
+      res.status(401).json({ message: 'Invalid credentials' }); return;
+    }
 
     if (!user.is_active) {
+      audit(req, {
+        action: AuditAction.LOGIN_FAILURE,
+        outcome: 'denied',
+        actorId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
+        metadata: { reason: 'inactive_account' },
+      });
       res.status(403).json({ message: 'This account is pending admin approval or has been deactivated. Please wait for approval or contact support.' });
       return;
     }
@@ -264,6 +297,13 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
 
     const organization = await getOrgForUser(user.id);
     const { password: _, mfa_secret: __, ...safeUser } = user;
+    audit(req, {
+      action: AuditAction.LOGIN_SUCCESS,
+      actorId: user.id,
+      actorEmail: user.email,
+      actorRole: user.role,
+      metadata: { mfa: false },
+    });
     res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
@@ -293,12 +333,28 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
     }
 
     if (!code || !authenticator.verify({ token: String(code), secret: user.mfa_secret })) {
+      // Worth separating from a wrong password: this is someone who already
+      // has the password and is failing only the second factor.
+      audit(req, {
+        action: AuditAction.MFA_CHALLENGE_FAILURE,
+        outcome: 'failure',
+        actorId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
+      });
       res.status(401).json({ message: 'Invalid authentication code' });
       return;
     }
 
     const organization = await getOrgForUser(user.id);
     const { password: _, mfa_secret: __, ...safeUser } = user;
+    audit(req, {
+      action: AuditAction.LOGIN_SUCCESS,
+      actorId: user.id,
+      actorEmail: user.email,
+      actorRole: user.role,
+      metadata: { mfa: true },
+    });
     res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
@@ -412,6 +468,15 @@ const impersonate = async (req: Request, res: Response, next: NextFunction): Pro
       `INSERT INTO impersonation_log (admin_id, target_user_id, target_name, target_role) VALUES ($1,$2,$3,$4)`,
       [req.user.id, target.id, target.name, target.role]
     );
+    // Also recorded in the central audit log, so "everything that touched
+    // this user" is one query rather than a union across two tables.
+    audit(req, {
+      action: AuditAction.IMPERSONATION_STARTED,
+      targetType: 'user',
+      targetId: target.id,
+      patientUserId: target.role === 'patient' ? target.id : null,
+      metadata: { targetRole: target.role },
+    });
 
     res.json({
       user: { ...safeUser, organization },
@@ -525,6 +590,14 @@ const changePassword = async (req: Request, res: Response, next: NextFunction): 
     await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hash, user.id]);
     await revokeRefreshTokens(user.id);
 
+    audit(req, {
+      action: AuditAction.PASSWORD_CHANGED_SELF,
+      actorId: user.id,
+      actorEmail: user.email,
+      actorRole: user.role,
+      targetType: 'user',
+      targetId: user.id,
+    });
     res.json({ message: 'Password changed. Please log in again.' });
   } catch (err) { next(err); }
 };
@@ -593,6 +666,15 @@ const resetPassword = async (req: Request, res: Response, next: NextFunction): P
     await pool.query('UPDATE public.password_reset_tokens SET used_at = NOW() WHERE id = $1', [rows[0].id]);
     await revokeRefreshTokens(rows[0].user_id);
 
+    // An unauthenticated path: the actor is the account being reset, proven
+    // only by possession of the emailed token. Worth recording precisely
+    // because it is the one way to take over an account without the password.
+    audit(req, {
+      action: AuditAction.PASSWORD_RESET_COMPLETED,
+      actorId: rows[0].user_id,
+      targetType: 'user',
+      targetId: rows[0].user_id,
+    });
     res.json({ message: 'Password reset. Please log in with your new password.' });
   } catch (err) { next(err); }
 };

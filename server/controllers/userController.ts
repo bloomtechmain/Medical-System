@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool, queryAs, RLSActor, revokeRefreshTokens } from '../config/db';
 import { parsePaging } from '../utils/pagination';
+import { audit, AuditAction } from '../utils/auditLog';
 
 // clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
 // live behind row-level security — queries against them must carry the
@@ -65,6 +66,14 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
     const { name, email, role, is_active } = req.body as {
       name: string; email: string; role: string; is_active: boolean;
     };
+    // MON-12: read the row before the update so the audit entry can say what
+    // actually changed. Two of these are privilege changes an access review
+    // has to be able to reconstruct — a role silently moved to 'admin', or an
+    // account quietly reactivated — and neither was recorded anywhere.
+    const { rows: before } = await pool.query(
+      'SELECT role, is_active FROM users WHERE id = $1',
+      [req.params.id]
+    );
     const { rows } = await pool.query(
       `UPDATE users SET name=$1, email=$2, role=$3, is_active=$4, updated_at=NOW()
        WHERE id=$5 RETURNING id, name, email, role, is_active`,
@@ -72,6 +81,24 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
     if (!rows[0].is_active) await revokeRefreshTokens(rows[0].id);
+
+    const prev = before[0];
+    if (prev && prev.role !== rows[0].role) {
+      audit(req, {
+        action: AuditAction.USER_ROLE_CHANGED,
+        targetType: 'user',
+        targetId: rows[0].id,
+        metadata: { from: prev.role, to: rows[0].role },
+      });
+    }
+    if (prev && prev.is_active !== rows[0].is_active) {
+      audit(req, {
+        action: AuditAction.USER_ACTIVE_CHANGED,
+        targetType: 'user',
+        targetId: rows[0].id,
+        metadata: { from: prev.is_active, to: rows[0].is_active },
+      });
+    }
     res.json(rows[0]);
   } catch (err) { next(err); }
 };
@@ -301,6 +328,14 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
     if (!rows[0].is_active) await revokeRefreshTokens(rows[0].id);
+    // The toggle's new value is authoritative here — it was computed by the
+    // database (NOT is_active), so there is nothing to compare against.
+    audit(req, {
+      action: AuditAction.USER_ACTIVE_CHANGED,
+      targetType: 'user',
+      targetId: rows[0].id,
+      metadata: { to: rows[0].is_active, via: 'toggle' },
+    });
     res.json(rows[0]);
   } catch (err) { next(err); }
 };
@@ -316,6 +351,12 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
       [req.params.id]
     );
     if (!rowCount) { res.status(404).json({ message: 'User not found' }); return; }
+    audit(req, {
+      action: AuditAction.USER_DELETED,
+      targetType: 'user',
+      targetId: Number(req.params.id),
+      metadata: { soft: true },
+    });
     res.status(204).end();
   } catch (err) { next(err); }
 };
