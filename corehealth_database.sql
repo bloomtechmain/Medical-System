@@ -151,10 +151,22 @@ CREATE TABLE public.users (
   -- server/scripts/purgeSoftDeleted.ts removes them for real after the
   -- retention window (see docs/data-retention.md).
   deleted_at TIMESTAMPTZ,
+  -- COMP-02: which version of the Terms/Privacy Policy this person accepted at
+  -- sign-up (see client/src/legal/index.ts LEGAL_VERSION), and when. NULL is
+  -- meaningful: the account predates the documents existing, so what they
+  -- agreed to is genuinely unknown and they need to re-accept. Timestamped by
+  -- the database, never by the client, so it cannot be backdated.
+  accepted_terms_version VARCHAR(40),
+  accepted_terms_at      TIMESTAMPTZ,
   created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_users_email ON public.users(email);
+-- Finding who must re-accept after a policy change — the only query these
+-- columns exist to serve. Partial, so it holds almost nothing once everyone
+-- has accepted the current version.
+CREATE INDEX idx_users_accepted_terms_pending ON public.users(id)
+  WHERE accepted_terms_version IS NULL AND deleted_at IS NULL;
 CREATE INDEX idx_users_role  ON public.users(role);
 CREATE INDEX idx_users_deleted_at ON public.users(deleted_at) WHERE deleted_at IS NOT NULL;
 

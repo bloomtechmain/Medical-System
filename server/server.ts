@@ -157,6 +157,9 @@ const registerOrgValidators = [
   body('owner_password').optional({ nullable: true }).isLength({ min: 10, max: 128 }),
   body('specializations').optional({ nullable: true }).isArray({ max: 30 }),
   body('specializations.*').optional().isString().isLength({ max: 100 }),
+  // COMP-02: a version string, not free text — bounded so it cannot be used
+  // to write arbitrary content into the users table.
+  body('accepted_terms_version').optional({ nullable: true }).isString().isLength({ max: 40 }),
 ];
 import organizationTeamRoutes from './routes/organizationTeamRoutes';
 import authRoutes            from './routes/authRoutes';

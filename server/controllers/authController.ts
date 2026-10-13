@@ -148,9 +148,9 @@ const createProfile = async (
 const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const { name, email, password, role, profile, hospital_organization_ids } = req.body as {
+    const { name, email, password, role, profile, hospital_organization_ids, accepted_terms_version } = req.body as {
       name: string; email: string; password: string; role: string; profile?: Record<string, any>;
-      hospital_organization_ids?: number[];
+      hospital_organization_ids?: number[]; accepted_terms_version?: string;
     };
 
     const existing = await client.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -176,9 +176,17 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     // letting it fall through to errorHandler as a raw 500.
     let user: Pick<DbUser, 'id' | 'name' | 'email' | 'role'> & { is_active: boolean };
     try {
+      // COMP-02: record which version of the terms/privacy policy was on
+      // screen when they agreed. The timestamp comes from the database,
+      // not the client, so it cannot be backdated. NULL is left as NULL
+      // rather than defaulted to the current version — "we don't know what
+      // they agreed to" is the truth for anyone who registered before the
+      // documents existed, and inventing a value would destroy that.
       ({ rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'> & { is_active: boolean }>(
-        'INSERT INTO users (name, email, password, role, is_active) VALUES ($1,$2,$3,$4,$5) RETURNING id, name, email, role, is_active',
-        [name, email, hash, role, !requiresApproval]
+        `INSERT INTO users (name, email, password, role, is_active, accepted_terms_version, accepted_terms_at)
+         VALUES ($1,$2,$3,$4,$5,$6, CASE WHEN $6::varchar IS NULL THEN NULL ELSE NOW() END)
+         RETURNING id, name, email, role, is_active`,
+        [name, email, hash, role, !requiresApproval, accepted_terms_version || null]
       ));
     } catch (err) {
       if ((err as { code?: string }).code === '23505') {

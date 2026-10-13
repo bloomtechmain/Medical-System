@@ -8,17 +8,17 @@ import { openAuthedFile } from './authedFiles';
 // and the symptom ("files don't load") would look like a server problem.
 
 describe('openAuthedFile', () => {
-  const originalFetch = global.fetch;
+  const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     localStorage.setItem('token', 'test-token-123');
-    global.URL.createObjectURL = vi.fn(() => 'blob:fake');
-    global.URL.revokeObjectURL = vi.fn();
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake');
+    globalThis.URL.revokeObjectURL = vi.fn();
     vi.spyOn(window, 'open').mockImplementation(() => null);
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     localStorage.clear();
     vi.restoreAllMocks();
   });
@@ -28,7 +28,7 @@ describe('openAuthedFile', () => {
       ok: true,
       blob: async () => new Blob(['pdf bytes']),
     });
-    global.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     await openAuthedFile('/api/consultations/7/prescription-file');
 
@@ -42,7 +42,7 @@ describe('openAuthedFile', () => {
   it('omits the header entirely when there is no token', async () => {
     localStorage.removeItem('token');
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob([]) });
-    global.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     await openAuthedFile('/api/patient-reports/1/file');
 
@@ -53,7 +53,7 @@ describe('openAuthedFile', () => {
   // 404 is deliberately indistinguishable from "not allowed". Either way the
   // helper must not throw into the caller's render path.
   it('does not throw when the request is rejected', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 }) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 }) as unknown as typeof fetch;
     vi.spyOn(window, 'alert').mockImplementation(() => undefined);
 
     await expect(openAuthedFile('/api/lab-requests/9/report-file')).resolves.toBeUndefined();

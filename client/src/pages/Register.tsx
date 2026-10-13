@@ -6,6 +6,7 @@ import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 import HospitalSearchAdd from '../components/common/HospitalSearchAdd';
+import { LEGAL_VERSION } from '../legal';
 import { Building2, X } from 'lucide-react';
 
 interface RoleOption {
@@ -66,7 +67,10 @@ export default function Register() {
       });
 
       const hospital_organization_ids = selectedRole === 'doctor' ? hospitals.map(h => h.id) : undefined;
-      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids }) as unknown as { user: User; token?: string; refreshToken?: string; pending?: boolean; message?: string };
+      // COMP-02: send which version of the terms/privacy policy was on screen,
+      // so there is a record of what this person actually agreed to rather
+      // than just that they clicked a button at some point.
+      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids, accepted_terms_version: LEGAL_VERSION }) as unknown as { user: User; token?: string; refreshToken?: string; pending?: boolean; message?: string };
       if (res.pending || !res.token) {
         toast.success(res.message || 'Account created — pending admin approval.', { duration: 6000 });
         navigate('/login');
@@ -292,8 +296,20 @@ export default function Register() {
                 ) : 'Create Account'}
               </button>
 
+              {/* COMP-02: this said the same thing in plain text, with no
+                  pages behind it and nothing recording what was agreed to.
+                  The version is submitted with the form and stored on the
+                  user row (migration 008). */}
               <p className="text-center text-xs text-gray-400">
-                By creating an account, you agree to Core Health's Terms of Service and Privacy Policy.
+                By creating an account, you agree to Core Health's{' '}
+                <Link to="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-700">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link to="/privacy" target="_blank" className="text-blue-600 underline hover:text-blue-700">
+                  Privacy Policy
+                </Link>{' '}
+                (version {LEGAL_VERSION}).
               </p>
             </div>
           </form>
