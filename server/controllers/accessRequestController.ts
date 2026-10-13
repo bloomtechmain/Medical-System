@@ -149,7 +149,7 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 const getPatientView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const doctorId  = req.user.id;
-    const patientId = parseInt(req.params.patientId, 10);
+    const patientId = parseInt(String(req.params.patientId), 10);
 
     const { rows: ptRows } = await queryAs(actor(req), `
       SELECT u.id, u.name, u.email, u.created_at,
@@ -271,8 +271,8 @@ const searchPatients = async (req: Request, res: Response, next: NextFunction): 
 const serveLabReportFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const doctorId     = req.user.id;
-    const patientId    = parseInt(req.params.patientId, 10);
-    const labRequestId = parseInt(req.params.labRequestId, 10);
+    const patientId    = parseInt(String(req.params.patientId), 10);
+    const labRequestId = parseInt(String(req.params.labRequestId), 10);
 
     const { rows: accessRows } = await queryAs(actor(req),
       `SELECT id FROM data_access_requests

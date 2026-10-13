@@ -397,7 +397,7 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
  */
 const impersonate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const targetId = parseInt(req.params.userId, 10);
+    const targetId = parseInt(String(req.params.userId), 10);
     const { rows } = await pool.query<DbUser>('SELECT * FROM users WHERE id = $1', [targetId]);
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
 

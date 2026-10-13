@@ -137,7 +137,7 @@ const computeAvailableSlots = async (doctorId: number, organizationId: number | 
 
 const getDoctorSlots = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const doctorId = parseInt(req.params.doctorId, 10);
+    const doctorId = parseInt(String(req.params.doctorId), 10);
     const days = Math.min(Math.max(parseInt((req.query.days as string) || '14', 10) || 14, 1), MAX_SLOTS_DAYS);
     const organizationId = req.query.organization_id ? parseInt(req.query.organization_id as string, 10) : null;
 

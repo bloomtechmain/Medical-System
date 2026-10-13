@@ -119,7 +119,11 @@ const getVitalsHistory = async (req: Request, res: Response, next: NextFunction)
 // which readings came from a lab report vs a manual entry.
 const getFieldHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const field = req.params.field;
+    // String(): Express 5 types req.params values as string | string[].
+    // This one is interpolated into the SQL below, so the VITAL_FIELDS
+    // allow-list check immediately after is the only thing keeping that
+    // safe — it has to be checking a plain string, not an array.
+    const field = String(req.params.field);
     if (!VITAL_FIELDS.includes(field)) {
       res.status(400).json({ message: 'Unknown vital field' });
       return;

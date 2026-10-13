@@ -203,7 +203,9 @@ console.log(`[boot] client/dist: ${clientDist ?? 'NOT FOUND'}`);
 
 if (clientDist) {
   app.use(express.static(clientDist));
-  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  // Express 5 (path-to-regexp v8) rejects a bare '*' path — it has to be a
+  // *named* wildcard. Same SPA fallback as before, new spelling.
+  app.get('/*splat', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
 app.use(errorHandler);

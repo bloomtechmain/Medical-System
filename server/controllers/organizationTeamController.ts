@@ -29,7 +29,7 @@ const getMembers = async (req: Request, res: Response, next: NextFunction): Prom
 const inviteMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const orgId = parseInt(req.params.orgId, 10);
+    const orgId = parseInt(String(req.params.orgId), 10);
     const { name, email, password, is_owner } = req.body as {
       name?: string; email?: string; password?: string; is_owner?: boolean;
     };
@@ -77,8 +77,8 @@ const inviteMember = async (req: Request, res: Response, next: NextFunction): Pr
 
 const removeMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const orgId = parseInt(req.params.orgId, 10);
-    const targetUserId = parseInt(req.params.userId, 10);
+    const orgId = parseInt(String(req.params.orgId), 10);
+    const targetUserId = parseInt(String(req.params.userId), 10);
 
     const { rows: [target] } = await pool.query(
       'SELECT member_role FROM public.organization_members WHERE organization_id=$1 AND user_id=$2',
