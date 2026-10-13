@@ -448,6 +448,37 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_failures
   ON public.audit_log (occurred_at DESC)
   WHERE outcome <> 'success';
 
+-- 2.10 per-user upload accounting (COST-04, PRO-07) — uploads were capped at
+-- 20 MB each with no limit on count and no storage quota, and each upload can
+-- start CPU-heavy OCR. uploadLimiter bounds the rate; this table is what lets
+-- a *total* be enforced (see server/middleware/uploadQuota.ts).
+--
+-- One row per upload rather than a file_size column on each of the four
+-- tables that reference an upload: the quota question spans all of them, and
+-- this also records uploads whose owning row was never created (the request
+-- failed after the file was written) — which is what makes orphaned-file
+-- cleanup possible at all.
+--
+-- ON DELETE CASCADE here, unlike audit_log's SET NULL, is deliberate: this is
+-- accounting, not an audit trail. Once the user is gone their quota is
+-- meaningless, and audit_log holds the record of what happened.
+CREATE TABLE IF NOT EXISTS public.upload_usage (
+  id          BIGSERIAL    PRIMARY KEY,
+  user_id     INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  subdir      VARCHAR(40)  NOT NULL,
+  filename    VARCHAR(255) NOT NULL,
+  bytes       BIGINT       NOT NULL CHECK (bytes >= 0),
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  -- Set when the file is deleted, so the row survives as a record while
+  -- stopping it counting against the live storage quota.
+  deleted_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_upload_usage_user_time
+  ON public.upload_usage (user_id, created_at DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_upload_usage_filename
+  ON public.upload_usage (subdir, filename);
+
 -- =============================================================================
 -- 3. CLINICAL SCHEMA — patient PHI, shared but RLS-protected
 -- =============================================================================

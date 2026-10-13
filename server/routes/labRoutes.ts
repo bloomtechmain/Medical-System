@@ -7,6 +7,7 @@ import { create, getAll, getOne, uploadReport, createDirect, updateStatus, rejec
 import { getAll as getMessages, create as createMessage } from '../controllers/labRequestMessagesController';
 import { uploadLimiter } from '../middleware/rateLimiter';
 import { verifyUploadSignature } from '../utils/uploadSecurity';
+import { enforceUploadQuota } from '../middleware/uploadQuota';
 import { createUploadStorage } from '../utils/fileStorage';
 import validate from '../middleware/validate';
 
@@ -61,8 +62,8 @@ router.get('/:id', protect, authorize('doctor', 'patient', 'laboratory', 'admin'
 router.get('/:id/report-file',   protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReportFile);
 router.get('/:id/referral-file', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReferralFile);
 router.post('/',   protect, authorize('doctor', 'patient'), uploadLimiter, uploadReferral.single('referral'), verifyUploadSignature(), createValidators, validate, create);
-router.post('/direct', protect, authorize('laboratory'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), createDirectValidators, validate, createDirect);
-router.patch('/:id/report',  protect, authorize('laboratory'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), uploadReport);
+router.post('/direct', protect, authorize('laboratory'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), enforceUploadQuota('lab-reports'), createDirectValidators, validate, createDirect);
+router.patch('/:id/report',  protect, authorize('laboratory'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), enforceUploadQuota('lab-reports'), uploadReport);
 router.patch('/:id/status',  protect, authorize('laboratory'), updateStatus);
 router.patch('/:id/reject',  protect, authorize('laboratory'), reject);
 router.patch('/:id/price',   protect, authorize('laboratory'), setPrice);

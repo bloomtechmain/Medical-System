@@ -180,6 +180,7 @@ import organizationRoutes    from './routes/organizationRoutes';
 import appointmentRoutes     from './routes/appointmentRoutes';
 import labCatalogRoutes      from './routes/labCatalogRoutes';
 import metricsRoutes         from './routes/metricsRoutes';
+import dataExportRoutes     from './routes/dataExportRoutes';
 import prescriptionAssignmentRoutes from './routes/prescriptionAssignmentRoutes';
 
 app.use('/api/auth',              authRoutes);
@@ -199,6 +200,7 @@ app.use('/api/patient-vitals',    patientVitalsRoutes);
 app.use('/api/appointments',      appointmentRoutes);
 app.use('/api/lab-catalog',       labCatalogRoutes);
 app.use('/api/metrics',           metricsRoutes);
+app.use('/api/data-export',       dataExportRoutes);
 app.use('/api/prescription-assignments', prescriptionAssignmentRoutes);
 // Public self-registration — mounted before the admin-gated organizations router
 // so it is never touched by the protect/authorize middleware.
