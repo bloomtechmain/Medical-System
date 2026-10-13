@@ -3,11 +3,22 @@ FROM node:22.12.0-slim AS builder
 WORKDIR /app
 COPY package*.json ./
 
+# AUTO-03: npm ci rather than npm install, so the same commit always produces
+# the same dependency tree (see server/Dockerfile for the full reasoning).
 # --include=dev ensures vite, typescript, tailwindcss, postcss are installed
 # even when NODE_ENV=production in the build environment.
-RUN npm install --include=dev
+RUN npm ci --include=dev
 
 COPY . .
+
+# MON-05: the release tag for client Sentry events. Unlike the API URL this
+# genuinely is build-time — it identifies this exact bundle — and it is not a
+# secret, so baking it in is safe. Never put a secret in a VITE_ variable:
+# they are compiled into the bundle and readable in the browser.
+ARG VITE_SENTRY_DSN=""
+ARG VITE_GIT_COMMIT_SHA=unknown
+ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
+ENV VITE_GIT_COMMIT_SHA=${VITE_GIT_COMMIT_SHA}
 
 # The backend URL is no longer baked in at build time (ARCH-04) — it's written
 # to dist/config.js by docker-entrypoint.sh when the container starts, so this
@@ -21,7 +32,7 @@ WORKDIR /app
 
 # Copy package files and install only production deps (includes serve).
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 # --chown: dist/ must stay writable by the non-root "node" user below —
 # docker-entrypoint.sh writes dist/config.js there at container start.

@@ -85,5 +85,7 @@
     "canvas@3.2.3": true,
     "esbuild@0.28.0": true,
     "tesseract.js@7.0.0": true
-  }
+  },
+  "private": true,
+  "license": "UNLICENSED"
 }

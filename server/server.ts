@@ -11,6 +11,7 @@ import { connectDB, pool } from './config/db';
 import { initSocket } from './config/socket';
 import { ALLOWED_ORIGINS } from './config/corsOrigins';
 import { logger, httpLogger } from './config/logger';
+import { isEnabled, logFlagState } from './config/featureFlags';
 import { initErrorTracking } from './config/errorTracking';
 import { registerLifecycle, isShuttingDown } from './config/lifecycle';
 import errorHandler from './middleware/errorHandler';
@@ -202,7 +203,17 @@ app.use('/api/prescription-assignments', prescriptionAssignmentRoutes);
 // format, password length, or slug format at all. PRO-11 / PRO-08: this and
 // the two public search endpoints below needed no login and had no rate
 // limit — publicFormLimiter/searchLimiter close that.
-app.post('/api/organizations/register', publicFormLimiter, registerOrgValidators, validate, registerOrganization);
+// CICD-12: the most expensive unauthenticated endpoint in the system — it
+// creates a database schema and a role per request (PRO-11). Rate-limited,
+// but this flag is the one that closes it outright under abuse, without a
+// deploy. 503 rather than 404: the endpoint exists and is temporarily off.
+app.post('/api/organizations/register', publicFormLimiter, (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (!isEnabled('PUBLIC_ORG_REGISTRATION')) {
+    res.status(503).json({ message: 'Organisation self-registration is temporarily unavailable. Please contact support.' });
+    return;
+  }
+  next();
+}, registerOrgValidators, validate, registerOrganization);
 app.get('/api/organizations/search-owner', searchLimiter, searchOwnerCandidates);
 app.get('/api/organizations/search-hospitals-clinics', searchLimiter, searchHospitalsClinics);
 app.use('/api/org-team', organizationTeamRoutes);
@@ -298,6 +309,9 @@ const start = async (): Promise<void> => {
     { port: PORT, env: process.env.NODE_ENV },
     'Core Health API + Socket.IO listening'
   );
+  // So a log line always answers "which flags were on for this deploy" — a
+  // flag-dependent bug is otherwise unreproducible after the fact.
+  logFlagState();
   await connectDB();
 
   // PERF-06: start the job queue and register this process as a worker for

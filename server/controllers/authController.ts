@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, revokeRefreshTokens } from '../config/db';
 import { sendMail } from '../config/mailer';
 import { audit, AuditAction } from '../utils/auditLog';
+import { isEnabled } from '../config/featureFlags';
 import { DbUser } from '../types';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
@@ -285,6 +286,24 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
     // back a short-lived pre-auth token (not a real session) that only proves
     // "this request already knows the password"; mfaLogin exchanges it + a
     // valid TOTP code for the actual session token.
+    // CICD-12/SEC-14: lets MFA be made mandatory for admins without a deploy
+    // — useful during an incident (see runbooks/suspected-data-exposure.md).
+    // Default off, so behaviour is unchanged until someone turns it on.
+    if (user.role === 'admin' && !user.mfa_enabled && isEnabled('REQUIRE_ADMIN_MFA')) {
+      audit(req, {
+        action: AuditAction.LOGIN_FAILURE,
+        outcome: 'denied',
+        actorId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
+        metadata: { reason: 'admin_mfa_required' },
+      });
+      res.status(403).json({
+        message: 'Multi-factor authentication is required for admin accounts. Contact another administrator to enrol.',
+      });
+      return;
+    }
+
     if (user.mfa_enabled) {
       const mfaToken = jwt.sign(
         { id: user.id, purpose: MFA_PENDING_PURPOSE },

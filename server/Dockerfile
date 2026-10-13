@@ -21,7 +21,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --include=dev
+# AUTO-03: npm ci, not npm install. `install` is free to resolve a newer
+# matching version than package-lock.json records, so two builds of the same
+# commit could ship different dependency trees — which defeats the point of
+# building an image once and promoting it (CICD-04). `ci` installs exactly
+# the lockfile and fails if the two have drifted.
+# --include=dev because vite/typescript/tsc are needed to build, and this
+# stage is discarded anyway (npm prune below, then a fresh runtime stage).
+RUN npm ci --include=dev
 
 COPY . .
 RUN npm run build
@@ -61,6 +68,13 @@ EXPOSE 5000
 # deployment's container has a different memory limit than the 512 MB this
 # assumes.
 ENV NODE_OPTIONS="--max-old-space-size=512"
+
+# MON-05/MON-10: baked in at build time so every log line and every Sentry
+# event carries the release, which is what makes "did the 14:00 deploy cause
+# this" answerable. Passed by .github/workflows/deploy.yml; defaults to
+# "unknown" for a local build, same as the code's own fallback.
+ARG GIT_COMMIT_SHA=unknown
+ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA}
 
 # Matches the existing GET /api/health route — used by the ALB target group
 # and/or ECS container health check once this runs on EC2.
