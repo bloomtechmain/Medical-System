@@ -31,9 +31,16 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!token) return;
 
+    // INF-11: the polling fallback was enabled. HTTP long-polling spreads one
+    // logical connection across many separate requests, so with more than one
+    // server instance behind a load balancer those requests land on different
+    // instances and the handshake breaks — unless sticky sessions are
+    // configured on the balancer. WebSocket-only keeps one connection pinned
+    // to one instance by nature, which is what makes running two instances
+    // (INF-09) safe without depending on balancer configuration.
     const socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
     });
 
     socket.on('notification', (notif: { message: string; type: string }) => {

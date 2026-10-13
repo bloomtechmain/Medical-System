@@ -4,6 +4,14 @@ builder = "dockerfile"
 # Root Directory restricts the build context to server/ only — no client/ access needed.
 
 [deploy]
-healthcheckPath = "/api/health"
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 10
+# INF-03: this used to point at /api/health, which only proves the process is
+# running — an instance whose database connection was broken reported healthy
+# and kept taking traffic. /api/ready also checks the database (and returns
+# 503 while shutting down), so the platform stops sending work to an instance
+# that cannot actually serve it.
+healthcheckPath = "/api/ready"
+# INF-06: "on_failure" with a retry cap meant that after 10 failed restarts
+# the service stayed down permanently with nothing watching. "always" keeps
+# trying, so a transient dependency outage recovers on its own instead of
+# needing someone to notice and press redeploy.
+restartPolicyType = "always"

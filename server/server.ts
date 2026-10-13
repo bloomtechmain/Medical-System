@@ -7,14 +7,17 @@ import cors from 'cors';
 import compression from 'compression';
 import path from 'path';
 import { body } from 'express-validator';
-import { connectDB } from './config/db';
+import { connectDB, pool } from './config/db';
 import { initSocket } from './config/socket';
 import { ALLOWED_ORIGINS } from './config/corsOrigins';
+import { logger, httpLogger } from './config/logger';
+import { initErrorTracking } from './config/errorTracking';
+import { registerLifecycle, isShuttingDown } from './config/lifecycle';
 import errorHandler from './middleware/errorHandler';
 import validate from './middleware/validate';
 import { generalApiLimiter, publicFormLimiter, searchLimiter } from './middleware/rateLimiter';
 import { isS3Enabled } from './utils/fileStorage';
-import { startQueue, stopQueue } from './queue/boss';
+import { startQueue } from './queue/boss';
 import { register as registerLabReportVitalsWorker } from './queue/jobs/extractLabReportVitals';
 import { register as registerPatientReportVitalsWorker } from './queue/jobs/extractPatientReportVitals';
 import { register as registerConsultationOcrWorker } from './queue/jobs/extractConsultationMedicines';
@@ -43,10 +46,24 @@ requireEnv(['JWT_SECRET']);
 requireEnv(process.env.DATABASE_URL ? [] : ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']);
 if (process.env.NODE_ENV === 'production') requireEnv(['CLIENT_URL']);
 
+// MON-05: start the error tracker before anything else can throw.
+initErrorTracking();
+
 const app    = express();
 app.disable('x-powered-by'); // SEC-21: don't advertise the framework/version
 const server = http.createServer(app);
 initSocket(server);
+
+// INF-05: no timeouts were set anywhere on the HTTP server. A client that
+// opens a connection and sends headers slowly (or never finishes a body) held
+// a connection and a request slot indefinitely — the cheapest possible way to
+// exhaust a small instance. These are the outermost timeouts: they must stay
+// *longer* than the database statement timeout (5s) and the OCR job limit, so
+// an inner operation fails with its own specific error rather than having the
+// whole request yanked out from under it.
+server.requestTimeout = parseInt(process.env.HTTP_REQUEST_TIMEOUT_MS || '30000', 10);
+server.headersTimeout = parseInt(process.env.HTTP_HEADERS_TIMEOUT_MS || '35000', 10);
+server.keepAliveTimeout = parseInt(process.env.HTTP_KEEPALIVE_TIMEOUT_MS || '65000', 10);
 
 // PRO-08: with no `trust proxy`, a rate limiter (or anything else reading
 // req.ip) sees the proxy's address for every request once this runs behind
@@ -75,6 +92,11 @@ app.use(helmet({
     },
   },
 }));
+
+// MON-10/MON-06: structured request log + a request ID echoed back in the
+// x-request-id response header. Mounted before the routes so every request is
+// logged even if it never matches one.
+app.use(httpLogger);
 
 app.use(cors({
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) =>
@@ -184,9 +206,55 @@ app.get('/api/organizations/search-hospitals-clinics', searchLimiter, searchHosp
 app.use('/api/org-team', organizationTeamRoutes);
 app.use('/api/organizations',     organizationRoutes);
 
+// Liveness: "this process is running and the event loop is not wedged." It
+// must NOT touch the database — a liveness probe that fails on a database
+// blip would make the platform restart a perfectly healthy process, which
+// never fixes a database problem and turns a brief outage into a crash loop.
 app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 );
+
+// INF-02/INF-03: previously there was only the liveness endpoint above, and
+// the platform health check pointed at it — so an instance whose database
+// connection was broken reported healthy and kept receiving traffic, and
+// (because the server listens before connecting, deliberately, so a slow
+// database doesn't fail the deploy) a brand-new instance passed its check
+// before it could serve a single real request.
+//
+// Readiness answers the different question "should this instance receive
+// traffic right now": it checks the database with a short, explicit timeout
+// and returns 503 when the answer is no. During shutdown it reports 503
+// immediately, which is what lets a load balancer take the instance out of
+// rotation before the graceful-shutdown drain begins.
+app.get('/api/ready', async (_req, res) => {
+  if (isShuttingDown()) {
+    res.status(503).json({ status: 'shutting_down' });
+    return;
+  }
+  const client = await pool.connect().catch(() => null);
+  if (!client) {
+    res.status(503).json({ status: 'unavailable', check: 'db_pool' });
+    return;
+  }
+  try {
+    // Deliberately shorter than the pool-wide statement timeout: a readiness
+    // probe should fail fast rather than queue behind a struggling database.
+    // Wrapped in a transaction because SET LOCAL only applies inside one —
+    // outside, it is silently a no-op, and a plain SET would follow this
+    // connection back into the pool and shorten an unrelated request's budget.
+    await client.query('BEGIN');
+    await client.query('SET LOCAL statement_timeout = 2000');
+    await client.query('SELECT 1');
+    await client.query('COMMIT');
+    res.json({ status: 'ready', timestamp: new Date().toISOString() });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    logger.warn({ err }, 'Readiness check failed');
+    res.status(503).json({ status: 'unavailable', check: 'db_query' });
+  } finally {
+    client.release();
+  }
+});
 
 app.get('/', (_req, res) =>
   res.json({ status: 'ok', service: 'BloomRx API', health: '/api/health' })
@@ -199,7 +267,7 @@ const clientDist = [
   path.join(__dirname, '../../client', 'dist'),   // /app/server/dist → /app/client/dist
 ].find(p => fs.existsSync(path.join(p, 'index.html')));
 
-console.log(`[boot] client/dist: ${clientDist ?? 'NOT FOUND'}`);
+logger.info({ clientDist: clientDist ?? null }, 'Resolved client/dist path');
 
 if (clientDist) {
   app.use(express.static(clientDist));
@@ -220,9 +288,14 @@ app.use(errorHandler);
 const PORT = parseInt(process.env.PORT || '5000');
 
 const start = async (): Promise<void> => {
-  // Listen first — Railway health check can reach /api/health while DB connects
+  // Listen first — the liveness check can reach /api/health while the DB
+  // connects. /api/ready stays 503 until the connection is actually up
+  // (INF-02), which is what the platform health check now watches.
   await new Promise<void>(resolve => server.listen(PORT, resolve));
-  console.log(`Core Health API + Socket.IO running on port ${PORT} [${process.env.NODE_ENV}]`);
+  logger.info(
+    { port: PORT, env: process.env.NODE_ENV },
+    'Core Health API + Socket.IO listening'
+  );
   await connectDB();
 
   // PERF-06: start the job queue and register this process as a worker for
@@ -237,13 +310,10 @@ const start = async (): Promise<void> => {
   await registerConsultationOcrWorker();
 };
 
-start();
+// INF-04/INF-06: graceful shutdown (drain HTTP, close sockets, stop the
+// queue, end the pool, hard deadline) and process-level crash handlers now
+// live in config/lifecycle.ts. Registered before start() so a crash during
+// startup is still reported rather than vanishing.
+registerLifecycle(server);
 
-// Let in-flight jobs finish and the queue disconnect cleanly instead of
-// being killed mid-job on every deploy/restart.
-const shutdown = async (): Promise<void> => {
-  await stopQueue();
-  process.exit(0);
-};
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+start();
