@@ -66,8 +66,13 @@ export default function Register() {
       });
 
       const hospital_organization_ids = selectedRole === 'doctor' ? hospitals.map(h => h.id) : undefined;
-      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids }) as unknown as { user: User; token: string };
-      login(res.user, res.token);
+      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids }) as unknown as { user: User; token?: string; refreshToken?: string; pending?: boolean; message?: string };
+      if (res.pending || !res.token) {
+        toast.success(res.message || 'Account created — pending admin approval.', { duration: 6000 });
+        navigate('/login');
+        return;
+      }
+      login(res.user, res.token, res.refreshToken);
       toast.success('Account created successfully!');
       const routes: Record<string, string> = { doctor: '/doctor', patient: '/patient' };
       navigate(routes[selectedRole] || '/');
@@ -178,8 +183,8 @@ export default function Register() {
                   <div>
                     <label className="label">Password</label>
                     <div className="relative">
-                      <input type={showPwd ? 'text' : 'password'} className="input pr-10" placeholder="Min. 6 characters"
-                        {...register('password', { required: 'Password required', minLength: { value: 6, message: 'Min 6 characters' } })} />
+                      <input type={showPwd ? 'text' : 'password'} className="input pr-10" placeholder="Min. 10 characters"
+                        {...register('password', { required: 'Password required', minLength: { value: 10, message: 'Min 10 characters' } })} />
                       <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                         {showPwd ? '🙈' : '👁️'}
                       </button>

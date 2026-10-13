@@ -1,6 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../config/db';
+import { pool, resolvePharmacySchema } from '../config/db';
 import { parsePaging } from '../utils/pagination';
+
+// SEC-17 #4: medicines used to be a single public table shared (and
+// writable) by every pharmacy — any pharmacist could read/edit any other
+// pharmacy's stock and cost_price. Each pharmacy now has its own
+// medicines/suppliers tables in its tenant schema (see resolvePharmacySchema
+// in config/db.ts for how a pharmacist vs. an admin resolves which one).
+const requireSchema = async (req: Request, res: Response): Promise<string | null> => {
+  const orgId = parseInt((req.query.organization_id as string) ?? (req.body?.organization_id as string), 10);
+  const result = await resolvePharmacySchema(
+    { id: req.user.id, role: req.user.role },
+    Number.isNaN(orgId) ? undefined : orgId
+  );
+  if ('error' in result) { res.status(result.status).json({ message: result.error }); return null; }
+  return result.schema;
+};
 
 // PRO-25: medicines were hard-deleted. remove() below now soft-deletes
 // (deleted_at) instead; every read here excludes rows with deleted_at set.
@@ -8,10 +23,13 @@ import { parsePaging } from '../utils/pagination';
 // window (see server/scripts/purgeSoftDeleted.ts).
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const { search, category, low_stock } = req.query as Record<string, string | undefined>;
     const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
-    let query = `SELECT m.*, s.name AS supplier_name FROM medicines m
-                 LEFT JOIN suppliers s ON m.supplier_id = s.id WHERE m.deleted_at IS NULL`;
+    let query = `SELECT m.*, s.name AS supplier_name FROM "${schema}".medicines m
+                 LEFT JOIN "${schema}".suppliers s ON m.supplier_id = s.id WHERE m.deleted_at IS NULL`;
     const params: unknown[] = [];
 
     // PRO-02: medicine search had no minimum length — a 1-character query
@@ -41,9 +59,12 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
 
 const getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const { rows } = await pool.query(
-      `SELECT m.*, s.name AS supplier_name FROM medicines m
-       LEFT JOIN suppliers s ON m.supplier_id = s.id WHERE m.id = $1 AND m.deleted_at IS NULL`,
+      `SELECT m.*, s.name AS supplier_name FROM "${schema}".medicines m
+       LEFT JOIN "${schema}".suppliers s ON m.supplier_id = s.id WHERE m.id = $1 AND m.deleted_at IS NULL`,
       [req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'Medicine not found' }); return; }
@@ -55,13 +76,16 @@ const getOne = async (req: Request, res: Response, next: NextFunction): Promise<
 
 const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const {
       name, generic_name, category, description,
       unit, price, cost_price, stock_quantity,
       reorder_level, expiry_date, supplier_id,
     } = req.body;
     const { rows } = await pool.query(
-      `INSERT INTO medicines
+      `INSERT INTO "${schema}".medicines
          (name, generic_name, category, description, unit, price, cost_price,
           stock_quantity, reorder_level, expiry_date, supplier_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
@@ -84,13 +108,16 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
 // in the database, never a client-supplied absolute number.
 const update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const {
       name, generic_name, category, description,
       unit, price, cost_price,
       reorder_level, expiry_date, supplier_id, is_active,
     } = req.body;
     const { rows } = await pool.query(
-      `UPDATE medicines SET name=$1, generic_name=$2, category=$3, description=$4,
+      `UPDATE "${schema}".medicines SET name=$1, generic_name=$2, category=$3, description=$4,
         unit=$5, price=$6, cost_price=$7, reorder_level=$8,
         expiry_date=$9, supplier_id=$10, is_active=$11, updated_at=NOW()
        WHERE id=$12 AND deleted_at IS NULL RETURNING *`,
@@ -114,12 +141,15 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
 // the client.
 const adjustStock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const { delta } = req.body as { delta?: number };
     if (typeof delta !== 'number' || !Number.isInteger(delta) || delta === 0) {
       res.status(400).json({ message: 'delta must be a non-zero integer' }); return;
     }
     const { rows } = await pool.query(
-      `UPDATE medicines SET stock_quantity = stock_quantity + $1, updated_at = NOW()
+      `UPDATE "${schema}".medicines SET stock_quantity = stock_quantity + $1, updated_at = NOW()
        WHERE id = $2 AND deleted_at IS NULL RETURNING *`,
       [delta, req.params.id]
     );
@@ -135,8 +165,11 @@ const adjustStock = async (req: Request, res: Response, next: NextFunction): Pro
 
 const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const schema = await requireSchema(req, res);
+    if (!schema) return;
+
     const { rowCount } = await pool.query(
-      'UPDATE medicines SET deleted_at = NOW(), is_active = FALSE WHERE id = $1 AND deleted_at IS NULL',
+      `UPDATE "${schema}".medicines SET deleted_at = NOW(), is_active = FALSE WHERE id = $1 AND deleted_at IS NULL`,
       [req.params.id]
     );
     if (!rowCount) { res.status(404).json({ message: 'Medicine not found' }); return; }

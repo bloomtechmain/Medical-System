@@ -13,12 +13,12 @@
   "toastInvited": "Team member invited — they can sign in now",
   "toastInviteFailed": "Failed to invite member",
   "errors": {
-    "formInvalid": "Please fill in all fields — password must be at least 6 characters."
+    "formInvalid": "Please fill in all fields — password must be at least 10 characters."
   },
   "inviteModal": {
     "title": "Invite Team Member",
     "passwordLabel": "Password",
-    "passwordPlaceholder": "Min. 6 characters",
+    "passwordPlaceholder": "Min. 10 characters",
     "makeOwner": "Make this person a co-owner",
     "submitBtn": "Create Login"
   }

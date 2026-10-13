@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { Request, Response } from 'express';
 
 // PRO-08: nothing in the app limited request rate at any layer. These are
@@ -52,13 +52,18 @@ const searchLimiter = rateLimit({
   handler: jsonLimitResponse('Too many searches. Please slow down.'),
 });
 
-// PRO-07: file uploads had no per-user rate limit.
+// PRO-07: file uploads had no per-user rate limit. Keyed on the user when
+// there is one, falling back to IP for anything unauthenticated — via
+// express-rate-limit's own ipKeyGenerator, which normalises IPv6 to a /64
+// subnet. Using req.ip raw here would let an IPv6 client hop addresses
+// within its own prefix to get a fresh bucket per request (and v8+ refuses
+// to start at all if a custom keyGenerator touches req.ip without it).
 const uploadLimiter = rateLimit({
   windowMs: 60_000,
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request): string => (req.user ? `u${req.user.id}` : req.ip || 'unknown'),
+  keyGenerator: (req: Request): string => (req.user ? `u${req.user.id}` : ipKeyGenerator(req.ip || 'unknown')),
   handler: jsonLimitResponse('Too many uploads. Please wait a moment and try again.'),
 });
 

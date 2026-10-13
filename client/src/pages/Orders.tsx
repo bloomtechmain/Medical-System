@@ -26,7 +26,7 @@ export default function Orders() {
   const navigate = useNavigate();
 
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['orders'], queryFn: orderApi.getAll });
-  const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: supplierApi.getAll });
+  const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: () => supplierApi.getAll() });
   const { data: medicines = [] } = useQuery({ queryKey: ['medicines'], queryFn: () => medicineApi.getAll({}) });
 
   const { register, handleSubmit, control, reset } = useForm<any>({

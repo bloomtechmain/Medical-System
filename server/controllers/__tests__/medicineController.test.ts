@@ -1,15 +1,29 @@
-import { pool } from '../../config/db';
+import { pool, resolvePharmacySchema } from '../../config/db';
 import { getAll, getOne, create, update, adjustStock, remove } from '../medicineController';
 import { mockRequest, mockResponse } from '../../test-utils/mockExpress';
 
+// SEC-17 #4: medicines moved from one shared public table into each
+// pharmacy's own tenant schema — medicineController now resolves the
+// caller's schema (resolvePharmacySchema) before touching medicines at all.
+// That resolution is its own concern; here it's mocked to a fixed schema so
+// these tests stay focused on what medicineController does once it HAS one.
 jest.mock('../../config/db', () => ({
   pool: { query: jest.fn() },
+  resolvePharmacySchema: jest.fn(),
 }));
 
 const query = pool.query as jest.Mock;
+const resolveSchema = resolvePharmacySchema as jest.Mock;
+const SCHEMA = 'tenant_test_pharmacy';
+const pharmacist = { id: 1, role: 'pharmacist' };
+const asPharmacist = (overrides: Record<string, unknown> = {}) =>
+  mockRequest({ user: pharmacist as any, ...overrides });
 
 describe('medicineController', () => {
   const next = jest.fn();
+
+  beforeEach(() => { resolveSchema.mockResolvedValue({ schema: SCHEMA }); });
+  afterEach(() => jest.clearAllMocks());
 
   describe('getAll', () => {
     it('excludes soft-deleted rows and applies the default page size with no filters', async () => {
@@ -17,21 +31,40 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rows: medicines });
 
       const res = mockResponse();
-      await getAll(mockRequest({ query: {} }), res, next);
+      await getAll(asPharmacist({ query: {} }), res, next);
 
       expect(query).toHaveBeenCalledWith(expect.stringContaining('WHERE m.deleted_at IS NULL'), [500, 0]);
       expect(res.json).toHaveBeenCalledWith(medicines);
+    });
+
+    it('scopes every read to the caller\'s own pharmacy schema (SEC-17 #4)', async () => {
+      query.mockResolvedValue({ rows: [] });
+
+      const res = mockResponse();
+      await getAll(asPharmacist({ query: {} }), res, next);
+
+      expect(query).toHaveBeenCalledWith(expect.stringContaining(`"${SCHEMA}".medicines`), expect.any(Array));
+    });
+
+    it('rejects a caller with no pharmacy organization, before any query runs', async () => {
+      resolveSchema.mockResolvedValue({ error: 'No pharmacy organization is linked to this account.', status: 400 });
+
+      const res = mockResponse();
+      await getAll(asPharmacist({ query: {} }), res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(query).not.toHaveBeenCalled();
     });
 
     it('applies the search filter only once it reaches the minimum length (PRO-02)', async () => {
       query.mockResolvedValue({ rows: [] });
 
       const res = mockResponse();
-      await getAll(mockRequest({ query: { search: 'panadol' } }), res, next);
+      await getAll(asPharmacist({ query: { search: 'panadol' } }), res, next);
       expect(query).toHaveBeenCalledWith(expect.stringContaining('ILIKE'), ['%panadol%', 500, 0]);
 
       query.mockClear();
-      await getAll(mockRequest({ query: { search: 'p' } }), res, next);
+      await getAll(asPharmacist({ query: { search: 'p' } }), res, next);
       expect(query).toHaveBeenCalledWith(expect.not.stringContaining('ILIKE'), [500, 0]);
     });
 
@@ -39,7 +72,7 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rows: [] });
 
       const res = mockResponse();
-      await getAll(mockRequest({ query: { low_stock: 'true' } }), res, next);
+      await getAll(asPharmacist({ query: { low_stock: 'true' } }), res, next);
 
       expect(query).toHaveBeenCalledWith(
         expect.stringContaining('stock_quantity <= m.reorder_level'),
@@ -51,7 +84,7 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rows: [] });
 
       const res = mockResponse();
-      await getAll(mockRequest({ query: { limit: '99999' } }), res, next);
+      await getAll(asPharmacist({ query: { limit: '99999' } }), res, next);
 
       expect(query).toHaveBeenCalledWith(expect.any(String), [1000, 0]);
     });
@@ -62,7 +95,7 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rows: [] });
 
       const res = mockResponse();
-      await getOne(mockRequest({ params: { id: '999' } }), res, next);
+      await getOne(asPharmacist({ params: { id: '999' } }), res, next);
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({ message: 'Medicine not found' });
@@ -80,7 +113,7 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rows: [created] });
 
       const res = mockResponse();
-      await create(mockRequest({ body }), res, next);
+      await create(asPharmacist({ body }), res, next);
 
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith(created);
@@ -92,7 +125,7 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rows: [{ id: 1 }] });
 
       const res = mockResponse();
-      await update(mockRequest({
+      await update(asPharmacist({
         params: { id: '1' },
         body: { name: 'X', price: 1, stock_quantity: 99999, is_active: true },
       }), res, next);
@@ -105,7 +138,7 @@ describe('medicineController', () => {
       query.mockRejectedValue({ code: '23514' });
 
       const res = mockResponse();
-      await update(mockRequest({ params: { id: '1' }, body: { name: 'X', price: -1 } }), res, next);
+      await update(asPharmacist({ params: { id: '1' }, body: { name: 'X', price: -1 } }), res, next);
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(next).not.toHaveBeenCalled();
@@ -115,7 +148,7 @@ describe('medicineController', () => {
   describe('adjustStock', () => {
     it('rejects a non-integer or zero delta', async () => {
       const res = mockResponse();
-      await adjustStock(mockRequest({ params: { id: '1' }, body: { delta: 0 } }), res, next);
+      await adjustStock(asPharmacist({ params: { id: '1' }, body: { delta: 0 } }), res, next);
       expect(res.status).toHaveBeenCalledWith(400);
       expect(query).not.toHaveBeenCalled();
     });
@@ -124,7 +157,7 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rows: [{ id: 1, stock_quantity: 105 }] });
 
       const res = mockResponse();
-      await adjustStock(mockRequest({ params: { id: '1' }, body: { delta: 5 } }), res, next);
+      await adjustStock(asPharmacist({ params: { id: '1' }, body: { delta: 5 } }), res, next);
 
       expect(query).toHaveBeenCalledWith(expect.stringContaining('stock_quantity + $1'), [5, '1']);
       expect(res.json).toHaveBeenCalledWith({ id: 1, stock_quantity: 105 });
@@ -134,7 +167,7 @@ describe('medicineController', () => {
       query.mockRejectedValue({ code: '23514' });
 
       const res = mockResponse();
-      await adjustStock(mockRequest({ params: { id: '1' }, body: { delta: -1000 } }), res, next);
+      await adjustStock(asPharmacist({ params: { id: '1' }, body: { delta: -1000 } }), res, next);
 
       expect(res.status).toHaveBeenCalledWith(409);
     });
@@ -145,10 +178,10 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rowCount: 1 });
 
       const res = mockResponse();
-      await remove(mockRequest({ params: { id: '1' } }), res, next);
+      await remove(asPharmacist({ params: { id: '1' } }), res, next);
 
       const [sql] = query.mock.calls[0];
-      expect(sql).toMatch(/UPDATE medicines SET deleted_at/);
+      expect(sql).toMatch(/UPDATE "tenant_test_pharmacy"\.medicines SET deleted_at/);
       expect(res.status).toHaveBeenCalledWith(204);
     });
 
@@ -156,7 +189,7 @@ describe('medicineController', () => {
       query.mockResolvedValue({ rowCount: 0 });
 
       const res = mockResponse();
-      await remove(mockRequest({ params: { id: '999' } }), res, next);
+      await remove(asPharmacist({ params: { id: '999' } }), res, next);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });

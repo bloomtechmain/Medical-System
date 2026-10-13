@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
-import { pool, queryAs, RLSActor } from '../config/db';
+import { pool, queryAs, RLSActor, revokeRefreshTokens } from '../config/db';
 import { parsePaging } from '../utils/pagination';
 
 // clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
@@ -71,6 +71,7 @@ const update = async (req: Request, res: Response, next: NextFunction): Promise<
       [name, email, role, is_active, req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+    if (!rows[0].is_active) await revokeRefreshTokens(rows[0].id);
     res.json(rows[0]);
   } catch (err) { next(err); }
 };
@@ -158,6 +159,10 @@ const updateWithProfile = async (req: Request, res: Response, next: NextFunction
     const params: unknown[] = [name, email, is_active === true || (is_active as unknown as string) === 'true'];
 
     if (password && password.trim()) {
+      if (password.length < 10) {
+        res.status(400).json({ message: 'Password must be at least 10 characters' });
+        return;
+      }
       const hash = await bcrypt.hash(password, 10);
       setClauses.push(`password=$${params.length + 1}`);
       params.push(hash);
@@ -187,6 +192,7 @@ const updateWithProfile = async (req: Request, res: Response, next: NextFunction
     const updatedProfile = await fetchRoleProfile(client, user.id, user.role);
 
     await client.query('COMMIT');
+    if (!user.is_active) await revokeRefreshTokens(user.id);
     res.json({ ...user, profile: updatedProfile });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -294,6 +300,7 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
       [req.params.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
+    if (!rows[0].is_active) await revokeRefreshTokens(rows[0].id);
     res.json(rows[0]);
   } catch (err) { next(err); }
 };
@@ -323,6 +330,7 @@ const PLATFORM_STATS_TTL_MS = parseInt(process.env.PLATFORM_STATS_TTL_MS || '300
 const computePlatformStats = async (): Promise<{
   total_sales: number; total_revenue: number; sales_this_month: number;
   total_appointments: number; upcoming_appointments: number; completed_appointments: number;
+  total_medicines: number; low_stock: number; expired: number;
 }> => {
   const [pharmacyRes, hospitalRes] = await Promise.all([
     pool.query(
@@ -351,7 +359,20 @@ const computePlatformStats = async (): Promise<{
        FROM (${hospitalSchemas.map(s => `SELECT status FROM "${s}".appointments`).join(' UNION ALL ')}) _a`
     : `SELECT 0::bigint AS total_appointments, 0::bigint AS upcoming_appointments, 0::bigint AS completed_appointments`;
 
-  const [salesRow, apptRow] = await Promise.all([pool.query(salesSQL), pool.query(apptSQL)]);
+  // SEC-17 #4: medicines moved from one shared public table into each
+  // pharmacy's own tenant schema — this admin-only system-wide count is the
+  // one place that legitimately needs to see across every pharmacy at once,
+  // summed the same way salesSQL above already does. Cached alongside
+  // sales/appointments for the same reason (see the comment above this
+  // function) — this used to be a live per-request query.
+  const medSQL = pharmacySchemas.length
+    ? `SELECT COUNT(*)::bigint AS total_medicines,
+              COUNT(*) FILTER (WHERE stock_quantity <= reorder_level)::bigint AS low_stock,
+              COUNT(*) FILTER (WHERE expiry_date < NOW())::bigint AS expired
+       FROM (${pharmacySchemas.map(s => `SELECT stock_quantity, reorder_level, expiry_date FROM "${s}".medicines WHERE is_active = TRUE AND deleted_at IS NULL`).join(' UNION ALL ')}) _m`
+    : `SELECT 0::bigint AS total_medicines, 0::bigint AS low_stock, 0::bigint AS expired`;
+
+  const [salesRow, apptRow, medRow] = await Promise.all([pool.query(salesSQL), pool.query(apptSQL), pool.query(medSQL)]);
   return {
     total_sales: salesRow.rows[0].total_sales,
     total_revenue: salesRow.rows[0].total_revenue,
@@ -359,6 +380,9 @@ const computePlatformStats = async (): Promise<{
     total_appointments: apptRow.rows[0].total_appointments,
     upcoming_appointments: apptRow.rows[0].upcoming_appointments,
     completed_appointments: apptRow.rows[0].completed_appointments,
+    total_medicines: medRow.rows[0].total_medicines,
+    low_stock: medRow.rows[0].low_stock,
+    expired: medRow.rows[0].expired,
   };
 };
 
@@ -374,16 +398,19 @@ const getCachedPlatformStats = async () => {
   const fresh = await computePlatformStats();
   const { rows: upserted } = await pool.query(
     `INSERT INTO public.platform_stats_cache
-       (id, total_sales, total_revenue, sales_this_month, total_appointments, upcoming_appointments, completed_appointments, computed_at)
-     VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+       (id, total_sales, total_revenue, sales_this_month, total_appointments, upcoming_appointments, completed_appointments,
+        total_medicines, low_stock, expired, computed_at)
+     VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
      ON CONFLICT (id) DO UPDATE SET
        total_sales = EXCLUDED.total_sales, total_revenue = EXCLUDED.total_revenue,
        sales_this_month = EXCLUDED.sales_this_month, total_appointments = EXCLUDED.total_appointments,
        upcoming_appointments = EXCLUDED.upcoming_appointments, completed_appointments = EXCLUDED.completed_appointments,
+       total_medicines = EXCLUDED.total_medicines, low_stock = EXCLUDED.low_stock, expired = EXCLUDED.expired,
        computed_at = EXCLUDED.computed_at
      RETURNING *`,
     [fresh.total_sales, fresh.total_revenue, fresh.sales_this_month,
-     fresh.total_appointments, fresh.upcoming_appointments, fresh.completed_appointments]
+     fresh.total_appointments, fresh.upcoming_appointments, fresh.completed_appointments,
+     fresh.total_medicines, fresh.low_stock, fresh.expired]
   );
   return upserted[0];
 };
@@ -394,8 +421,10 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
     // (recomputed lazily, at most once per TTL — see getCachedPlatformStats).
     const platformStats = await getCachedPlatformStats();
 
-    // Phase 2: run all other stats in parallel
-    const [userRes, orgRes, medRes, consultRes, labRes, recentRes] = await Promise.all([
+    // Phase 2: run all other stats in parallel. medicines (SEC-17 #4: now a
+    // cross-tenant UNION ALL, same as sales/appointments) comes from the
+    // same TTL cache as sales/appointments above, not a live query here.
+    const [userRes, orgRes, consultRes, labRes, recentRes] = await Promise.all([
       pool.query(`
         SELECT
           COUNT(*) FILTER (WHERE role='patient')    AS total_patients,
@@ -417,13 +446,6 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
           COUNT(*) FILTER (WHERE is_active=TRUE)                            AS total_organizations,
           COUNT(*) FILTER (WHERE is_active=FALSE AND approved_at IS NULL)   AS pending_organizations
         FROM public.organizations
-      `),
-      pool.query(`
-        SELECT
-          COUNT(*)                                             AS total_medicines,
-          COUNT(*) FILTER (WHERE stock_quantity <= reorder_level) AS low_stock,
-          COUNT(*) FILTER (WHERE expiry_date < NOW())         AS expired
-        FROM public.medicines WHERE is_active=TRUE
       `),
       queryAs(actor(req), `
         SELECT
@@ -448,7 +470,11 @@ const getStats = async (req: Request, res: Response, next: NextFunction): Promis
     res.json({
       users:         userRes.rows[0],
       organizations: orgRes.rows[0],
-      medicines:     medRes.rows[0],
+      medicines: {
+        total_medicines: platformStats.total_medicines,
+        low_stock: platformStats.low_stock,
+        expired: platformStats.expired,
+      },
       consultations: consultRes.rows[0],
       labs:          labRes.rows[0],
       sales: {

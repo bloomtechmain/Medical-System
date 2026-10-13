@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { authApi, userApi } from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import ChangePasswordPanel from '../components/common/ChangePasswordPanel';
 
 export default function DoctorSettings() {
   const { t } = useTranslation('doctorCore');
@@ -107,6 +108,8 @@ export default function DoctorSettings() {
           </button>
         </div>
       </form>
+
+      <ChangePasswordPanel />
     </div>
   );
 }

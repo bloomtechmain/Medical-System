@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'path';
 import multer from 'multer';
 import { body } from 'express-validator';
-import { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove } from '../controllers/consultationController';
+import { create, update, updateByPatient, getAll, getOne, getPatientHistory, remove, servePrescriptionFile } from '../controllers/consultationController';
 import { protect, authorize } from '../middleware/auth';
 import { uploadLimiter } from '../middleware/rateLimiter';
 import { verifyUploadSignature } from '../utils/uploadSecurity';
@@ -37,6 +37,8 @@ const createValidators = [
 router.get('/patient/:patientId/history', protect, authorize('doctor', 'admin'), getPatientHistory);
 router.get('/',        protect, authorize('patient', 'doctor'), getAll);
 router.get('/:id',     protect, authorize('patient', 'doctor'), getOne);
+// SEC-28: replaces the removed unauthenticated /uploads/... static route.
+router.get('/:id/prescription-file', protect, authorize('patient', 'doctor', 'pharmacist', 'admin'), servePrescriptionFile);
 router.post('/',       protect, authorize('patient', 'doctor'), uploadLimiter, upload.single('prescription'), verifyUploadSignature(), createValidators, validate, create);
 router.put('/:id',                  protect, authorize('doctor'),      uploadLimiter, upload.single('prescription'), verifyUploadSignature(), update);
 router.put('/:id/patient',          protect, authorize('patient'),     updateByPatient);

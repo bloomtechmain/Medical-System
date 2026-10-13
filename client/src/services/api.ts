@@ -15,13 +15,54 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// SEC-17 (auth): access tokens are now short-lived (15m), so a 401 from an
+// expired-but-otherwise-valid session is the common case, not the exception.
+// One shared in-flight refresh call (not one per failed request) exchanges
+// the stored refresh token for a new pair and retries; if that fails (no
+// refresh token — e.g. an impersonation session, which never gets one on
+// purpose — or it's been revoked/expired) this falls back to the original
+// clear-and-redirect behavior.
+let refreshPromise: Promise<string | null> | null = null;
+
+const clearSessionAndRedirect = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+  window.location.href = '/login';
+};
+
+const doRefresh = async (): Promise<string | null> => {
+  const storedRefresh = localStorage.getItem('refreshToken');
+  if (!storedRefresh) return null;
+  try {
+    const res = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken: storedRefresh });
+    const { token, refreshToken } = res.data as { token: string; refreshToken: string };
+    localStorage.setItem('token', token);
+    localStorage.setItem('refreshToken', refreshToken);
+    return token;
+  } catch {
+    return null;
+  }
+};
+
 api.interceptors.response.use(
   (res) => res.data,
-  (err) => {
-    if (err.response?.status === 401 && localStorage.getItem('token')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+  async (err) => {
+    const original = err.config;
+    const url: string = original?.url || '';
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/mfa/login');
+
+    if (err.response?.status === 401 && localStorage.getItem('token') && !isAuthEndpoint && !original._retry) {
+      original._retry = true;
+      if (!refreshPromise) refreshPromise = doRefresh().finally(() => { refreshPromise = null; });
+      const newToken = await refreshPromise;
+      if (newToken) {
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api.request(original);
+      }
+      clearSessionAndRedirect();
+    } else if (err.response?.status === 401 && localStorage.getItem('token') && !isAuthEndpoint) {
+      clearSessionAndRedirect();
     }
     return Promise.reject(err.response?.data || err);
   }
@@ -35,23 +76,36 @@ export const authApi = {
   me:       (): Promise<any>              => api.get('/auth/me'),
   impersonate:       (userId: number): Promise<any> => api.post(`/auth/impersonate/${userId}`),
   getImpersonations: (): Promise<any>               => api.get('/auth/impersonations'),
+  mfaLogin:      (data: { mfaToken: string; code: string }): Promise<any> => api.post('/auth/mfa/login', data),
+  mfaSetup:      (): Promise<any>                     => api.post('/auth/mfa/setup'),
+  mfaVerifySetup: (code: string): Promise<any>        => api.post('/auth/mfa/verify-setup', { code }),
+  mfaDisable:    (code: string): Promise<any>         => api.post('/auth/mfa/disable', { code }),
+  refresh:       (refreshToken: string): Promise<any> => api.post('/auth/refresh', { refreshToken }),
+  logoutSession: (refreshToken: string): Promise<any> => api.post('/auth/logout', { refreshToken }),
+  changePassword: (data: { currentPassword: string; newPassword: string }): Promise<any> => api.post('/auth/change-password', data),
+  forgotPassword: (email: string): Promise<any> => api.post('/auth/forgot-password', { email }),
+  resetPassword:  (data: { token: string; newPassword: string }): Promise<any> => api.post('/auth/reset-password', data),
 };
 
+// organization_id is only ever read server-side for an admin caller (see
+// resolvePharmacySchema in server/config/db.ts) — a pharmacist's own org is
+// always resolved from their membership regardless of what's sent here, so
+// passing undefined for non-admin callers is the normal, correct case.
 export const medicineApi = {
-  getAll: (params?: unknown): Promise<any>          => api.get('/medicines', { params }),
-  getOne: (id: number): Promise<any>                => api.get(`/medicines/${id}`),
-  create: (data: unknown): Promise<any>             => api.post('/medicines', data),
-  update: (id: number, data: unknown): Promise<any> => api.put(`/medicines/${id}`, data),
-  adjustStock: (id: number, delta: number): Promise<any> => api.patch(`/medicines/${id}/stock`, { delta }),
-  remove: (id: number): Promise<any>                => api.delete(`/medicines/${id}`),
+  getAll: (params?: unknown): Promise<any>                                     => api.get('/medicines', { params }),
+  getOne: (id: number, organization_id?: number): Promise<any>                 => api.get(`/medicines/${id}`, { params: { organization_id } }),
+  create: (data: unknown, organization_id?: number): Promise<any>              => api.post('/medicines', data, { params: { organization_id } }),
+  update: (id: number, data: unknown, organization_id?: number): Promise<any>  => api.put(`/medicines/${id}`, data, { params: { organization_id } }),
+  adjustStock: (id: number, delta: number, organization_id?: number): Promise<any> => api.patch(`/medicines/${id}/stock`, { delta }, { params: { organization_id } }),
+  remove: (id: number, organization_id?: number): Promise<any>                => api.delete(`/medicines/${id}`, { params: { organization_id } }),
 };
 
 export const supplierApi = {
-  getAll: (): Promise<any>                           => api.get('/suppliers'),
-  getOne: (id: number): Promise<any>                 => api.get(`/suppliers/${id}`),
-  create: (data: unknown): Promise<any>              => api.post('/suppliers', data),
-  update: (id: number, data: unknown): Promise<any>  => api.put(`/suppliers/${id}`, data),
-  remove: (id: number): Promise<any>                 => api.delete(`/suppliers/${id}`),
+  getAll: (organization_id?: number): Promise<any>                        => api.get('/suppliers', { params: { organization_id } }),
+  getOne: (id: number, organization_id?: number): Promise<any>            => api.get(`/suppliers/${id}`, { params: { organization_id } }),
+  create: (data: unknown, organization_id?: number): Promise<any>         => api.post('/suppliers', data, { params: { organization_id } }),
+  update: (id: number, data: unknown, organization_id?: number): Promise<any> => api.put(`/suppliers/${id}`, data, { params: { organization_id } }),
+  remove: (id: number, organization_id?: number): Promise<any>            => api.delete(`/suppliers/${id}`, { params: { organization_id } }),
 };
 
 export const orderApi = {
@@ -69,9 +123,9 @@ export const saleApi = {
 };
 
 export const inventoryApi = {
-  summary:  (): Promise<any>             => api.get('/inventory/summary'),
-  lowStock: (): Promise<any>             => api.get('/inventory/low-stock'),
-  expiring: (days: number): Promise<any> => api.get('/inventory/expiring', { params: { days } }),
+  summary:  (organization_id?: number): Promise<any>             => api.get('/inventory/summary', { params: { organization_id } }),
+  lowStock: (organization_id?: number): Promise<any>             => api.get('/inventory/low-stock', { params: { organization_id } }),
+  expiring: (days: number, organization_id?: number): Promise<any> => api.get('/inventory/expiring', { params: { days, organization_id } }),
 };
 
 export const consultationApi = {

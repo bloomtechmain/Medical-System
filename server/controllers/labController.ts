@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, getTenantSchema, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
-import { deleteUpload } from '../utils/fileStorage';
+import { deleteUpload, streamUploadToResponse } from '../utils/fileStorage';
 import { parsePaging } from '../utils/pagination';
 import { enqueue as enqueueLabReportVitals } from '../queue/jobs/extractLabReportVitals';
 
@@ -96,6 +96,11 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       if (dup.length) { res.status(409).json({ message: 'Lab request already sent for this consultation' }); return; }
     }
 
+    // Content-type verification already happened at the route level
+    // (verifyUploadSignature) and the filename is already random
+    // (randomUploadName) before multer's storage engine wrote this file.
+    const referralFile = req.file ? req.file.filename : null;
+
     const { rows: [request] } = await queryAs(actor(req), `
       INSERT INTO lab_requests
         (doctor_id, patient_id, laboratory_id, consultation_id, test_description, notes,
@@ -104,7 +109,7 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       RETURNING *
     `, [doctorId, patientId, laboratory_id, consultation_id || null, testDesc, notes || null,
         report_type || null, scheduled_at || null,
-        req.file?.filename || null, req.file?.mimetype || null]);
+        referralFile, req.file?.mimetype || null]);
 
     // Catalog-backed bookings are priced immediately — the chosen test's
     // price is copied into the lab's own tenant invoices table right away,
@@ -279,7 +284,10 @@ const uploadReport = async (req: Request, res: Response, next: NextFunction): Pr
     if (!existing.length) { res.status(404).json({ message: 'Not found' }); return; }
     if (!req.file)        { res.status(400).json({ message: 'Report file is required' }); return; }
 
-    // Delete previous file if replacing
+    // Delete previous file if replacing. Content-type verification already
+    // happened at the route level (verifyUploadSignature, before multer's
+    // storage engine wrote this file) and the filename is already random
+    // (randomUploadName) — see utils/uploadSecurity.ts / utils/fileStorage.ts.
     if (existing[0].report_file) {
       await deleteUpload('lab-reports', existing[0].report_file);
     }
@@ -459,4 +467,30 @@ const remove = async (req: Request, res: Response, next: NextFunction): Promise<
   } catch (err) { next(err); }
 };
 
-export { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove };
+// SEC-28: replaces the removed unauthenticated `/uploads/...` static route.
+// Same ownership gate for both file types a lab_requests row can carry.
+const serveFile = (column: 'report_file' | 'referral_file') =>
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { rows } = await queryAs(actor(req),
+        `SELECT ${column}, patient_id, doctor_id, laboratory_id FROM lab_requests WHERE id=$1`,
+        [req.params.id]
+      );
+      const row = rows[0];
+      const allowed = row && (
+        req.user.role === 'admin' ||
+        row.patient_id === req.user.id ||
+        row.doctor_id === req.user.id ||
+        row.laboratory_id === req.user.id
+      );
+      const filename = row?.[column];
+      if (!allowed || !filename) { res.status(404).json({ message: 'Not found' }); return; }
+      const subdir = column === 'report_file' ? 'lab-reports' : 'lab-referrals';
+      const found = await streamUploadToResponse(res, subdir, filename, { originalName: filename });
+      if (!found) res.status(404).json({ message: 'Not found' });
+    } catch (err) { next(err); }
+  };
+const serveReportFile = serveFile('report_file');
+const serveReferralFile = serveFile('referral_file');
+
+export { create, getAll, getOne, uploadReport, createDirect, updateStatus, reject, setPrice, remove, serveReportFile, serveReferralFile };
