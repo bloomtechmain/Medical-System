@@ -5,6 +5,13 @@ This only matters once — the first time `npm run db:migrate` is pointed at the
 a brand-new production database) just runs `npm run db:migrate` normally,
 which executes `001_initial_schema.sql` for real. Skip this file for those.
 
+> **Note on this file's location.** This file and `BASELINE_prod_catchup.sql`
+> live in the migrations directory but are *not* migrations — neither has the
+> `NNN_` numeric prefix node-pg-migrate expects, and it refuses to start if it
+> finds them ("Cannot determine numeric prefix"). The `db:migrate` scripts in
+> `server/package.json` therefore pass `--ignore-pattern "BASELINE.*"`. If you
+> rename either file, update that pattern too.
+
 ## Why this is needed
 
 Production's schema was built by hand, over time, by running `migrate.ts` and
