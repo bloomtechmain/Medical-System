@@ -20,9 +20,51 @@ const transporter = hasSmtp
     })
   : null;
 
-if (!hasSmtp) {
-  console.log('[mailer] SMTP_HOST is not set — emails will be logged to the console instead of sent (ARCH-style optional-service fallback).');
-}
+// PRO-11: email verification is on by default, so an environment with no
+// mail path cannot confirm any new address — every registration becomes an
+// account that can never log in, and the only clue is a console line nobody
+// reads. In development that is fine and deliberate (read the link out of the
+// server log). In production it is a silent, total lockout of new users.
+//
+// Treated the same way as a missing environment variable (ARCH-04) and a
+// database behind the code (schemaCheck.ts): refuse to start and say exactly
+// what to do, rather than coming up and failing every user quietly.
+const assertMailPath = (): void => {
+  if (hasSmtp) return;
+
+  const verificationRequired = process.env.FEATURE_REQUIRE_EMAIL_VERIFICATION !== 'false';
+
+  if (process.env.NODE_ENV === 'production' && verificationRequired) {
+    const lines = [
+      '',
+      '=============================================================',
+      ' NO MAIL PATH, BUT EMAIL VERIFICATION IS REQUIRED.',
+      '=============================================================',
+      '',
+      'SMTP_HOST is not set, so no confirmation email can be sent — and',
+      'FEATURE_REQUIRE_EMAIL_VERIFICATION is on, so no new account can log in',
+      'without one. Every registration would become an account nobody can get',
+      'into, and password reset would be equally unusable.',
+      '',
+      'Pick one:',
+      '  - Configure SMTP (see server/.env.example, then',
+      '    `npm run mail:test you@example.com` to check it), or',
+      '  - Set FEATURE_REQUIRE_EMAIL_VERIFICATION=false to accept unverified',
+      '    addresses deliberately.',
+      '',
+    ];
+    console.error(lines.join('\n'));
+    process.exit(1);
+  }
+
+  console.warn(
+    '[mailer] SMTP_HOST is not set — confirmation and password-reset emails are ' +
+    'logged to the console instead of sent. Fine locally (grep the log for ' +
+    '"verify-email?token="); never acceptable in a deployed environment.'
+  );
+};
+
+assertMailPath();
 
 const sendMail = async (to: string, subject: string, html: string): Promise<void> => {
   if (!transporter) {
