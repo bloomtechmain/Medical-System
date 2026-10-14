@@ -186,8 +186,7 @@ export default function OrgRegister() {
         owner_email:    ownerUser ? undefined : data.owner_email,
         owner_password: ownerUser ? undefined : data.owner_password,
         profile: Object.keys(profile).length ? profile : undefined,
-        specializations: (selectedType === 'hospital' || selectedType === 'clinic') && orgSpecializations.length
-          ? orgSpecializations : undefined,
+        specializations: orgSpecializations.length ? orgSpecializations : undefined,
         accepted_terms_version: LEGAL_VERSION,
       });
 
@@ -291,7 +290,7 @@ export default function OrgRegister() {
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => { setSelectedType(t.id); setStep(2); }}
+                  onClick={() => { setSelectedType(t.id); setOrgSpecializations([]); setStep(2); }}
                   className={`group relative text-left p-6 rounded-2xl border-2 bg-white transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${t.color}`}
                 >
                   <svg className="absolute top-5 right-5 w-5 h-5 text-gray-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -457,6 +456,19 @@ export default function OrgRegister() {
               </div>
             )}
 
+            {selectedType === 'pharmacy' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Organization Specializations</h3>
+                <p className="text-xs text-gray-400 mb-4">What pharmacy services does your organization offer? Select any that apply, or add your own.</p>
+                <MultiSelectWithCustom
+                  options={PHARMA_SPECS}
+                  selected={orgSpecializations}
+                  onChange={setOrgSpecializations}
+                  customPlaceholder="e.g., Veterinary Pharmacy"
+                />
+              </div>
+            )}
+
             {selectedType === 'laboratory' && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Laboratory Details</h3>
@@ -497,6 +509,19 @@ export default function OrgRegister() {
                     <input className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="https://www.yourlaboratory.lk" {...register('website')} />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {selectedType === 'laboratory' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Organization Specializations</h3>
+                <p className="text-xs text-gray-400 mb-4">What testing services does your laboratory offer? Select any that apply, or add your own.</p>
+                <MultiSelectWithCustom
+                  options={LAB_TYPES}
+                  selected={orgSpecializations}
+                  onChange={setOrgSpecializations}
+                  customPlaceholder="e.g., Toxicology"
+                />
               </div>
             )}
 
