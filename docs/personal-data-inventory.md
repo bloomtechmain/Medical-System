@@ -4,19 +4,30 @@ What tables hold personal data or PHI, what's in them, why, and who can
 reach them. Generated from `corehealth_database.sql` — the schema file is
 the source of truth; re-check this doc whenever that file changes.
 
-## Important caveat: row-level security does not currently enforce anything
+## Row-level security: now actually enforced (resolved — DB-02)
 
-Several tables below are marked `RLS` — they have `FORCE ROW LEVEL SECURITY`
-policies defined in the schema. **In the current deployment this provides
-zero actual protection**, confirmed by querying `pg_roles` for the
-connection the app uses: it connects as `postgres`, which has
-`rolsuper = true` and `rolbypassrls = true`. Postgres superusers bypass RLS
-entirely regardless of what policies exist. Every access control guarantee
-below that says "RLS" is really enforced by application code (explicit
-`WHERE` clauses, ownership checks in controllers) — RLS is defense-in-depth
-that isn't currently defending anything. Fixing this means connecting as a
-non-superuser role with `NOSUPERUSER` and `NOBYPASSRLS`, which is deployment
-configuration, not a code change — flag this before AWS RDS is provisioned.
+This section previously carried a caveat that the `RLS` markings below
+provided **zero actual protection**, because the application connected as
+`postgres` (`rolsuper = true`, `rolbypassrls = true`) and a superuser bypasses
+row-level security entirely.
+
+**That has been fixed.** The application now connects as `corehealth_app`, a
+role that is neither a superuser nor `BYPASSRLS`, with a separate
+`corehealth_migrator` role for migrations and tenant provisioning (see section
+6 of `corehealth_database.sql`). The `RLS` markings below therefore mean what
+they say, and the application-layer `WHERE` clauses and ownership checks are
+defence in depth rather than the only line.
+
+This is verified, not assumed: `server/controllers/__tests__/rls.integration.test.ts`
+runs against a real database **as `corehealth_app`** and asserts that a doctor
+with no accepted access request reads zero rows — which is exactly the test
+DB-02 asked for, and it would pass vacuously if the connection were a
+superuser.
+
+One thing to preserve on any new deployment, including AWS RDS: `DATABASE_URL`
+must point at `corehealth_app`, never at the instance's master user. Pointing
+it at a superuser silently re-opens this hole with no error and no visible
+symptom. See `docs/environments.md`.
 
 ## public schema — shared identity, not RLS-protected (app-layer checks only)
 
@@ -31,9 +42,15 @@ configuration, not a code change — flag this before AWS RDS is provisioned.
 | `laboratory_profiles` | phone, license_number, address, accreditation, website | Laboratory's professional profile. | Self, admin, limited public search. |
 | `organizations` | owner_user_id, org registration details | Hospital/clinic/pharmacy/laboratory tenant registry — not personal data itself, but links an org to its owner's user row. | Admin (full), public (name/type only, for the hospital-affiliation search box). |
 
-Not personal data, included for completeness: `medicines`, `suppliers`
-(commercial catalog, SEC-17 #4's pending tenant-scoping work),
-`organization_members`, `organization_specializations`.
+| `audit_log` | actor id/email/role, the admin behind an impersonated session, the patient whose record was involved, IP address, user agent | MON-12 — append-only record of sign-ins and failed sign-ins, permission changes, deletions, and who viewed which patient record. Also the source for answering a patient's "who accessed my data" request. | Admin only. **Append-only by privilege**: `corehealth_app` has `SELECT`/`INSERT` and no `UPDATE`/`DELETE`, so nothing reachable from a request can rewrite it. Metadata is validated on write to refuse credentials and clinical content (`server/utils/auditLog.ts`). |
+
+Not personal data, included for completeness: `organization_members`,
+`organization_specializations`, `idempotency_keys`, `platform_stats_cache`.
+
+`medicines` and `suppliers` no longer appear in `public` at all — SEC-17 #4
+moved them into each organisation's own `tenant_<slug>` schema, so one
+pharmacy's stock and cost prices are not readable by another. They remain
+commercial data, not personal data.
 
 ## clinical schema — PHI, RLS-defined (see caveat above) + app-layer checks
 

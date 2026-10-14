@@ -3,6 +3,15 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // CICD-03: the client had no tests at all, so a broken render or a
+  // regression in the shared helpers only showed up in a browser.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    // Vitest picks up server/ otherwise when run from the repo root.
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  },
   server: {
     port: 5173,
     proxy: {

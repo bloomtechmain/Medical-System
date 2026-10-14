@@ -6,6 +6,7 @@ import { orgApi } from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import OperatingHoursPicker from '../components/common/OperatingHoursPicker';
 import MultiSelectWithCustom from '../components/common/MultiSelectWithCustom';
+import { LEGAL_VERSION } from '../legal';
 
 interface OwnerCandidate {
   id: number;
@@ -187,6 +188,7 @@ export default function OrgRegister() {
         profile: Object.keys(profile).length ? profile : undefined,
         specializations: (selectedType === 'hospital' || selectedType === 'clinic') && orgSpecializations.length
           ? orgSpecializations : undefined,
+        accepted_terms_version: LEGAL_VERSION,
       });
 
       setDone(true);
@@ -639,8 +641,18 @@ export default function OrgRegister() {
               ) : 'Submit Organization Registration'}
             </button>
 
+            {/* COMP-02: see Register.tsx — the documents now exist and the
+                accepted version is recorded. */}
             <p className="text-center text-xs text-gray-400">
-              By registering, you agree to Core Health's Terms of Service and Privacy Policy.
+              By registering, you agree to Core Health's{' '}
+              <Link to="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-700">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy" target="_blank" className="text-blue-600 underline hover:text-blue-700">
+                Privacy Policy
+              </Link>{' '}
+              (version {LEGAL_VERSION}).
             </p>
             </>
             )}

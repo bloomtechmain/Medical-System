@@ -6,12 +6,23 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import { initErrorTracking, captureError } from './errorTracking';
 import './i18n';
 import './index.css';
+
+// MON-05: before the app renders, so a crash during the first render is
+// reported too.
+initErrorTracking();
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
   static getDerivedStateFromError(error: Error) { return { error }; }
+  // The boundary already stopped this error from reaching window.onerror, so
+  // without an explicit report the tracker would never hear about the crashes
+  // that matter most — the ones that blank the screen for the user.
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    captureError(error, { componentStack: info.componentStack });
+  }
   render() {
     if (this.state.error) {
       const err = this.state.error as Error;

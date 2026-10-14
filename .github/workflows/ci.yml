@@ -5,6 +5,9 @@ on:
     branches: ["*"]
   pull_request:
     branches: [main]
+  # CICD-01: lets deploy.yml call this and wait for it, so a deploy cannot
+  # start before CI has passed.
+  workflow_call:
 
 jobs:
   # SEC-07: catches secrets committed anywhere in history, not just the
@@ -127,12 +130,54 @@ jobs:
         working-directory: ./client
         run: npm run lint
 
+      # CICD-03: the client had no tests at all, so the only thing standing
+      # between a broken shared helper and production was someone clicking it.
+      - name: Run client tests
+        working-directory: ./client
+        run: npm test
+
       - name: Build client
         working-directory: ./client
         run: npm run build
         env:
           VITE_API_URL: http://localhost:5000
           VITE_WS_URL: ws://localhost:5000
+
+  # COMP-05: no licence check existed. A copyleft dependency arriving
+  # transitively is the kind of thing nobody notices until it is a legal
+  # problem, and this is a closed-source health product.
+  #
+  # The allowlist is permissive licences only. Notably absent: GPL/AGPL/LGPL
+  # and SSPL. "Apache*" is license-checker's marker for a package whose
+  # licence it read from a LICENSE file rather than an SPDX field (today:
+  # sentry-cli, genuinely Apache-2.0) — allowed because the family is right,
+  # not because the detection is fuzzy.
+  license-check:
+    name: Dependency licences
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        workspace: [server, client]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ${{ matrix.workspace }}/package-lock.json
+      - name: Install ${{ matrix.workspace }} dependencies
+        working-directory: ./${{ matrix.workspace }}
+        run: npm ci
+      # --production: dev dependencies never ship, so their licences do not
+      # bind the distributed product. --excludePrivatePackages skips our own
+      # package, which is deliberately UNLICENSED.
+      - name: Check ${{ matrix.workspace }} licences
+        working-directory: ./${{ matrix.workspace }}
+        run: |
+          npx license-checker \
+            --production \
+            --excludePrivatePackages \
+            --onlyAllow "MIT;MIT-0;Apache-2.0;Apache*;ISC;BSD-2-Clause;BSD-3-Clause;BlueOak-1.0.0;CC-BY-4.0;0BSD;Unlicense;CC0-1.0;Python-2.0;WTFPL"
 
   # SEC-19: scans the actual built images, not just source dependencies —
   # catches vulnerable OS packages baked into the base image too.

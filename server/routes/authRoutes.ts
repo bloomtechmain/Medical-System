@@ -19,6 +19,9 @@ router.post('/register',
     body('role').isIn(['patient', 'doctor', 'pharmacist', 'laboratory']).withMessage('Invalid role'),
     body('hospital_organization_ids').optional().isArray({ max: 20 }).withMessage('Too many organizations'),
     body('hospital_organization_ids.*').optional().isInt(),
+    // COMP-02: a version string, not free text — bounded so it cannot be used
+    // to write arbitrary content into the users table.
+    body('accepted_terms_version').optional({ nullable: true }).isString().isLength({ max: 40 }),
   ],
   validate,
   register

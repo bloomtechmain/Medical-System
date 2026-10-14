@@ -14,6 +14,8 @@ const Login                 = lazy(() => import('./pages/Login'));
 const Register               = lazy(() => import('./pages/Register'));
 const OrgRegister           = lazy(() => import('./pages/OrgRegister'));
 const ForgotPassword        = lazy(() => import('./pages/ForgotPassword'));
+const PrivacyPolicy         = lazy(() => import('./pages/PrivacyPolicy'));
+const Terms                 = lazy(() => import('./pages/Terms'));
 const ResetPassword         = lazy(() => import('./pages/ResetPassword'));
 const HospitalDashboard     = lazy(() => import('./pages/HospitalDashboard'));
 const ClinicDashboard       = lazy(() => import('./pages/ClinicDashboard'));
@@ -102,6 +104,14 @@ export default function App() {
       <Route path="/org-register" element={token && user?.role ? <RoleHome /> : <OrgRegister />} />
       <Route path="/forgot-password" element={token && user?.role ? <RoleHome /> : <ForgotPassword />} />
       <Route path="/reset-password"  element={token && user?.role ? <RoleHome /> : <ResetPassword />} />
+
+      {/* COMP-02: both documents must be readable before anyone has an
+          account — the sign-up form links to them — so these stay public and
+          are NOT redirected away for a logged-in user, unlike /login and
+          /register above. A logged-in patient looking up the privacy policy
+          should get the privacy policy. */}
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms"   element={<Terms />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={<PrivateRoute roles={['admin']}><Layout /></PrivateRoute>}>

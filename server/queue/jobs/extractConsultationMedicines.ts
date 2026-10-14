@@ -1,5 +1,6 @@
 import type { Job } from 'pg-boss';
 import { boss, DEFAULT_QUEUE_OPTIONS } from '../boss';
+import { isEnabled } from '../../config/featureFlags';
 import { queryAs, RLSActor } from '../../config/db';
 import { extractMedicines, runOCR } from '../../utils/ocrParser';
 import { readUploadToTempFile } from '../../utils/fileStorage';
@@ -57,6 +58,11 @@ const register = async (): Promise<void> => {
   await boss.createQueue(JOB_NAME, DEFAULT_QUEUE_OPTIONS);
   await boss.work<Payload>(JOB_NAME, handler);
 };
-const enqueue = (payload: Payload): Promise<string | null> => boss.send(JOB_NAME, payload);
+// CICD-12: gated so OCR can be turned off with a variable change and a
+// restart rather than a revert-and-deploy. Off means the upload still
+// succeeds and the extraction simply does not happen — strictly better than
+// the API OOMing under a burst of large files (PRO-15).
+const enqueue = (payload: Payload): Promise<string | null> =>
+  isEnabled('OCR_PROCESSING') ? boss.send(JOB_NAME, payload) : Promise.resolve(null);
 
 export { JOB_NAME, register, enqueue };

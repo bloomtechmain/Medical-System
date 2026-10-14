@@ -201,12 +201,14 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
     const {
       org_name, slug, org_type, owner_user_id,
       owner_name, owner_email, owner_password, profile, specializations,
+      accepted_terms_version,
     } = req.body as {
       org_name: string; slug: string; org_type: string;
       owner_user_id?: number;
       owner_name?: string; owner_email?: string; owner_password?: string;
       profile?: Record<string, any>;
       specializations?: string[];
+      accepted_terms_version?: string;
     };
 
     const role = ORG_OWNER_ROLE[org_type];
@@ -250,10 +252,13 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
       const hash = await bcrypt.hash(owner_password as string, 10);
       let newUser: { id: number; name: string; email: string; role: string };
       try {
+        // COMP-02: same as the individual sign-up path — record which version
+        // of the terms the owner accepted, timestamped by the database.
         ({ rows: [newUser] } = await client.query(
-          `INSERT INTO public.users (name, email, password, role, is_active)
-           VALUES ($1,$2,$3,$4, FALSE) RETURNING id, name, email, role`,
-          [owner_name, owner_email, hash, role]
+          `INSERT INTO public.users (name, email, password, role, is_active, accepted_terms_version, accepted_terms_at)
+           VALUES ($1,$2,$3,$4, FALSE, $5, CASE WHEN $5::varchar IS NULL THEN NULL ELSE NOW() END)
+           RETURNING id, name, email, role`,
+          [owner_name, owner_email, hash, role, accepted_terms_version || null]
         ));
       } catch (err) {
         // PRO-29: the existing-email check above races with a second

@@ -1,0 +1,238 @@
+name: Deploy
+
+# CICD-01/04/05/06/09/10/13 and BKP-09.
+#
+# What was wrong: code reached production through Railway's automatic deploy
+# from GitHub, entirely outside this pipeline. So nothing guaranteed a deploy
+# waited for CI (CICD-01), each service was rebuilt from source per
+# environment rather than one image being promoted (CICD-04), the auto-created
+# v1.2.3 tag was not what got deployed (CICD-05), there was no staging step
+# (CICD-06), no post-deploy smoke test (CICD-09), no approval gate (CICD-10),
+# no team notification (CICD-13), and nothing took a backup before migrations
+# ran (BKP-09).
+#
+# ──────────────────────────────────────────────────────────────────────────
+# THIS WORKFLOW DOES NOT RUN UNTIL IT IS CONFIGURED. Every job is gated on a
+# secret or variable being present, so merging it changes nothing until
+# someone sets these up. That is deliberate: the alternative is a workflow
+# that fails on every push.
+#
+# To switch it on:
+#   1. Create the GitHub environments `staging` and `production`
+#      (Settings → Environments). Add required reviewers to `production` —
+#      that is CICD-10, and it is a settings change, not a code change.
+#   2. Set repository variable DEPLOY_ENABLED = "true".
+#   3. Set per-environment secrets:
+#        RAILWAY_TOKEN           (or the AWS equivalents below)
+#        DATABASE_MIGRATOR_URL   corehealth_migrator — used only for migrations
+#        SMOKE_BASE_URL          public API base URL for that environment
+#        SMOKE_TEST_EMAIL/PASSWORD  a dedicated low-privilege test account
+#        SLACK_WEBHOOK_URL       optional, for CICD-13
+#   4. In Railway, turn OFF automatic deploy on the service, and turn ON
+#      "Wait for CI" if you keep auto-deploy instead of this workflow.
+#   5. For the AWS target: replace the two "Deploy to ..." steps with
+#      `aws ecs update-service --force-new-deployment`, and push images to ECR
+#      instead of GHCR. The build-once-promote shape stays identical.
+# ──────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_staging:
+        description: "Deploy straight to production (incident fixes only)"
+        type: boolean
+        default: false
+
+concurrency:
+  # Never let two deploys of the same branch overlap — the loser would race
+  # the winner's migrations. Do not cancel in progress: a half-finished
+  # migration is worse than a queued deploy.
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  preflight:
+    name: Should this run?
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        run: |
+          if [ "${{ vars.DEPLOY_ENABLED }}" = "true" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEPLOY_ENABLED is not set to 'true' — skipping. See the header of this workflow file."
+          fi
+
+  # CICD-01: the deploy waits for CI, rather than running beside it.
+  ci:
+    name: CI must pass first
+    needs: preflight
+    if: needs.preflight.outputs.enabled == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  # CICD-04: build each image ONCE, here, and promote that exact image to
+  # staging and then production. Nothing is rebuilt per environment, so what
+  # was tested in staging is bit-for-bit what reaches production.
+  # CICD-05: tagged with the commit SHA, and the SHA is what gets deployed.
+  build:
+    name: Build and push images
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push server
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/server:${{ steps.meta.outputs.tag }}
+            ghcr.io/${{ github.repository }}/server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Stamps the release into the image so logs and Sentry events can be
+          # tied to a deploy (MON-05/MON-10).
+          build-args: |
+            GIT_COMMIT_SHA=${{ github.sha }}
+
+      - name: Build and push client
+        uses: docker/build-push-action@v6
+        with:
+          context: ./client
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/client:${{ steps.meta.outputs.tag }}
+            ghcr.io/${{ github.repository }}/client:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_GIT_COMMIT_SHA=${{ github.sha }}
+
+  # CICD-06: staging first. Until a staging environment actually exists this
+  # job is skipped by its own `if`, and the chain still works — production
+  # then depends on a skipped job, which is why it uses `always()` plus an
+  # explicit result check rather than plain `needs`.
+  deploy-staging:
+    name: Deploy to staging
+    needs: build
+    if: ${{ !inputs.skip_staging }}
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      # BKP-09: nothing took a backup before a schema change — migrations were
+      # run by hand from a laptop or the Railway shell. This snapshots first
+      # and WAITS for it, so the backup exists before anything alters the
+      # schema. It is also the restore point runbooks/rollback.md sends you to.
+      - name: Snapshot the database before migrating
+        env:
+          DATABASE_MIGRATOR_URL: ${{ secrets.DATABASE_MIGRATOR_URL }}
+        run: ./scripts/deploy/snapshot-database.sh staging
+
+      - name: Run migrations
+        working-directory: ./server
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_MIGRATOR_URL }}
+        run: |
+          npm ci
+          npm run db:migrate
+
+      - name: Deploy to Railway (staging)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          npm i -g @railway/cli
+          railway redeploy --service server --yes
+          railway redeploy --service client --yes
+
+      # CICD-09: no smoke test ran after a deploy, so a deploy that broke
+      # login was found by a user.
+      - name: Smoke test
+        env:
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+        run: ./scripts/deploy/smoke-test.sh
+
+  # CICD-10: the `production` GitHub environment carries required reviewers,
+  # so this job waits for a human before it starts.
+  deploy-production:
+    name: Deploy to production
+    needs: [build, deploy-staging]
+    if: always() && needs.build.result == 'success' && needs.deploy-staging.result != 'failure'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Snapshot the database before migrating
+        env:
+          DATABASE_MIGRATOR_URL: ${{ secrets.DATABASE_MIGRATOR_URL }}
+        run: ./scripts/deploy/snapshot-database.sh production
+
+      - name: Run migrations
+        working-directory: ./server
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_MIGRATOR_URL }}
+        run: |
+          npm ci
+          npm run db:migrate
+
+      - name: Deploy to Railway (production)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          npm i -g @railway/cli
+          railway redeploy --service server --yes
+          railway redeploy --service client --yes
+
+      - name: Smoke test
+        env:
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+        run: ./scripts/deploy/smoke-test.sh
+
+      # CICD-13: a release was announced on a green CI run, which is not a
+      # deploy. This fires on an actual production deploy, and says whether it
+      # worked.
+      # The `secrets` context is not available in `if:`, so the "is it
+      # configured" check has to happen inside the step.
+      - name: Tell the team
+        if: always()
+        env:
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          STATUS: ${{ job.status }}
+          TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::notice::SLACK_WEBHOOK_URL not set — skipping team notification (CICD-13)."
+            exit 0
+          fi
+          curl -fsS -X POST "$WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "$(printf '{"text":"Production deploy %s — %s (%s) by %s\n%s"}' \
+                  "$STATUS" "$TAG" "${GITHUB_SHA::12}" "$GITHUB_ACTOR" \
+                  "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")"

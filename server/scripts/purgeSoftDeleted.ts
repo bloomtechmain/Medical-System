@@ -18,19 +18,31 @@
 import 'dotenv/config';
 import { pool } from '../config/db';
 import { deleteUpload } from '../utils/fileStorage';
+import { releaseUploadUsage } from '../middleware/uploadQuota';
 
 const RETENTION_DAYS = parseInt(process.env.PURGE_RETENTION_DAYS || '90', 10);
 const EXECUTE = process.argv.includes('--execute');
 
 const TARGETS: Array<{ table: string; idCol: string; fileCol?: string; fileSubdir?: string }> = [
   { table: 'public.users', idCol: 'id' },
-  { table: 'public.medicines', idCol: 'id' },
+  // public.medicines was removed here on purpose. SEC-17 #4 moved
+  // medicines/suppliers into each pharmacy's own tenant_<slug> schema and
+  // migration 006 dropped the shared tables — so this entry referenced a
+  // table that no longer exists and would have failed the script outright on
+  // its next run. Per-tenant medicines still carry deleted_at; purging them
+  // means iterating tenant schemas, which is handled separately below.
   { table: 'clinical.medical_consultations', idCol: 'id', fileCol: 'prescription_file', fileSubdir: 'prescriptions' },
   { table: 'clinical.patient_reports', idCol: 'id', fileCol: 'file_path', fileSubdir: 'patient-reports' },
 ];
 
 const run = async (): Promise<void> => {
   console.log(`Retention window: ${RETENTION_DAYS} days. Mode: ${EXECUTE ? 'EXECUTE (will delete rows and files)' : 'DRY RUN (no changes — pass --execute to actually delete)'}\n`);
+
+  // MUST run before the TARGETS loop below. It finds files by joining
+  // lab_requests to the users about to be purged — once public.users rows are
+  // deleted, that join returns nothing and the files are orphaned forever
+  // with no record of who they belonged to.
+  await purgeFilesOfDepartingUsers();
 
   for (const { table, idCol, fileCol, fileSubdir } of TARGETS) {
     const selectCols = fileCol ? `${idCol}, ${fileCol}` : idCol;
@@ -43,7 +55,11 @@ const run = async (): Promise<void> => {
     if (EXECUTE && candidates.length) {
       if (fileCol && fileSubdir) {
         for (const row of candidates) {
-          if (row[fileCol]) await deleteUpload(fileSubdir, row[fileCol]);
+          if (row[fileCol]) {
+            await deleteUpload(fileSubdir, row[fileCol]);
+            // COST-04: stop the bytes counting against the owner's quota.
+            await releaseUploadUsage(fileSubdir, row[fileCol]);
+          }
         }
       }
       const { rowCount } = await pool.query(
@@ -56,6 +72,40 @@ const run = async (): Promise<void> => {
 
   console.log('\nDone.');
   await pool.end();
+};
+
+// COMP-03: "the uploaded files of that user stay on disk". Deleting a user
+// cascades their clinical rows away, which means the rows naming their
+// uploaded files disappear *without* those files ever being deleted — leaving
+// orphaned patient documents in storage with nothing left pointing at them.
+// Lab reports and referrals are the case the TARGETS loop cannot catch,
+// because lab_requests has no deleted_at of its own: it is removed by the
+// cascade from a purged user, not soft-deleted in its own right. So these
+// files have to be collected while the rows that name them still exist.
+const purgeFilesOfDepartingUsers = async (): Promise<void> => {
+  const { rows } = await pool.query<{ report_file: string | null; referral_file: string | null }>(
+    `SELECT lr.report_file, lr.referral_file
+     FROM clinical.lab_requests lr
+     JOIN public.users u ON u.id = lr.patient_id
+     WHERE u.deleted_at IS NOT NULL AND u.deleted_at < NOW() - $1::interval
+       AND (lr.report_file IS NOT NULL OR lr.referral_file IS NOT NULL)`,
+    [`${RETENTION_DAYS} days`]
+  );
+
+  const files: Array<{ subdir: string; name: string }> = [];
+  for (const r of rows) {
+    if (r.report_file) files.push({ subdir: 'lab-reports', name: r.report_file });
+    if (r.referral_file) files.push({ subdir: 'lab-referrals', name: r.referral_file });
+  }
+
+  console.log(`lab files of purged users: ${files.length} file(s) past retention`);
+  if (!EXECUTE || !files.length) return;
+
+  for (const f of files) {
+    await deleteUpload(f.subdir, f.name);
+    await releaseUploadUsage(f.subdir, f.name);
+  }
+  console.log(`  -> deleted ${files.length} lab report/referral file(s)`);
 };
 
 run().catch(err => { console.error(err); process.exit(1); });

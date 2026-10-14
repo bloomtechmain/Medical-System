@@ -8,6 +8,10 @@ builder = "dockerfile"
 # VITE_API_URL is still read as a fallback during the transition, but prefer API_URL.
 
 [deploy]
+# The client is a static file server with no backing dependency, so "/" is a
+# complete readiness signal here — there is no equivalent of the API's
+# database check to add (INF-03).
 healthcheckPath = "/"
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 10
+# INF-06: see server/railway.toml — a capped retry policy leaves the service
+# permanently down after a burst of restarts.
+restartPolicyType = "always"

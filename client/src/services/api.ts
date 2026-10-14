@@ -4,8 +4,18 @@ import { SERVER_ORIGIN } from '../env';
 // In development SERVER_ORIGIN is empty → Vite proxy rewrites /api/* → localhost:5000/api/*.
 const BASE_URL = SERVER_ORIGIN ? `${SERVER_ORIGIN}/api` : '/api';
 
+// INF-05: no client-side timeout meant a request to a hung or unreachable
+// server never settled — the spinner span and the user had no signal other
+// than the page looking broken. 30s matches the server's own requestTimeout,
+// so the two ends agree on when a request has failed. File uploads override
+// this per call (see UPLOAD_TIMEOUT_MS) since OCR-bound requests legitimately
+// take longer than an ordinary JSON round trip.
+const REQUEST_TIMEOUT_MS = 30_000;
+export const UPLOAD_TIMEOUT_MS = 120_000;
+
 const api = axios.create({
   baseURL: BASE_URL,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: { 'Content-Type': 'application/json' },
 });
 
