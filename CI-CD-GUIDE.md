@@ -171,9 +171,32 @@ CI Pipeline
             └── e2e tests (slow, optional in CI)
 ```
 
-### Your project currently has no tests — that is fine!
+### The project does have tests now
 
-The CI pipeline will still run lint + build checks. You can add tests later. This guide sets up the structure so adding tests just means dropping test files in.
+This section used to say "your project currently has no tests — that is fine!",
+which was true when this guide was written and is no longer (flagged by the
+CI/CD audit, CICD-03). What exists today:
+
+- **Server** (`npm test`, jest): controller unit tests, plus real-database
+  integration tests for row-level security, pharmacy tenant provisioning and
+  the audit log. The integration tests self-skip without `DATABASE_URL`, so a
+  local `npm test` with no database still works.
+- **Client** (`npm test`, vitest): shared helpers and the authenticated-file
+  fetch path.
+
+CI runs both, plus lint, build, `npm audit`, gitleaks, CodeQL, a Trivy image
+scan, a licence check, and a pg-boss smoke test executed as the application's
+own non-superuser role.
+
+Two things worth knowing before adding tests here:
+
+- Run the server integration tests as **`corehealth_app`**, never as a
+  superuser. A superuser bypasses row-level security entirely, so an RLS test
+  would pass while proving nothing. `.github/workflows/ci.yml` does this
+  deliberately.
+- Schema changes need testing through **both** install paths — the numbered
+  migrations and `corehealth_database.sql`. They have silently diverged
+  before; see `server/controllers/__tests__/tenantProvisioning.integration.test.ts`.
 
 ---
 
