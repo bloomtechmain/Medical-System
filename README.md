@@ -230,6 +230,14 @@ Conventions that hold everywhere:
   ownership-checked endpoint, and a 404 deliberately does not distinguish
   "missing" from "not yours".
 
+## Production readiness
+
+This repository has been through a 234-check production-readiness audit.
+`docs/audit-status.md` maps every finding to its current state, and groups what
+is still outstanding by who can actually do it — AWS/platform, GitHub settings,
+legal, team agreement, or remaining product work. Read it before the AWS
+cutover.
+
 ## Contributing
 
 - **New to the project?** `docs/onboarding.md`.
