@@ -280,6 +280,12 @@ export const userApi = {
   joinOrganization:    (organizationId: number): Promise<any>    => api.post('/users/me/organizations', { organization_id: organizationId }),
   leaveOrganization:   (organizationId: number): Promise<any>    => api.delete(`/users/me/organizations/${organizationId}`),
   toggle:              (id: number): Promise<any>                => api.patch(`/users/${id}/toggle`),
+  // SEC-17 #2: professional sign-ups wait for an admin. Without a list, a
+  // registration was indistinguishable from a deactivated account and sat
+  // unapproved indefinitely.
+  pendingApprovals:    (): Promise<any>                          => api.get('/users/pending-approvals'),
+  approve:             (id: number): Promise<any>                => api.post(`/users/${id}/approve`),
+  decline:             (id: number, reason?: string): Promise<any> => api.post(`/users/${id}/decline`, { reason }),
   remove:              (id: number): Promise<any>                => api.delete(`/users/${id}`),
   getStats:            (): Promise<any>                          => api.get('/users/stats'),
 };

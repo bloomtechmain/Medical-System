@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { Plus, Search, Edit2, Trash2, ToggleLeft, ToggleRight, Eye } from 'lucide-react';
+import PendingApprovals from '../components/common/PendingApprovals';
 
 // ── Profile field definitions per role ────────────────────────────────────────
 
@@ -252,6 +253,10 @@ export default function Users() {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
+
+      {/* SEC-17 #2: professional sign-ups awaiting review. Renders nothing
+          when the queue is empty, so it costs no space in the normal case. */}
+      <PendingApprovals />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

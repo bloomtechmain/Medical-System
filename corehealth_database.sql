@@ -164,6 +164,15 @@ CREATE TABLE public.users (
   -- the demo fixtures in corehealth_seed_data.sql) must set this explicitly
   -- or it creates an account nobody can log into.
   email_verified_at      TIMESTAMPTZ,
+  -- SEC-17 #2: professional sign-ups are inactive until an admin approves
+  -- them. is_active alone cannot say WHY an account is off — these two
+  -- columns distinguish "waiting for approval" from "deactivated by an
+  -- admin", which are different messages to the user and different lists to
+  -- the admin. See migration 012.
+  --   is_active = false, approved_at IS NULL     -> waiting for approval
+  --   is_active = false, approved_at IS NOT NULL -> deactivated
+  approved_at            TIMESTAMPTZ,
+  approved_by            INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -173,6 +182,10 @@ CREATE INDEX idx_users_email ON public.users(email);
 -- has accepted the current version.
 CREATE INDEX idx_users_accepted_terms_pending ON public.users(id)
   WHERE accepted_terms_version IS NULL AND deleted_at IS NULL;
+-- The admin approval queue. Partial, so it holds only what is actually
+-- waiting — a worklist, not a growing table.
+CREATE INDEX idx_users_pending_approval ON public.users(created_at)
+  WHERE is_active = FALSE AND approved_at IS NULL AND deleted_at IS NULL;
 CREATE INDEX idx_users_role  ON public.users(role);
 CREATE INDEX idx_users_deleted_at ON public.users(deleted_at) WHERE deleted_at IS NOT NULL;
 

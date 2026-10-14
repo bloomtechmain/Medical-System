@@ -26,6 +26,8 @@ export interface DbUser {
   mfa_secret: string | null;
   mfa_enabled: boolean;
   email_verified_at: Date | null;
+  approved_at: Date | null;
+  approved_by: number | null;
   accepted_terms_version: string | null;
   created_at: Date;
   updated_at: Date;

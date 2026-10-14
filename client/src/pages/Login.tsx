@@ -22,6 +22,11 @@ export default function Login() {
   // can offer a way out — without it the user is told to check an inbox that
   // may have nothing in it, and has no action available anywhere in the UI.
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  // Migration 012 split "waiting for approval" from "deactivated". They need
+  // different screens: one is a wait with nothing to do, the other is a dead
+  // end that needs support. Neither should offer the resend button — the
+  // account cannot verify until it is approved.
+  const [blocked, setBlocked] = useState<{ kind: 'approval' | 'deactivated'; message: string } | null>(null);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const { login } = useAuth();
@@ -50,6 +55,14 @@ export default function Login() {
       if (err?.emailUnverified) {
         setUnverifiedEmail(data.email);
         setResent(false);
+        return;
+      }
+      if (err?.awaitingApproval) {
+        setBlocked({ kind: 'approval', message: err.message });
+        return;
+      }
+      if (err?.accountDeactivated) {
+        setBlocked({ kind: 'deactivated', message: err.message });
         return;
       }
       toast.error(err.message || 'Invalid credentials');
@@ -151,7 +164,55 @@ export default function Login() {
           </Link>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            {unverifiedEmail ? (
+            {blocked ? (
+              <>
+                <div className="mb-6">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 ${
+                    blocked.kind === 'approval' ? 'bg-blue-100' : 'bg-red-100'}`}>
+                    {blocked.kind === 'approval' ? (
+                      <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                      </svg>
+                    )}
+                  </div>
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    {blocked.kind === 'approval' ? 'Waiting for approval' : 'Account deactivated'}
+                  </h1>
+                </div>
+
+                <div className={`rounded-xl px-4 py-3 text-sm ${
+                  blocked.kind === 'approval'
+                    ? 'border border-blue-200 bg-blue-50 text-blue-900'
+                    : 'border border-red-200 bg-red-50 text-red-900'}`}>
+                  {blocked.message}
+                </div>
+
+                {blocked.kind === 'approval' && (
+                  /* Deliberately no resend button: the confirmation link is
+                     sent when an admin approves, so there is nothing to
+                     resend yet and offering it would imply otherwise. */
+                  <p className="text-xs text-gray-500 mt-4 leading-relaxed">
+                    An administrator reviews professional registrations by hand, because a
+                    licence number cannot be checked automatically. You will be emailed a
+                    confirmation link as soon as it is approved.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setBlocked(null)}
+                  className="w-full text-sm text-gray-500 hover:text-gray-700 text-center mt-5"
+                >
+                  &larr; Back to sign in
+                </button>
+              </>
+            ) : unverifiedEmail ? (
               /* PRO-11: the way out of "confirm your email before logging
                  in". Previously that message was a toast with no action
                  attached, so a user whose confirmation email never arrived —

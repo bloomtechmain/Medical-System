@@ -25,6 +25,7 @@ export const AuditAction = {
   USER_ACTIVE_CHANGED: 'user.active_changed',
   USER_DELETED: 'user.deleted',
   USER_APPROVED: 'user.approved',
+  USER_DECLINED: 'user.declined',
   EMAIL_VERIFIED: 'email.verified',
   TERMS_ACCEPTED: 'terms.accepted',
   UPLOAD_REJECTED_MALWARE: 'upload.rejected_malware',

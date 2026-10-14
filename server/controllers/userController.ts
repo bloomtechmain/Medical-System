@@ -3,6 +3,11 @@ import bcrypt from 'bcryptjs';
 import { pool, queryAs, RLSActor, revokeRefreshTokens } from '../config/db';
 import { parsePaging } from '../utils/pagination';
 import { audit, AuditAction } from '../utils/auditLog';
+import { isEnabled } from '../config/featureFlags';
+import { logger } from '../config/logger';
+// Approving is what makes the account usable, so it is also what sends the
+// confirmation link — see approveUser below.
+import { sendVerificationEmail } from './authController';
 
 // clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
 // live behind row-level security — queries against them must carry the
@@ -319,6 +324,122 @@ const leaveOrganization = async (req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 };
 
+// SEC-17 #2 made professional sign-ups inactive pending admin review, but
+// nothing surfaced them: a newly registered doctor looked identical to a
+// suspended account in the user list, so registrations sat unapproved
+// indefinitely and the "pending admin approval" message the applicant saw was
+// effectively permanent. These two endpoints are the missing half.
+//
+// "Pending" is defined by migration 012: inactive, never approved, not
+// deleted. Patients are excluded because they are never subject to approval —
+// an inactive patient was deactivated, not awaiting review.
+const listPendingApprovals = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.email, u.role, u.created_at,
+              dp.specialization, dp.license_number AS doctor_license, dp.hospital_affiliation,
+              pp.license_number AS pharmacist_license, pp.pharmacy_name,
+              lp.license_number AS lab_license, lp.lab_name,
+              o.id   AS organization_id,
+              o.name AS organization_name,
+              o.org_type
+         FROM public.users u
+         LEFT JOIN public.doctor_profiles     dp ON dp.user_id = u.id
+         LEFT JOIN public.pharmacist_profiles pp ON pp.user_id = u.id
+         LEFT JOIN public.laboratory_profiles lp ON lp.user_id = u.id
+         -- An owner registered through the organisation flow is approved
+         -- together with their organisation, so show which one it is.
+         LEFT JOIN public.organization_members om
+                ON om.user_id = u.id AND om.member_role = 'owner'
+         LEFT JOIN public.organizations o ON o.id = om.organization_id
+        WHERE u.is_active = FALSE
+          AND u.approved_at IS NULL
+          AND u.deleted_at IS NULL
+          AND u.role <> 'patient'
+        ORDER BY u.created_at ASC`
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+};
+
+// Approving is the point at which the account becomes usable, so it is also
+// the point at which the email-confirmation link is worth sending (PRO-11).
+// Sending it at registration instead meant the 48-hour window usually expired
+// while the request sat in this queue.
+const approveUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE public.users
+          SET is_active = TRUE, approved_at = NOW(), approved_by = $1, updated_at = NOW()
+        WHERE id = $2 AND approved_at IS NULL AND deleted_at IS NULL
+        RETURNING id, name, email, role, is_active, email_verified_at`,
+      [req.user.id, req.params.id]
+    );
+    // Guarded on approved_at IS NULL, so a double-click approves once and the
+    // second call reports plainly rather than re-approving and re-emailing.
+    if (!rows.length) {
+      res.status(404).json({ message: 'No pending registration found for that account. It may already have been approved.' });
+      return;
+    }
+    const user = rows[0];
+
+    audit(req, {
+      action: AuditAction.USER_APPROVED,
+      targetType: 'user',
+      targetId: user.id,
+      metadata: { role: user.role },
+    });
+
+    // Only if they still need to confirm — an account approved after already
+    // verifying (possible if verification was off when they registered) must
+    // not be sent a pointless link.
+    let verificationEmailSent = false;
+    if (!user.email_verified_at && isEnabled('REQUIRE_EMAIL_VERIFICATION')) {
+      try {
+        await sendVerificationEmail({ id: user.id, name: user.name, email: user.email });
+        verificationEmailSent = true;
+      } catch (err) {
+        // Approval has already committed and is the important part. The user
+        // can request a link from the login page, so this is logged rather
+        // than failing the approval.
+        logger.error({ err, userId: user.id }, 'Approved the account but could not send its verification email');
+      }
+    }
+
+    res.json({ ...user, verificationEmailSent });
+  } catch (err) { next(err); }
+};
+
+// Declining is a soft delete, not a hard one: the registration is a record of
+// someone having applied, and PRO-25's retention rules apply to it like any
+// other user row. is_active stays false and approved_at stays NULL, so a
+// declined account cannot be confused with an approved-then-deactivated one.
+const declineUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { reason } = req.body as { reason?: string };
+    const { rows } = await pool.query(
+      `UPDATE public.users
+          SET deleted_at = NOW(), is_active = FALSE, updated_at = NOW()
+        WHERE id = $1 AND approved_at IS NULL AND deleted_at IS NULL
+        RETURNING id, name, email, role`,
+      [req.params.id]
+    );
+    if (!rows.length) {
+      res.status(404).json({ message: 'No pending registration found for that account.' });
+      return;
+    }
+    await revokeRefreshTokens(rows[0].id);
+    audit(req, {
+      action: AuditAction.USER_DECLINED,
+      targetType: 'user',
+      targetId: rows[0].id,
+      // The reason is an admin's note about a decision, not clinical content.
+      metadata: { role: rows[0].role, reason: reason?.slice(0, 500) ?? null },
+    });
+    res.status(204).end();
+  } catch (err) { next(err); }
+};
+
 const toggleActive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query(
@@ -619,4 +740,4 @@ const searchLaboratories = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-export { getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, getMyOrganizations, joinOrganization, leaveOrganization, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors };
+export { listPendingApprovals, approveUser, declineUser, getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, getMyOrganizations, joinOrganization, leaveOrganization, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors };

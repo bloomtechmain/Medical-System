@@ -233,8 +233,17 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     // failure must not roll back a successfully created account. If the send
     // fails the user can ask for another via /auth/resend-verification, so
     // this is logged rather than surfaced as a registration failure.
+    //
+    // SEC-17 #2 interaction: a professional sign-up is inactive until an
+    // admin approves it, so a verification link sent now would be redeemable
+    // long before the account can actually be used — and the 48-hour window
+    // would usually expire while the registration sat in the admin queue,
+    // leaving the user with a dead link and no idea why. The link is sent by
+    // approveUser() instead, at the point it becomes useful. Patients need no
+    // approval, so theirs goes out immediately as before.
     const verificationRequired = isEnabled('REQUIRE_EMAIL_VERIFICATION');
-    if (verificationRequired) {
+    const sendLinkNow = verificationRequired && !requiresApproval;
+    if (sendLinkNow) {
       try {
         await sendVerificationEmail({ id: user.id, name: user.name, email: user.email });
       } catch (mailErr) {
@@ -246,10 +255,13 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
       res.status(201).json({
         user,
         pending: true,
+        awaitingApproval: true,
+        // Nothing for the user to do yet, so do not ask them to check an
+        // inbox — the link has not been sent (see sendLinkNow above).
         emailVerificationRequired: verificationRequired,
         message: verificationRequired
-          ? 'Your account has been created. Please confirm your email address, then wait for an admin to approve the account.'
-          : 'Your account has been created and is pending admin approval. You will be able to log in once an admin approves it.',
+          ? 'Your registration has been received and is waiting for an administrator to approve it. Once approved, we will email you a link to confirm your address, and then you can log in.'
+          : 'Your registration has been received and is waiting for an administrator to approve it. You will be able to log in once it is approved.',
       });
       return;
     }
@@ -310,15 +322,31 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
     }
 
     if (!user.is_active) {
+      // Migration 012: approved_at is what tells these two apart. The old
+      // message said "pending admin approval or has been deactivated", which
+      // is wrong for both readers — a waiting applicant is told they were
+      // switched off, and a suspended account is told to wait for something
+      // that will never come.
+      const awaitingApproval = !user.approved_at;
       audit(req, {
         action: AuditAction.LOGIN_FAILURE,
         outcome: 'denied',
         actorId: user.id,
         actorEmail: user.email,
         actorRole: user.role,
-        metadata: { reason: 'inactive_account' },
+        metadata: { reason: awaitingApproval ? 'awaiting_approval' : 'deactivated' },
       });
-      res.status(403).json({ message: 'This account is pending admin approval or has been deactivated. Please wait for approval or contact support.' });
+      res.status(403).json(
+        awaitingApproval
+          ? {
+              awaitingApproval: true,
+              message: 'Your registration is still waiting for an administrator to approve it. You will be emailed once it is approved — there is nothing you need to do in the meantime.',
+            }
+          : {
+              accountDeactivated: true,
+              message: 'This account has been deactivated. Please contact support if you think this is a mistake.',
+            }
+      );
       return;
     }
 
@@ -915,4 +943,4 @@ const resetPassword = async (req: Request, res: Response, next: NextFunction): P
   } catch (err) { next(err); }
 };
 
-export { register, login, verifyEmail, resendVerification, acceptTerms, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };
+export { register, login, verifyEmail, resendVerification, acceptTerms, sendVerificationEmail, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };
