@@ -158,6 +158,12 @@ CREATE TABLE public.users (
   -- the database, never by the client, so it cannot be backdated.
   accepted_terms_version VARCHAR(40),
   accepted_terms_at      TIMESTAMPTZ,
+  -- PRO-11: when the registration address was confirmed. NULL = unverified,
+  -- and login is refused while FEATURE_REQUIRE_EMAIL_VERIFICATION is on, so
+  -- anything that creates a user without an inbox round-trip (the admin seed,
+  -- the demo fixtures in corehealth_seed_data.sql) must set this explicitly
+  -- or it creates an account nobody can log into.
+  email_verified_at      TIMESTAMPTZ,
   created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -210,8 +216,26 @@ CREATE INDEX idx_password_reset_tokens_hash ON public.password_reset_tokens(toke
 -- Admin "View As" session-start audit trail — not per-action logging, just
 -- who viewed as whom and when. Admin-only operational record, not patient
 -- PHI, so it lives in `public` with no RLS (read via an admin-only endpoint).
+-- PRO-11: email verification. Same opaque-token-hashed-at-rest shape as
+-- password_reset_tokens above, because the threat model is identical — an
+-- emailed token is a bearer credential, so only its SHA-256 hash is stored
+-- and a database leak hands out nothing usable. One row per issued token
+-- rather than a column on users, so a resend is auditable and an old token
+-- can be invalidated on its own.
+CREATE TABLE public.email_verification_tokens (
+  id         BIGSERIAL    PRIMARY KEY,
+  user_id    INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  token_hash CHAR(64)     NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ  NOT NULL,
+  used_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_evt_user         ON public.email_verification_tokens(user_id);
+-- Rate-limiting resends needs "how many have I issued to this user recently".
+CREATE INDEX idx_evt_user_created ON public.email_verification_tokens(user_id, created_at DESC);
+
 CREATE TABLE public.impersonation_log (
-  id              SERIAL       PRIMARY KEY,
+  id              BIGSERIAL       PRIMARY KEY,
   admin_id        INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   target_user_id  INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   target_name     VARCHAR(150) NOT NULL,
@@ -226,7 +250,7 @@ CREATE INDEX idx_impersonation_started ON public.impersonation_log(started_at);
 -- DELETE) made while impersonating; reads are deliberately excluded —
 -- high-volume, low audit value, same convention as most access logs.
 CREATE TABLE public.impersonation_action_log (
-  id              SERIAL       PRIMARY KEY,
+  id              BIGSERIAL       PRIMARY KEY,
   admin_id        INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   target_user_id  INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   method          VARCHAR(10)  NOT NULL,
@@ -573,7 +597,7 @@ CREATE INDEX idx_pa_status       ON clinical.prescription_assignments(status);
 -- (e.g. "that medicine isn't in stock" / patient replies) — same shape and RLS
 -- convention as lab_request_messages below.
 CREATE TABLE clinical.prescription_assignment_messages (
-  id             SERIAL      PRIMARY KEY,
+  id             BIGSERIAL      PRIMARY KEY,
   assignment_id  INTEGER     NOT NULL REFERENCES clinical.prescription_assignments(id) ON DELETE CASCADE,
   patient_id     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   pharmacist_id  INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -635,7 +659,7 @@ CREATE INDEX idx_lr_status       ON clinical.lab_requests(status);
 -- at insert time (same convention as lab_view_requests below) so RLS stays a
 -- simple column check instead of a subquery.
 CREATE TABLE clinical.lab_request_messages (
-  id             SERIAL      PRIMARY KEY,
+  id             BIGSERIAL      PRIMARY KEY,
   lab_request_id INTEGER     NOT NULL REFERENCES clinical.lab_requests(id) ON DELETE CASCADE,
   patient_id     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   doctor_id      INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
@@ -784,7 +808,7 @@ CREATE INDEX idx_pr_issued_date ON clinical.patient_reports(issued_date);
 -- source='lab_report' rows link back to the lab_request that generated them via
 -- lab_request_id (soft ref — the physical report file lives in the lab tenant schema).
 CREATE TABLE clinical.patient_vitals (
-  id                SERIAL        PRIMARY KEY,
+  id                BIGSERIAL        PRIMARY KEY,
   patient_id        INTEGER       NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   -- CBC Panel
   wbc               NUMERIC(7,2),
@@ -827,7 +851,7 @@ CREATE INDEX idx_pv_lab_req      ON clinical.patient_vitals(lab_request_id);
 CREATE INDEX idx_pv_patient_rept ON clinical.patient_vitals(patient_report_id);
 
 CREATE TABLE clinical.notifications (
-  id         SERIAL       PRIMARY KEY,
+  id         BIGSERIAL       PRIMARY KEY,
   user_id    INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   type       VARCHAR(60)  NOT NULL,
   title      VARCHAR(200) NOT NULL,
@@ -1113,6 +1137,17 @@ REVOKE UPDATE, DELETE ON public.audit_log FROM corehealth_app;
 -- that work real retries instead of setImmediate's "lost on restart".
 CREATE SCHEMA IF NOT EXISTS pgboss;
 GRANT ALL ON SCHEMA pgboss TO corehealth_app;
+-- The schema-level grant above is NOT sufficient on its own. pg-boss issues
+-- `CREATE SCHEMA IF NOT EXISTS pgboss` on every start, and PostgreSQL checks
+-- CREATE on the *database* for that statement before it ever notices the
+-- schema already exists — so without this the server dies at boot with
+-- "permission denied for database". Verified by running this file against a
+-- fresh database and starting the API: it fails without this line and starts
+-- with it. Mirrors migration 005.
+DO $$
+BEGIN
+  EXECUTE format('GRANT CREATE ON DATABASE %I TO corehealth_app', current_database());
+END $$;
 
 -- Unqualified table names keep working because clinical is on the search_path:
 ALTER ROLE corehealth_app SET search_path = public, clinical;

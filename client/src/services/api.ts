@@ -95,6 +95,11 @@ export const authApi = {
   changePassword: (data: { currentPassword: string; newPassword: string }): Promise<any> => api.post('/auth/change-password', data),
   forgotPassword: (email: string): Promise<any> => api.post('/auth/forgot-password', { email }),
   resetPassword:  (data: { token: string; newPassword: string }): Promise<any> => api.post('/auth/reset-password', data),
+  // PRO-11: email verification
+  verifyEmail:        (token: string): Promise<any> => api.post('/auth/verify-email', { token }),
+  resendVerification: (email: string): Promise<any> => api.post('/auth/resend-verification', { email }),
+  // COMP-02: re-acceptance of an updated Terms/Privacy version
+  acceptTerms:        (version: string): Promise<any> => api.post('/auth/accept-terms', { version }),
 };
 
 // organization_id is only ever read server-side for an admin caller (see

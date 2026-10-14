@@ -70,6 +70,48 @@ failing later in a confusing way (ARCH-04, `server/server.ts`).
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_SECURE` | Password-reset emails. Without them, `config/mailer.ts` logs the message instead of sending it — fine in development, means nobody can reset a password in production. |
 | `SENTRY_DSN` | Error tracking (MON-05). Inert without it: errors are logged but not reported anywhere. |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | `npm run db:seed` only. No default exists any more (SEC-07) — the seed refuses to run without them. Never set these in production. |
+| `CLAMAV_HOST`, `CLAMAV_PORT` | Virus scanning on upload (PRO-07). Without `CLAMAV_HOST` every upload is accepted unscanned and a warning is logged per upload. Port defaults to 3310. |
+
+### Queue worker placement (PRO-15)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `QUEUE_WORKER_MODE` | `inline` | `inline` = the API process runs the OCR/extraction workers itself (unchanged behaviour). `separate` = the API only enqueues and `server/worker.ts` processes, in its own process with its own memory limit. **Must be set to the same value on both processes** — the worker refuses to start if it would process nothing. |
+| `WORKER_HEALTH_PORT` | `5001` | The worker serves only `/health` and `/ready` on this port, so a platform health check has something to probe. It serves no API routes, deliberately. |
+
+Run `separate` in any environment where upload volume is real: tesseract.js
+and pdfjs-dist are the memory-hungry paths, and `inline` means a burst of
+large uploads can OOM the API and take in-flight clinical requests with it.
+See `docker-compose.yml` for a working two-process setup.
+
+### Rate limits (PRO-08) — all optional
+
+Window and ceiling for each limiter, so a deployment behind a CDN or a shared
+corporate NAT can be tuned without a code change. Defaults are the values
+that were previously hardcoded.
+
+| Variable | Default | Applies to |
+|---|---|---|
+| `RATE_LIMIT_GENERAL_MAX` / `_WINDOW_MS` | 300 / 60 s | Everything under `/api` |
+| `RATE_LIMIT_AUTH_MAX` / `_WINDOW_MS` | 10 / 15 min | Login, registration, verification, password reset |
+| `RATE_LIMIT_PUBLIC_FORM_MAX` / `_WINDOW_MS` | 5 / 60 min | Public organisation registration |
+| `RATE_LIMIT_SEARCH_MAX` / `_WINDOW_MS` | 60 / 60 s | Search endpoints, including the two needing no login |
+| `RATE_LIMIT_UPLOAD_MAX` / `_WINDOW_MS` | 20 / 60 s | File uploads, keyed per user |
+
+A load test from a single address will hit `RATE_LIMIT_GENERAL_MAX` and
+measure the limiter rather than the server — raise it deliberately for the
+run (see `docs/capacity-plan.md`).
+
+### Upload quota (COST-04) and retention (PRO-04) — all optional
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `UPLOAD_QUOTA_DAILY_BYTES` | 500 MB | Rolling 24h upload budget per user |
+| `UPLOAD_QUOTA_TOTAL_BYTES` | 2 GB | Lifetime stored-bytes budget per user |
+| `RETAIN_NOTIFICATIONS_DAYS` | 365 | Age-based purge, `purgeSoftDeleted.ts` |
+| `RETAIN_MESSAGES_DAYS` | 365 | Chat threads |
+| `RETAIN_IMPERSONATION_DAYS` | 730 | Security audit trail — longer on purpose |
+| `CLAMAV_FAIL_OPEN` | unset (closed) | `true` accepts an upload when scanning cannot be completed. Default rejects, so a clamd outage cannot silently become "no scanning". |
 
 ### Optional, with defaults
 
@@ -94,6 +136,11 @@ failing later in a confusing way (ARCH-04, `server/server.ts`).
 | `DB_SSL_REJECT_UNAUTHORIZED` | `true` | DB-03. Set `false` **only** for a local database with a self-signed certificate. |
 | `DB_SSL_CA` | — | PEM contents of the provider's CA, to pin it instead of trusting the system store. |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0` | Performance tracing off by default — this is an error tracker first. |
+| `FEATURE_REQUIRE_EMAIL_VERIFICATION` | `true` | PRO-11. Refuses login until the registration address is confirmed. Needs a mail path: without `SMTP_HOST` the link is logged to the console (fine locally, **not** in production). Set `false` only if an environment has no mail path at all. |
+| `FEATURE_OCR_PROCESSING` | `true` | CICD-12. `false` keeps uploads working and skips extraction. |
+| `FEATURE_PUBLIC_ORG_REGISTRATION` | `true` | CICD-12. `false` returns 503 on the public registration endpoint. |
+| `FEATURE_REQUIRE_ADMIN_MFA` | `false` | CICD-12. `true` refuses admin logins that have not enrolled in MFA. |
+| `CLAMAV_TIMEOUT_MS` | `30000` | How long to wait for clamd before treating the scan as incomplete. |
 | `PLATFORM_STATS_TTL_MS` | see `userController.ts` | Admin-dashboard stats cache staleness window (DB-08) |
 | `PURGE_RETENTION_DAYS` | see `scripts/purgeSoftDeleted.ts` | How long soft-deleted rows survive before a real delete (PRO-25, COMP-04) |
 

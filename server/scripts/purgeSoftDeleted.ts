@@ -44,6 +44,10 @@ const run = async (): Promise<void> => {
   // with no record of who they belonged to.
   await purgeFilesOfDepartingUsers();
 
+  // PRO-04: age-based retention, separate from soft-delete retention below.
+  // These tables are never deleted from at all and grow with every event.
+  await purgeByAge();
+
   for (const { table, idCol, fileCol, fileSubdir } of TARGETS) {
     const selectCols = fileCol ? `${idCol}, ${fileCol}` : idCol;
     const { rows: candidates } = await pool.query(
@@ -72,6 +76,77 @@ const run = async (): Promise<void> => {
 
   console.log('\nDone.');
   await pool.end();
+};
+
+// PRO-04: "Nothing is ever deleted or archived: notifications, chat messages,
+// the impersonation log and vitals grow without end." Soft-delete retention
+// (the TARGETS loop) does not help here, because nothing ever soft-deletes
+// these rows — they need a retention period measured from creation.
+//
+// Periods come from docs/data-retention.md and are overridable per category,
+// because the right answer differs sharply between them and is not ours to
+// settle alone:
+//
+//   notifications / chat messages — transient operational noise. A year is
+//   generous; nobody re-reads a year-old "your prescription is ready".
+//
+//   impersonation logs — a security audit trail. Deliberately longer, and
+//   kept in step with audit_log's proposed 2 years, because the question
+//   "who was viewing this patient's account last March" has to stay
+//   answerable for longer than an incident takes to surface.
+//
+//   patient_vitals is NOT here, on purpose. The audit lists it as a table
+//   that grows without end, and it does — but it is clinical data subject to
+//   statutory minimum retention (COMP-04), so deleting it on an age rule
+//   would be the one mistake in this script that cannot be undone and might
+//   be unlawful. It is widened to BIGINT instead (migration 010) and left to
+//   the clinical retention schedule once a lawyer has confirmed it.
+const AGE_TARGETS: Array<{ table: string; tsCol: string; days: number; why: string }> = [
+  { table: 'clinical.notifications', tsCol: 'created_at',
+    days: parseInt(process.env.RETAIN_NOTIFICATIONS_DAYS || '365', 10),
+    why: 'transient operational notices' },
+  { table: 'clinical.prescription_assignment_messages', tsCol: 'created_at',
+    days: parseInt(process.env.RETAIN_MESSAGES_DAYS || '365', 10),
+    why: 'pharmacy chat thread' },
+  { table: 'clinical.lab_request_messages', tsCol: 'created_at',
+    days: parseInt(process.env.RETAIN_MESSAGES_DAYS || '365', 10),
+    why: 'laboratory chat thread' },
+  { table: 'public.impersonation_action_log', tsCol: 'created_at',
+    days: parseInt(process.env.RETAIN_IMPERSONATION_DAYS || '730', 10),
+    why: 'security audit trail — kept longer than operational data' },
+  { table: 'public.impersonation_log', tsCol: 'started_at',
+    days: parseInt(process.env.RETAIN_IMPERSONATION_DAYS || '730', 10),
+    why: 'security audit trail — kept longer than operational data' },
+];
+
+const purgeByAge = async (): Promise<void> => {
+  for (const { table, tsCol, days, why } of AGE_TARGETS) {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::bigint AS n FROM ${table} WHERE ${tsCol} < NOW() - $1::interval`,
+      [`${days} days`]
+    );
+    const n = Number(rows[0].n);
+    console.log(`${table}: ${n} row(s) older than ${days} days (${why})`);
+
+    if (EXECUTE && n) {
+      // Deleted in bounded batches rather than one statement. The first run
+      // against a table that has been accumulating for years could otherwise
+      // be a single enormous DELETE holding locks and bloating WAL — which
+      // turns a cleanup into an incident.
+      let removed = 0;
+      for (;;) {
+        const { rowCount } = await pool.query(
+          `DELETE FROM ${table} WHERE id IN (
+             SELECT id FROM ${table} WHERE ${tsCol} < NOW() - $1::interval LIMIT 5000
+           )`,
+          [`${days} days`]
+        );
+        if (!rowCount) break;
+        removed += rowCount;
+      }
+      console.log(`  -> deleted ${removed} row(s)`);
+    }
+  }
 };
 
 // COMP-03: "the uploaded files of that user stay on disk". Deleting a user

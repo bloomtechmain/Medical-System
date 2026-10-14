@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword } from '../controllers/authController';
+import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword, verifyEmail, resendVerification, acceptTerms } from '../controllers/authController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
 import { authLimiter } from '../middleware/rateLimiter';
@@ -25,6 +25,34 @@ router.post('/register',
   ],
   validate,
   register
+);
+
+// PRO-11: email verification. Both are public — the user has no session yet,
+// that being the point — and both sit behind authLimiter, because an
+// unthrottled resend lets this server be used to send mail at a third party's
+// inbox. resendVerification adds a per-account hourly cap on top.
+router.post('/verify-email',
+  authLimiter,
+  [body('token').isString().isLength({ min: 32, max: 128 })],
+  validate,
+  verifyEmail
+);
+
+router.post('/resend-verification',
+  authLimiter,
+  [body('email').isEmail().isLength({ max: 254 }).normalizeEmail()],
+  validate,
+  resendVerification
+);
+
+// COMP-02: lets a logged-in user accept the current Terms/Privacy version.
+// Needed for the users migration 008 deliberately left NULL (they signed up
+// before the documents existed) and for anyone on a superseded version.
+router.post('/accept-terms',
+  protect,
+  [body('version').isString().isLength({ min: 1, max: 40 })],
+  validate,
+  acceptTerms
 );
 
 router.post('/login',

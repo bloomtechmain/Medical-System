@@ -3,6 +3,7 @@ import { ReactNode, Suspense, lazy } from 'react';
 import { useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 import Layout from './components/layout/Layout';
+import TermsGate from './components/common/TermsGate';
 
 // PERF-10: every page was a static import, so the client shipped as one
 // ~2 MB bundle regardless of role — a patient's browser downloaded the
@@ -15,6 +16,7 @@ const Register               = lazy(() => import('./pages/Register'));
 const OrgRegister           = lazy(() => import('./pages/OrgRegister'));
 const ForgotPassword        = lazy(() => import('./pages/ForgotPassword'));
 const PrivacyPolicy         = lazy(() => import('./pages/PrivacyPolicy'));
+const VerifyEmail           = lazy(() => import('./pages/VerifyEmail'));
 const Terms                 = lazy(() => import('./pages/Terms'));
 const ResetPassword         = lazy(() => import('./pages/ResetPassword'));
 const HospitalDashboard     = lazy(() => import('./pages/HospitalDashboard'));
@@ -96,6 +98,9 @@ export default function App() {
 
   return (
     <Suspense fallback={<RouteFallback />}>
+    {/* COMP-02: prompts for acceptance when this account is not on the
+        current Terms/Privacy version. Renders nothing otherwise. */}
+    {token && user?.role && <TermsGate />}
     <Routes>
       <Route path="/"           element={token && user?.role ? <RoleHome /> : <Landing />} />
       <Route path="/welcome"    element={<Landing />} />
@@ -104,6 +109,11 @@ export default function App() {
       <Route path="/org-register" element={token && user?.role ? <RoleHome /> : <OrgRegister />} />
       <Route path="/forgot-password" element={token && user?.role ? <RoleHome /> : <ForgotPassword />} />
       <Route path="/reset-password"  element={token && user?.role ? <RoleHome /> : <ResetPassword />} />
+
+      {/* PRO-11: public, and deliberately not redirected away when a session
+          exists — a person may well click the confirmation link while already
+          signed in on another account. */}
+      <Route path="/verify-email" element={<VerifyEmail />} />
 
       {/* COMP-02: both documents must be readable before anyone has an
           account — the sign-up form links to them — so these stay public and

@@ -50,6 +50,23 @@ const DEFINITIONS = {
     removeWhen: 'Registration requires email verification before provisioning (PRO-11).',
   },
 
+  // PRO-11: "Verify the email before the account can do anything." Default
+  // ON, because that is what the finding asks for and an unverified address
+  // means an account nobody can be held to.
+  //
+  // The reason this is a flag rather than unconditional: delivery depends on
+  // SMTP being configured. With SMTP_HOST unset, config/mailer.ts logs the
+  // message to the console instead of sending it (the same fallback
+  // forgot-password already relies on), so local development and CI still
+  // work — you read the link out of the server log. But if an environment
+  // somehow has no mail path at all, this is the switch that stops new
+  // sign-ups being stranded, without a deploy.
+  REQUIRE_EMAIL_VERIFICATION: {
+    default: true,
+    description: 'Refuse login until the registration email address is confirmed.',
+    removeWhen: 'Mail delivery is reliable in every environment and this becomes unconditional.',
+  },
+
   // SEC-14/PRO-09. Being able to require MFA for every admin without a deploy
   // is useful during an incident — see runbooks/suspected-data-exposure.md.
   REQUIRE_ADMIN_MFA: {

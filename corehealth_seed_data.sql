@@ -23,19 +23,24 @@
 SET search_path = public, clinical;
 
 -- 8.1 Users (same order -> ids 1..12, matching all downstream references)
-INSERT INTO public.users (name, email, password, role) VALUES
-  ('System Admin',        'admin@corehealth.lk',    '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'admin'),
-  ('Dr. Janaka Perera',   'dr.janaka@corehealth.lk','$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'doctor'),
-  ('Dr. Nimal Fernando',  'dr.nimal@corehealth.lk', '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'doctor'),
-  ('Dr. Kamani Silva',    'dr.kamani@corehealth.lk','$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'doctor'),
-  ('Sunil Rathnayake',    'sunil@pharma.lk',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'pharmacist'),
-  ('Dilani Wijesinghe',   'dilani@pharma.lk',       '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'pharmacist'),
-  ('City Medical Lab',    'info@citylab.lk',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'laboratory'),
-  ('National Diagnostics','lab@nationaldiag.lk',    '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'laboratory'),
-  ('Saman Kumara',        'saman@gmail.com',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'patient'),
-  ('Priya Wickramasinghe','priya@gmail.com',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'patient'),
-  ('Ashan Dissanayake',   'ashan@gmail.com',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'patient'),
-  ('Malini Jayawardena',  'malini@gmail.com',       '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'patient');
+-- PRO-11: email_verified_at is set for every demo account. Login is
+-- refused for an unverified address, so without this a fresh local
+-- install would come up with twelve seeded users and no way to log in
+-- as any of them. These are fixtures with known addresses, not real
+-- sign-ups, so there is no inbox round-trip to skip.
+INSERT INTO public.users (name, email, password, role, email_verified_at) VALUES
+  ('System Admin',        'admin@corehealth.lk',    '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'admin', NOW()),
+  ('Dr. Janaka Perera',   'dr.janaka@corehealth.lk','$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'doctor', NOW()),
+  ('Dr. Nimal Fernando',  'dr.nimal@corehealth.lk', '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'doctor', NOW()),
+  ('Dr. Kamani Silva',    'dr.kamani@corehealth.lk','$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'doctor', NOW()),
+  ('Sunil Rathnayake',    'sunil@pharma.lk',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'pharmacist', NOW()),
+  ('Dilani Wijesinghe',   'dilani@pharma.lk',       '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'pharmacist', NOW()),
+  ('City Medical Lab',    'info@citylab.lk',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'laboratory', NOW()),
+  ('National Diagnostics','lab@nationaldiag.lk',    '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'laboratory', NOW()),
+  ('Saman Kumara',        'saman@gmail.com',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'patient', NOW()),
+  ('Priya Wickramasinghe','priya@gmail.com',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'patient', NOW()),
+  ('Ashan Dissanayake',   'ashan@gmail.com',        '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'patient', NOW()),
+  ('Malini Jayawardena',  'malini@gmail.com',       '$2a$10$37llNyUObWedDtDE1Q80dO7aHa./6DP8cGX6Ffi6hulAxwVEj/fB6', 'patient', NOW());
 
 -- 8.2 Staff profiles
 INSERT INTO public.doctor_profiles (user_id, phone, specialization, license_number, medical_school, years_experience, hospital_affiliation, consultation_fee, bio) VALUES
@@ -51,34 +56,20 @@ INSERT INTO public.laboratory_profiles (user_id, phone, lab_name, lab_type, lice
   (7, '+94112345678', 'City Medical Laboratory', 'Multi-Discipline', 'LAB-2016-0033', 'ISO 15189:2012', '78 Union Place, Colombo 02',   'Full Blood Count, Lipid Profile, Liver Function, Renal Function, Blood Glucose, HbA1c, Thyroid, Urine Analysis, PCR', 'Mon–Sat 07:00–18:00'),
   (8, '+94113456789', 'National Diagnostics',    'Pathology',        'LAB-2014-0019', 'ISO 15189:2012', '23 Baseline Road, Colombo 08', 'Histopathology, Cytology, Microbiology, Biochemistry, Haematology, Immunology, Hormone Assay',                       'Mon–Sun 06:00–20:00');
 
--- 8.3 Suppliers + shared medicine catalog
-INSERT INTO public.suppliers (name, contact, phone, email, address) VALUES
-  ('PharmaCo Lanka (Pvt) Ltd', 'Ruwan Senanayake',   '+94112223344', 'orders@pharmacolanka.lk',  '125 Sir James Pieris Mawatha, Colombo 02'),
-  ('MediSupply Solutions',     'Tharanga Bandara',   '+94114455667', 'supply@medisupply.lk',     '67 Vauxhall Street, Colombo 02'),
-  ('CeylonPharma Distributors','Lasantha Gunatilake','+94115566778', 'sales@ceylonpharma.lk',    '22 Havelock Road, Colombo 05'),
-  ('HealthLine Imports Ltd',   'Nimasha Ratnasiri',  '+94116677889', 'info@healthlineimports.lk','90 D.R. Wijewardena Mawatha, Colombo 10');
-
-INSERT INTO public.medicines (name, generic_name, category, description, unit, price, cost_price, stock_quantity, reorder_level, expiry_date, supplier_id) VALUES
-  ('Panadol 500mg','Paracetamol','Analgesic','Pain reliever and fever reducer','tablet',8.50,4.00,500,50,'2026-12-31',1),
-  ('Amoxicillin 500mg','Amoxicillin','Antibiotic','Broad-spectrum penicillin antibiotic','capsule',22.00,11.00,300,30,'2026-06-30',1),
-  ('Metformin 500mg','Metformin HCl','Antidiabetic','First-line medication for type 2 diabetes','tablet',12.00,6.00,400,40,'2027-03-31',2),
-  ('Amlodipine 5mg','Amlodipine Besylate','Antihypertensive','Calcium channel blocker for high blood pressure','tablet',18.00,9.00,350,35,'2027-01-31',2),
-  ('Atorvastatin 10mg','Atorvastatin Calcium','Statin','Lowers cholesterol and reduces cardiovascular risk','tablet',25.00,12.00,250,25,'2026-09-30',3),
-  ('Omeprazole 20mg','Omeprazole','PPI','Proton pump inhibitor for acid-related disorders','capsule',15.00,7.00,280,30,'2026-11-30',3),
-  ('Cetirizine 10mg','Cetirizine HCl','Antihistamine','Non-drowsy antihistamine for allergies','tablet',10.00,4.50,320,30,'2027-02-28',1),
-  ('Ibuprofen 400mg','Ibuprofen','NSAID','Anti-inflammatory pain reliever','tablet',9.00,4.00,420,40,'2027-04-30',2),
-  ('Azithromycin 250mg','Azithromycin','Antibiotic','Macrolide antibiotic for respiratory infections','tablet',45.00,22.00,150,20,'2026-08-31',4),
-  ('Salbutamol 2mg','Salbutamol Sulphate','Bronchodilator','Short-acting bronchodilator for asthma relief','tablet',14.00,6.50,180,20,'2026-10-31',4),
-  ('Vitamin C 500mg','Ascorbic Acid','Vitamin','Vitamin C supplement for immune support','tablet',6.00,2.50,600,60,'2027-06-30',1),
-  ('Metronidazole 400mg','Metronidazole','Antibiotic','Antibiotic for bacterial and protozoal infections','tablet',11.00,5.00,240,25,'2026-07-31',2),
-  ('Losartan 50mg','Losartan Potassium','Antihypertensive','ARB for hypertension and diabetic nephropathy','tablet',22.00,10.00,200,25,'2027-05-31',3),
-  ('Pantoprazole 40mg','Pantoprazole Sodium','PPI','Proton pump inhibitor for GERD treatment','tablet',20.00,9.00,260,30,'2027-01-31',3),
-  ('Paracetamol Syrup 120mg','Paracetamol','Analgesic','Paracetamol suspension for children','bottle',65.00,30.00,80,10,'2026-05-31',1),
-  ('Prednisolone 5mg','Prednisolone','Corticosteroid','Anti-inflammatory corticosteroid','tablet',16.00,7.50,120,15,'2026-12-31',4),
-  ('Glibenclamide 5mg','Glibenclamide','Antidiabetic','Sulfonylurea for type 2 diabetes','tablet',13.00,6.00,170,20,'2027-02-28',2),
-  ('Warfarin 1mg','Warfarin Sodium','Anticoagulant','Blood thinner to prevent clot formation','tablet',18.00,8.50,90,15,'2026-11-30',4),
-  ('Ferrous Sulphate 200mg','Ferrous Sulphate','Iron Supplement','Iron supplement for iron-deficiency anaemia','tablet',7.00,3.00,350,40,'2027-03-31',1),
-  ('Folic Acid 5mg','Folic Acid','Vitamin','B-vitamin for cell growth and anaemia prevention','tablet',5.00,2.00,400,40,'2027-04-30',1);
+-- 8.3 (removed) Suppliers + shared medicine catalogue
+--
+-- These used to be INSERTs into public.suppliers and public.medicines. SEC-17
+-- #4 moved both tables into each pharmacy's own tenant_<slug> schema, because
+-- any pharmacist could otherwise read and write every other pharmacy's stock
+-- levels and cost_price — so there is no shared catalogue to seed any more,
+-- and this file has failed on a fresh install ever since with
+-- "relation public.suppliers does not exist".
+--
+-- The same catalogue is now seeded per pharmacy, in section 8.5 below, after
+-- provision_tenant() has created those tables. Ids are assigned explicitly
+-- and identically in each tenant so the order_items / sale_items /
+-- inventory_adjustments rows further down keep referring to the same
+-- medicines they always did.
 
 -- 8.4 Provision tenant organisations
 -- Hospitals, pharmacies, and labs (no owner)
@@ -97,6 +88,77 @@ SELECT public.provision_tenant('janaka_clinic',  'Janaka Medical Centre, Colombo
 SELECT public.provision_tenant('nimal_clinic',   'Fernando Heart Clinic, Colombo',  'clinic', 3);
 -- Dr. Kamani Silva (user_id=4): works only at Lady Ridgeway — NO personal clinic
 -- (demonstrates that personal clinic is optional, not required)
+
+-- 8.5 Per-pharmacy catalogue (SEC-17 #4)
+--
+-- Each pharmacy gets its own copy of the same demo catalogue. Deliberately
+-- identical ids in both tenants: the sales/orders/adjustment rows later in
+-- this file reference medicine_id 1..20 and supplier_id 1..4, and keeping
+-- the ids aligned means those references stay correct without rewriting
+-- every one of them. In real use the two pharmacies' catalogues diverge
+-- immediately — that is the point of the change.
+
+-- tenant_healthcare_pharmacy
+INSERT INTO tenant_healthcare_pharmacy.suppliers (id, name, contact, phone, email, address) VALUES
+(1,'PharmaCo Lanka (Pvt) Ltd', 'Ruwan Senanayake',   '+94112223344', 'orders@pharmacolanka.lk',  '125 Sir James Pieris Mawatha, Colombo 02'),
+(2,'MediSupply Solutions',     'Tharanga Bandara',   '+94114455667', 'supply@medisupply.lk',     '67 Vauxhall Street, Colombo 02'),
+(3,'CeylonPharma Distributors','Lasantha Gunatilake','+94115566778', 'sales@ceylonpharma.lk',    '22 Havelock Road, Colombo 05'),
+(4,'HealthLine Imports Ltd',   'Nimasha Ratnasiri',  '+94116677889', 'info@healthlineimports.lk','90 D.R. Wijewardena Mawatha, Colombo 10');
+SELECT setval(pg_get_serial_sequence('tenant_healthcare_pharmacy.suppliers','id'), 4, true);
+
+INSERT INTO tenant_healthcare_pharmacy.medicines (id, name, generic_name, category, description, unit, price, cost_price, stock_quantity, reorder_level, expiry_date, supplier_id) VALUES
+(1,'Panadol 500mg','Paracetamol','Analgesic','Pain reliever and fever reducer','tablet',8.50,4.00,500,50,'2026-12-31',1),
+(2,'Amoxicillin 500mg','Amoxicillin','Antibiotic','Broad-spectrum penicillin antibiotic','capsule',22.00,11.00,300,30,'2026-06-30',1),
+(3,'Metformin 500mg','Metformin HCl','Antidiabetic','First-line medication for type 2 diabetes','tablet',12.00,6.00,400,40,'2027-03-31',2),
+(4,'Amlodipine 5mg','Amlodipine Besylate','Antihypertensive','Calcium channel blocker for high blood pressure','tablet',18.00,9.00,350,35,'2027-01-31',2),
+(5,'Atorvastatin 10mg','Atorvastatin Calcium','Statin','Lowers cholesterol and reduces cardiovascular risk','tablet',25.00,12.00,250,25,'2026-09-30',3),
+(6,'Omeprazole 20mg','Omeprazole','PPI','Proton pump inhibitor for acid-related disorders','capsule',15.00,7.00,280,30,'2026-11-30',3),
+(7,'Cetirizine 10mg','Cetirizine HCl','Antihistamine','Non-drowsy antihistamine for allergies','tablet',10.00,4.50,320,30,'2027-02-28',1),
+(8,'Ibuprofen 400mg','Ibuprofen','NSAID','Anti-inflammatory pain reliever','tablet',9.00,4.00,420,40,'2027-04-30',2),
+(9,'Azithromycin 250mg','Azithromycin','Antibiotic','Macrolide antibiotic for respiratory infections','tablet',45.00,22.00,150,20,'2026-08-31',4),
+(10,'Salbutamol 2mg','Salbutamol Sulphate','Bronchodilator','Short-acting bronchodilator for asthma relief','tablet',14.00,6.50,180,20,'2026-10-31',4),
+(11,'Vitamin C 500mg','Ascorbic Acid','Vitamin','Vitamin C supplement for immune support','tablet',6.00,2.50,600,60,'2027-06-30',1),
+(12,'Metronidazole 400mg','Metronidazole','Antibiotic','Antibiotic for bacterial and protozoal infections','tablet',11.00,5.00,240,25,'2026-07-31',2),
+(13,'Losartan 50mg','Losartan Potassium','Antihypertensive','ARB for hypertension and diabetic nephropathy','tablet',22.00,10.00,200,25,'2027-05-31',3),
+(14,'Pantoprazole 40mg','Pantoprazole Sodium','PPI','Proton pump inhibitor for GERD treatment','tablet',20.00,9.00,260,30,'2027-01-31',3),
+(15,'Paracetamol Syrup 120mg','Paracetamol','Analgesic','Paracetamol suspension for children','bottle',65.00,30.00,80,10,'2026-05-31',1),
+(16,'Prednisolone 5mg','Prednisolone','Corticosteroid','Anti-inflammatory corticosteroid','tablet',16.00,7.50,120,15,'2026-12-31',4),
+(17,'Glibenclamide 5mg','Glibenclamide','Antidiabetic','Sulfonylurea for type 2 diabetes','tablet',13.00,6.00,170,20,'2027-02-28',2),
+(18,'Warfarin 1mg','Warfarin Sodium','Anticoagulant','Blood thinner to prevent clot formation','tablet',18.00,8.50,90,15,'2026-11-30',4),
+(19,'Ferrous Sulphate 200mg','Ferrous Sulphate','Iron Supplement','Iron supplement for iron-deficiency anaemia','tablet',7.00,3.00,350,40,'2027-03-31',1),
+(20,'Folic Acid 5mg','Folic Acid','Vitamin','B-vitamin for cell growth and anaemia prevention','tablet',5.00,2.00,400,40,'2027-04-30',1);
+SELECT setval(pg_get_serial_sequence('tenant_healthcare_pharmacy.medicines','id'), 20, true);
+
+-- tenant_medplus_pharmacy
+INSERT INTO tenant_medplus_pharmacy.suppliers (id, name, contact, phone, email, address) VALUES
+(1,'PharmaCo Lanka (Pvt) Ltd', 'Ruwan Senanayake',   '+94112223344', 'orders@pharmacolanka.lk',  '125 Sir James Pieris Mawatha, Colombo 02'),
+(2,'MediSupply Solutions',     'Tharanga Bandara',   '+94114455667', 'supply@medisupply.lk',     '67 Vauxhall Street, Colombo 02'),
+(3,'CeylonPharma Distributors','Lasantha Gunatilake','+94115566778', 'sales@ceylonpharma.lk',    '22 Havelock Road, Colombo 05'),
+(4,'HealthLine Imports Ltd',   'Nimasha Ratnasiri',  '+94116677889', 'info@healthlineimports.lk','90 D.R. Wijewardena Mawatha, Colombo 10');
+SELECT setval(pg_get_serial_sequence('tenant_medplus_pharmacy.suppliers','id'), 4, true);
+
+INSERT INTO tenant_medplus_pharmacy.medicines (id, name, generic_name, category, description, unit, price, cost_price, stock_quantity, reorder_level, expiry_date, supplier_id) VALUES
+(1,'Panadol 500mg','Paracetamol','Analgesic','Pain reliever and fever reducer','tablet',8.50,4.00,500,50,'2026-12-31',1),
+(2,'Amoxicillin 500mg','Amoxicillin','Antibiotic','Broad-spectrum penicillin antibiotic','capsule',22.00,11.00,300,30,'2026-06-30',1),
+(3,'Metformin 500mg','Metformin HCl','Antidiabetic','First-line medication for type 2 diabetes','tablet',12.00,6.00,400,40,'2027-03-31',2),
+(4,'Amlodipine 5mg','Amlodipine Besylate','Antihypertensive','Calcium channel blocker for high blood pressure','tablet',18.00,9.00,350,35,'2027-01-31',2),
+(5,'Atorvastatin 10mg','Atorvastatin Calcium','Statin','Lowers cholesterol and reduces cardiovascular risk','tablet',25.00,12.00,250,25,'2026-09-30',3),
+(6,'Omeprazole 20mg','Omeprazole','PPI','Proton pump inhibitor for acid-related disorders','capsule',15.00,7.00,280,30,'2026-11-30',3),
+(7,'Cetirizine 10mg','Cetirizine HCl','Antihistamine','Non-drowsy antihistamine for allergies','tablet',10.00,4.50,320,30,'2027-02-28',1),
+(8,'Ibuprofen 400mg','Ibuprofen','NSAID','Anti-inflammatory pain reliever','tablet',9.00,4.00,420,40,'2027-04-30',2),
+(9,'Azithromycin 250mg','Azithromycin','Antibiotic','Macrolide antibiotic for respiratory infections','tablet',45.00,22.00,150,20,'2026-08-31',4),
+(10,'Salbutamol 2mg','Salbutamol Sulphate','Bronchodilator','Short-acting bronchodilator for asthma relief','tablet',14.00,6.50,180,20,'2026-10-31',4),
+(11,'Vitamin C 500mg','Ascorbic Acid','Vitamin','Vitamin C supplement for immune support','tablet',6.00,2.50,600,60,'2027-06-30',1),
+(12,'Metronidazole 400mg','Metronidazole','Antibiotic','Antibiotic for bacterial and protozoal infections','tablet',11.00,5.00,240,25,'2026-07-31',2),
+(13,'Losartan 50mg','Losartan Potassium','Antihypertensive','ARB for hypertension and diabetic nephropathy','tablet',22.00,10.00,200,25,'2027-05-31',3),
+(14,'Pantoprazole 40mg','Pantoprazole Sodium','PPI','Proton pump inhibitor for GERD treatment','tablet',20.00,9.00,260,30,'2027-01-31',3),
+(15,'Paracetamol Syrup 120mg','Paracetamol','Analgesic','Paracetamol suspension for children','bottle',65.00,30.00,80,10,'2026-05-31',1),
+(16,'Prednisolone 5mg','Prednisolone','Corticosteroid','Anti-inflammatory corticosteroid','tablet',16.00,7.50,120,15,'2026-12-31',4),
+(17,'Glibenclamide 5mg','Glibenclamide','Antidiabetic','Sulfonylurea for type 2 diabetes','tablet',13.00,6.00,170,20,'2027-02-28',2),
+(18,'Warfarin 1mg','Warfarin Sodium','Anticoagulant','Blood thinner to prevent clot formation','tablet',18.00,8.50,90,15,'2026-11-30',4),
+(19,'Ferrous Sulphate 200mg','Ferrous Sulphate','Iron Supplement','Iron supplement for iron-deficiency anaemia','tablet',7.00,3.00,350,40,'2027-03-31',1),
+(20,'Folic Acid 5mg','Folic Acid','Vitamin','B-vitamin for cell growth and anaemia prevention','tablet',5.00,2.00,400,40,'2027-04-30',1);
+SELECT setval(pg_get_serial_sequence('tenant_medplus_pharmacy.medicines','id'), 20, true);
 
 -- All orgs provisioned above were created by an admin/seed script, not through the
 -- public self-registration endpoint — treat them as already reviewed so they don't

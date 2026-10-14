@@ -35,6 +35,25 @@ const DEFAULT_QUEUE_OPTIONS = { retryLimit: 3, retryDelay: 30, retryBackoff: tru
 
 boss.on('error', (err) => console.error('[pg-boss]', err.message));
 
+// PRO-15: where the OCR/extraction workers actually run.
+//
+//   'inline'   (default) — the API process registers the workers itself, as
+//                it always has. Correct for a single-service deployment, and
+//                keeps existing environments working unchanged.
+//   'separate' — the API only *enqueues*; server/worker.ts registers the
+//                workers in its own process, with its own memory limit, so a
+//                heavy OCR job can no longer OOM the API and take in-flight
+//                clinical requests with it.
+//
+// Must be set to the same value on both processes. The API still starts
+// pg-boss either way, because enqueueing needs it.
+const QUEUE_WORKER_MODE = process.env.QUEUE_WORKER_MODE === 'separate' ? 'separate' : 'inline';
+
+// Guards worker registration at every call site, so a mode mismatch cannot
+// result in the API quietly processing jobs it was configured not to.
+const shouldRegisterWorkersHere = (processKind: 'api' | 'worker'): boolean =>
+  QUEUE_WORKER_MODE === 'separate' ? processKind === 'worker' : processKind === 'api';
+
 let started = false;
 
 const startQueue = async (): Promise<void> => {
@@ -49,4 +68,4 @@ const stopQueue = async (): Promise<void> => {
   started = false;
 };
 
-export { boss, startQueue, stopQueue, DEFAULT_QUEUE_OPTIONS };
+export { boss, startQueue, stopQueue, DEFAULT_QUEUE_OPTIONS, QUEUE_WORKER_MODE, shouldRegisterWorkersHere };

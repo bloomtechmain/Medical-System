@@ -7,6 +7,7 @@ import { protect, authorize } from '../middleware/auth';
 import { uploadLimiter } from '../middleware/rateLimiter';
 import { verifyUploadSignature } from '../utils/uploadSecurity';
 import { enforceUploadQuota } from '../middleware/uploadQuota';
+import { virusScanUpload } from '../middleware/virusScanUpload';
 import { createUploadStorage } from '../utils/fileStorage';
 import validate from '../middleware/validate';
 
@@ -40,8 +41,8 @@ router.get('/',        protect, authorize('patient', 'doctor'), getAll);
 router.get('/:id',     protect, authorize('patient', 'doctor'), getOne);
 // SEC-28: replaces the removed unauthenticated /uploads/... static route.
 router.get('/:id/prescription-file', protect, authorize('patient', 'doctor', 'pharmacist', 'admin'), servePrescriptionFile);
-router.post('/',       protect, authorize('patient', 'doctor'), uploadLimiter, upload.single('prescription'), verifyUploadSignature(), enforceUploadQuota('prescriptions'), createValidators, validate, create);
-router.put('/:id',                  protect, authorize('doctor'),      uploadLimiter, upload.single('prescription'), verifyUploadSignature(), enforceUploadQuota('prescriptions'), update);
+router.post('/',       protect, authorize('patient', 'doctor'), uploadLimiter, upload.single('prescription'), verifyUploadSignature(), enforceUploadQuota('prescriptions'), virusScanUpload('prescriptions'), createValidators, validate, create);
+router.put('/:id',                  protect, authorize('doctor'),      uploadLimiter, upload.single('prescription'), verifyUploadSignature(), enforceUploadQuota('prescriptions'), virusScanUpload('prescriptions'), update);
 router.put('/:id/patient',          protect, authorize('patient'),     updateByPatient);
 router.delete('/:id',               protect, authorize('patient', 'doctor'), remove);
 
