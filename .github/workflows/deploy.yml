@@ -102,7 +102,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push server
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./server
           push: true
@@ -117,7 +117,7 @@ jobs:
             GIT_COMMIT_SHA=${{ github.sha }}
 
       - name: Build and push client
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./client
           push: true
