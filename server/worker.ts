@@ -4,6 +4,7 @@ import { connectDB, pool } from './config/db';
 import { logger } from './config/logger';
 import { initErrorTracking, captureError, flushErrorTracking } from './config/errorTracking';
 import { logFlagState } from './config/featureFlags';
+import { verifySchema } from './config/schemaCheck';
 import { startQueue, stopQueue, shouldRegisterWorkersHere, QUEUE_WORKER_MODE } from './queue/boss';
 import { register as registerLabReportVitalsWorker } from './queue/jobs/extractLabReportVitals';
 import { register as registerPatientReportVitalsWorker } from './queue/jobs/extractPatientReportVitals';
@@ -79,6 +80,7 @@ const start = async (): Promise<void> => {
   logFlagState();
 
   await connectDB();
+  await verifySchema();
   await startQueue();
 
   // Refuses to run as a no-op. Starting a worker process with

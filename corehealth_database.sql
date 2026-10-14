@@ -403,6 +403,15 @@ CREATE TABLE IF NOT EXISTS public.platform_stats_cache (
   total_appointments      BIGINT       NOT NULL DEFAULT 0,
   upcoming_appointments   BIGINT       NOT NULL DEFAULT 0,
   completed_appointments  BIGINT       NOT NULL DEFAULT 0,
+  -- SEC-17 #4 (mirrors server/migrations/004_security_fixes.sql): medicines'
+  -- admin-dashboard totals are cached like sales/appointments, now that
+  -- medicines is a cross-tenant UNION ALL rather than one table. These were
+  -- added by 004 but not mirrored here, so a fresh database built from this
+  -- file had no such columns and userController.getCachedPlatformStats
+  -- (GET /api/users/stats) failed with 42703 on every admin dashboard load.
+  total_medicines         BIGINT       NOT NULL DEFAULT 0,
+  low_stock               BIGINT       NOT NULL DEFAULT 0,
+  expired                 BIGINT       NOT NULL DEFAULT 0,
   computed_at             TIMESTAMPTZ  NOT NULL DEFAULT '-infinity'
 );
 

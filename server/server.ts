@@ -14,6 +14,7 @@ import { logger, httpLogger } from './config/logger';
 import { isEnabled, logFlagState } from './config/featureFlags';
 import { initErrorTracking } from './config/errorTracking';
 import { registerLifecycle, isShuttingDown } from './config/lifecycle';
+import { verifySchema } from './config/schemaCheck';
 import errorHandler from './middleware/errorHandler';
 import validate from './middleware/validate';
 import { generalApiLimiter, publicFormLimiter, searchLimiter } from './middleware/rateLimiter';
@@ -318,6 +319,12 @@ const start = async (): Promise<void> => {
   // flag-dependent bug is otherwise unreproducible after the fact.
   logFlagState();
   await connectDB();
+
+  // Before anything serves a request: confirm the database actually has the
+  // columns and tables this build reads. A missing column reads as undefined
+  // rather than throwing, so without this check a database that is behind the
+  // code starts up and then refuses every login with a misleading message.
+  await verifySchema();
 
   // PERF-06: start the job queue and register this process as a worker for
   // the OCR/PDF-extraction jobs. Running the worker in the same process as
