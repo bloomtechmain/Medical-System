@@ -48,15 +48,39 @@ const issueRefreshToken = async (userId: number): Promise<string> => {
   return token;
 };
 
-const getOrgForUser = async (userId: number) => {
+// Requirement 1: a user can hold more than one context at once. The obvious
+// case is a doctor who is also registered as the owner of a hospital — they
+// have their own doctor dashboard AND the hospital's.
+//
+// This used to be a single LIMIT 1 lookup, and RoleHome then preferred the
+// organisation over the user's own role. The effect was that picking an
+// existing doctor as a hospital owner silently took away that doctor's
+// dashboard: their credentials only ever reached /hospital from then on, with
+// no route back to /doctor and no indication anything had been lost.
+//
+// Returned as a list so the client can offer a choice and a switcher. Kept as
+// `organization` (the first owned org) as well, for the existing callers that
+// read user.organization — removing that is a separate change.
+const getMembershipsForUser = async (userId: number) => {
   const { rows } = await pool.query(`
-    SELECT o.id, o.name, o.org_type, o.slug, o.is_active
+    SELECT o.id, o.name, o.org_type, o.slug, o.is_active, om.member_role
     FROM public.organizations o
     JOIN public.organization_members om ON om.organization_id = o.id
-    WHERE om.user_id = $1 AND om.member_role = 'owner'
-    LIMIT 1
+    WHERE om.user_id = $1
+      -- A suspended organisation must not appear as somewhere to log in to.
+      AND o.is_active = TRUE
+    ORDER BY
+      -- Ownership first: if someone both owns one org and is a member of
+      -- another, the one they own is the more likely default.
+      CASE WHEN om.member_role = 'owner' THEN 0 ELSE 1 END,
+      o.name
   `, [userId]);
-  return rows[0] || null;
+  return rows;
+};
+
+const getOrgForUser = async (userId: number) => {
+  const memberships = await getMembershipsForUser(userId);
+  return memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
 };
 
 /**
@@ -404,7 +428,8 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
       return;
     }
 
-    const organization = await getOrgForUser(user.id);
+    const memberships = await getMembershipsForUser(user.id);
+    const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
     const { password: _, mfa_secret: __, ...safeUser } = user;
     audit(req, {
       action: AuditAction.LOGIN_SUCCESS,
@@ -413,7 +438,7 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
       actorRole: user.role,
       metadata: { mfa: false },
     });
-    res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+    res.json({ user: { ...safeUser, organization, memberships }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
@@ -455,7 +480,8 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
       return;
     }
 
-    const organization = await getOrgForUser(user.id);
+    const memberships = await getMembershipsForUser(user.id);
+    const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
     const { password: _, mfa_secret: __, ...safeUser } = user;
     audit(req, {
       action: AuditAction.LOGIN_SUCCESS,
@@ -464,7 +490,7 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
       actorRole: user.role,
       metadata: { mfa: true },
     });
-    res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+    res.json({ user: { ...safeUser, organization, memberships }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
@@ -548,8 +574,11 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
       profile = p[0] || null;
     }
 
-    const organization = await getOrgForUser(req.user.id);
-    res.json({ ...user, profile, organization });
+    // Must match what login returns, or refreshing the page would lose the
+    // dashboard switcher until the next sign-in.
+    const memberships = await getMembershipsForUser(req.user.id);
+    const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
+    res.json({ ...user, profile, organization, memberships });
   } catch (err) {
     next(err);
   }

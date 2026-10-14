@@ -61,11 +61,48 @@ describe('authController.login', () => {
     expect(res.json).toHaveBeenCalledWith({
       user: {
         id: 1, email: 'x@x.com', role: 'patient', is_active: true,
-        email_verified_at: user.email_verified_at, organization: null,
+        email_verified_at: user.email_verified_at,
+        organization: null,
+        // Requirement 1: login now returns every dashboard context the
+        // account holds, so the client can offer a choice and a switcher.
+        // Empty here because this user belongs to no organisation.
+        memberships: [],
       },
       token: 'fake-token',
       refreshToken: expect.any(String),
     });
+  });
+
+  // Requirement 1: the bug was that picking an existing doctor as a hospital
+  // owner silently removed that doctor's own dashboard, because login
+  // returned one organisation and routing preferred it over the user's role.
+  // Login must now hand back BOTH so nothing can be hidden.
+  it('returns every organisation the user belongs to, not just the first', async () => {
+    const user = {
+      id: 2, email: 'dr@x.com', password: 'hashed', role: 'doctor',
+      is_active: true, email_verified_at: new Date('2026-01-01'),
+    };
+    const memberships = [
+      { id: 10, name: 'Nawaloka Hospital', org_type: 'hospital', slug: 'nawaloka', is_active: true, member_role: 'owner' },
+      { id: 11, name: 'City Medical Lab', org_type: 'laboratory', slug: 'citylab', is_active: true, member_role: 'owner' },
+    ];
+    query
+      .mockResolvedValueOnce({ rows: [user] })        // SELECT * FROM users
+      .mockResolvedValueOnce({ rows: memberships })   // getMembershipsForUser
+      .mockResolvedValueOnce({ rows: [] });           // issueRefreshToken
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    (jwt.sign as jest.Mock).mockReturnValue('fake-token');
+
+    const res = mockResponse();
+    await login(mockRequest({ body: { email: 'dr@x.com', password: 'correct' } }), res, next);
+
+    const payload = (res.json as jest.Mock).mock.calls[0][0];
+    expect(payload.user.memberships).toHaveLength(2);
+    expect(payload.user.memberships.map((m: { name: string }) => m.name))
+      .toEqual(['Nawaloka Hospital', 'City Medical Lab']);
+    // `organization` is kept for existing callers and resolves to the owned
+    // org, but it must no longer be the only thing returned.
+    expect(payload.user.organization).toMatchObject({ name: 'Nawaloka Hospital' });
   });
 
   // PRO-11: "Sign-up needs no email verification ... and the account can act

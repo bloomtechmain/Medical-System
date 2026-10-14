@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { User } from '../types';
 import { authApi } from '../services/api';
+import { clearActiveContextKey } from '../constants/dashboards';
 
 const ADMIN_SESSION_KEY = 'admin_session';
 
@@ -48,6 +49,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     localStorage.removeItem(ADMIN_SESSION_KEY);
+    // Requirement 1: a remembered dashboard choice belongs to the account that
+    // made it. Leaving it would send the NEXT person to sign in on this
+    // browser straight to a dashboard they may not even have.
+    clearActiveContextKey();
   }, []);
 
   // Admin "View As" — stash the admin's own session, then switch the active
