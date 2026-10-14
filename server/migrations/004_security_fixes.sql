@@ -210,6 +210,26 @@ BEGIN
         created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
         updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
       )$t$, v_schema, v_schema);
+    -- A tenant provisioned by an OLDER version of this function already has a
+    -- medicines table, so CREATE TABLE IF NOT EXISTS above is a no-op and the
+    -- newer columns are simply absent. The index on deleted_at below then
+    -- fails with "column deleted_at does not exist" — which is exactly what
+    -- happens adopting migrations on a database whose tenant schemas were
+    -- built from corehealth_database.sql before deleted_at existed. Verified
+    -- against a copy of such a database: 004 aborts without these ALTERs and
+    -- completes with them. They make the function idempotent against the
+    -- older shape as well as the current one.
+    EXECUTE format('ALTER TABLE %I.medicines ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ', v_schema);
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_price_nonneg      CHECK (price >= 0)',          v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_cost_price_nonneg CHECK (cost_price >= 0)',     v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_stock_nonneg      CHECK (stock_quantity >= 0)', v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_name       ON %I.medicines(name)',     v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_category   ON %I.medicines(category)', v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_supplier   ON %I.medicines(supplier_id)', v_schema);
@@ -348,6 +368,27 @@ $fn$;
 ALTER FUNCTION public.provision_tenant(text, text, text, int) OWNER TO corehealth_migrator;
 REVOKE ALL ON FUNCTION public.provision_tenant(text, text, text, int) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.provision_tenant(text, text, text, int) TO corehealth_app, corehealth_migrator;
+
+-- Privileges the backfill below actually needs.
+--
+-- provision_tenant() is SECURITY DEFINER and the line just above sets its
+-- owner to corehealth_migrator — so when the backfill calls it, its
+-- `INSERT INTO public.organizations` runs with the MIGRATOR's privileges,
+-- not the caller's. 001 grants that role `ALL ON SCHEMA public, clinical`,
+-- which covers the schemas and nothing inside them. The result is
+-- "permission denied for table organizations", and the whole migration
+-- rolls back.
+--
+-- This never showed up on a fresh database because the backfill loop selects
+-- pharmacy organisations, finds none, and never calls the function. It fails
+-- on every database that already has a pharmacy — i.e. exactly the databases
+-- this backfill exists for. Reproduced against a copy of a real one.
+--
+-- REFERENCES is included because the per-tenant tables' foreign keys to
+-- public.users need it; TRIGGER because provision_tenant creates triggers
+-- inside the tenant schema.
+GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public, clinical TO corehealth_migrator;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public, clinical TO corehealth_migrator;
 
 -- SEC-17 #4 backfill: every pharmacy tenant provisioned before this
 -- migration only has order_items/sale_items/inventory_adjustments/orders

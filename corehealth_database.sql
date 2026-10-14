@@ -1363,6 +1363,26 @@ BEGIN
         CONSTRAINT medicines_cost_price_nonneg CHECK (cost_price >= 0),
         CONSTRAINT medicines_stock_nonneg      CHECK (stock_quantity >= 0)
       )$t$, v_schema, v_schema);
+    -- A tenant provisioned by an OLDER version of this function already has a
+    -- medicines table, so CREATE TABLE IF NOT EXISTS above is a no-op and the
+    -- newer columns are simply absent. The index on deleted_at below then
+    -- fails with "column deleted_at does not exist" — which is exactly what
+    -- happens adopting migrations on a database whose tenant schemas were
+    -- built from corehealth_database.sql before deleted_at existed. Verified
+    -- against a copy of such a database: 004 aborts without these ALTERs and
+    -- completes with them. They make the function idempotent against the
+    -- older shape as well as the current one.
+    EXECUTE format('ALTER TABLE %I.medicines ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ', v_schema);
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_price_nonneg      CHECK (price >= 0)',          v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_cost_price_nonneg CHECK (cost_price >= 0)',     v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_stock_nonneg      CHECK (stock_quantity >= 0)', v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_name     ON %I.medicines(name)',     v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_category ON %I.medicines(category)', v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_supplier ON %I.medicines(supplier_id)', v_schema);
