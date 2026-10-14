@@ -30,7 +30,8 @@
     "db:purge-soft-deleted": "node dist/scripts/purgeSoftDeleted.js",
     "queue:smoke-test": "node dist/scripts/smokeTestQueue.js",
     "worker": "node dist/worker.js",
-    "worker:dev": "tsx watch worker.ts"
+    "worker:dev": "tsx watch worker.ts",
+    "mail:test": "tsx scripts/testMail.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1148.0",

@@ -687,6 +687,23 @@ const changePassword = async (req: Request, res: Response, next: NextFunction): 
   } catch (err) { next(err); }
 };
 
+// Links in emails are built from CLIENT_URL. Unset, the old code produced
+// either a relative URL (useless in an email client) or the literal string
+// "undefined/reset-password?token=..." — a delivered email containing a
+// broken link, which is harder to diagnose than no email at all. Production
+// already requires CLIENT_URL at boot (ARCH-04); this covers development,
+// where it is optional, by refusing to send rather than sending nonsense.
+const buildClientLink = (path: string): string => {
+  const base = process.env.CLIENT_URL?.trim().replace(/\/$/, '');
+  if (!base) {
+    throw Object.assign(
+      new Error('CLIENT_URL is not set, so the link in this email would be broken. Set CLIENT_URL to the client origin (e.g. http://localhost:5173).'),
+      { status: 500 }
+    );
+  }
+  return `${base}${path}`;
+};
+
 // PRO-11 — email verification. Same opaque-token-hashed-at-rest shape as the
 // password reset above, because the threat model is the same.
 const EMAIL_VERIFICATION_HOURS = 48;
@@ -703,7 +720,7 @@ const sendVerificationEmail = async (user: { id: number; name: string; email: st
     [user.id, hashRefreshToken(token), expiresAt]
   );
 
-  const verifyUrl = `${process.env.CLIENT_URL || ''}/verify-email?token=${token}`;
+  const verifyUrl = buildClientLink(`/verify-email?token=${token}`);
   await sendMail(
     user.email,
     'Confirm your Core Health email address',
@@ -845,7 +862,7 @@ const forgotPassword = async (req: Request, res: Response, next: NextFunction): 
       [user.id, hashRefreshToken(token), expiresAt]
     );
 
-    const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
+    const resetUrl = buildClientLink(`/reset-password?token=${token}`);
     await sendMail(
       user.email,
       'Reset your Core Health password',
