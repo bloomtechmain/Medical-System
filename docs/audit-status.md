@@ -59,7 +59,7 @@ could not be verified from the repository.
 | AUTO-03 | PARTIAL | **Done** | `npm ci`, pinned bases, unused root build files deleted |
 | MON-05 | FAIL | **Done** | Sentry both sides, release-tagged. **Needs a DSN to do anything.** |
 | MON-10 | FAIL | **Done** | pino JSON + request ID in a response header |
-| COMP-02 | FAIL | **Partly** | Documents published and the accepted version recorded. **Needs legal review; existing users need re-acceptance.** |
+| COMP-02 | FAIL | **Done**, bar review | Documents published, accepted version recorded, and a blocking re-acceptance prompt for users left NULL. **Still needs legal review** — flip `LEGAL_REVIEWED` after sign-off. |
 | DOC-01 | PARTIAL | **Done** | README rewritten |
 | DOC-02 | FAIL | **Done** | `docs/environments.md` |
 | PRO-06 | FAIL | **Done** | Server-side validation; prices from the database |
@@ -69,9 +69,9 @@ could not be verified from the repository.
 
 ## P1 and P2
 
-Done: SEC-15, SEC-24, SEC-25, DB-15, INF-11, PERF-06, PERF-10, CICD-12,
-CICD-13 (wired), AUTO-08, MON-06, MON-07, MON-12, COMP-03, COMP-05, COST-04,
-DOC-03, DOC-04, PRO-01…PRO-05, PRO-07…PRO-11, PRO-14, PRO-15, PRO-17, PRO-22,
+Done: SEC-15, SEC-24, SEC-25, DB-15, INF-11, PERF-02, PERF-06, PERF-10,
+CICD-12, CICD-13 (wired), AUTO-08, MON-06, MON-07, MON-12, COMP-03, COMP-05,
+COST-04, DOC-03, DOC-04, PRO-01…PRO-12, PRO-14, PRO-15, PRO-17, PRO-22,
 PRO-25, PRO-30, FEAT-01.
 
 Deliberately not done:
@@ -118,12 +118,30 @@ Deliberately not done:
 - Access review, offboarding, rotation (SEC-05, SEC-06, SEC-10)
 
 ### Still genuine product work
-- Re-acceptance prompt for users with `accepted_terms_version IS NULL` (COMP-02)
-- Email verification before an account can act (PRO-11's remaining half)
-- Retention for notifications, messages and vitals — nothing deletes them (PRO-04)
-- Virus scanning on upload (PRO-07)
-- A load test at twice peak (PERF-02); a penetration test (SEC-26)
-- Move the OCR worker to its own process (PRO-15, PERF-06's remaining half)
+
+All six items previously listed here are now done — see the section below.
+What remains needs someone outside the repository:
+
+- **Penetration test** (SEC-26) — needs a third party
+- **Soak test of several hours** (PERF-09), watching the OCR worker's memory
+  now that it is a separate process
+- **A CAPTCHA** on the two public forms (PRO-11 names it alongside email
+  verification; it needs a third-party service and a decision on which)
+
+### Reactivated by the fixes — previously N/A, now live
+
+The audit marked 18 checks `N/A` "because the application has no outside
+services, cache, queue or scheduled jobs yet. **They start to apply when one
+is added.**" A queue now exists (pg-boss), so three of them do:
+
+| ID | Was | Now needs |
+|---|---|---|
+| WARN-07 (P0) | N/A — no queue | A queue-depth alert. `pgboss.job` is queryable; the alert is platform-side. |
+| WARN-08 (P1) | N/A — no dead-letter queue | A failed-job alert. pg-boss has a real failed state after 3 retries. |
+| PRO-16 (P1) | N/A — "applies once PERF-06 is done" | PERF-06 is done, so this applies. Worker now separate (PRO-15) with its own limit; the remaining piece is alerting on stuck/failed jobs. |
+
+`AUTO-02` (infrastructure state file) likewise activates the moment the
+Terraform is actually applied.
 
 ## Found while fixing, not in the audit
 
@@ -147,6 +165,28 @@ schema truth that had silently diverged.
 Also: `purgeSoftDeleted.ts` still targeted `public.medicines` and would have
 crashed on its next run.
 
+A second round of the same class, found while closing the last six items —
+each one caught by *running* the thing rather than reading it:
+
+5. `corehealth_database.sql` was missing migration 005's `GRANT CREATE ON
+   DATABASE`, so the API died at boot with "permission denied for database"
+   on any db.sql-built database. pg-boss issues `CREATE SCHEMA` on every
+   start and PostgreSQL checks the database privilege before noticing the
+   schema exists.
+6. `seed.ts` still inserted into `public.suppliers` — dropped by migration
+   006 — so `npm run db:seed` failed outright.
+7. `corehealth_seed_data.sql` still seeded `public.suppliers`/`medicines`,
+   so it had failed on fresh install ever since SEC-17 #4.
+8. A **deadlock** in `markAllRead`, found by the PERF-02 load test: no
+   `is_read` filter and a plan-dependent lock order, so two concurrent calls
+   for one user could deadlock, and the stuck transactions then exhausted the
+   connection pool. Fixing it raised write throughput 73% and removed every
+   500 from the run.
+
+The pattern is consistent enough to be worth stating: every one of these was
+invisible to the mocked tests and visible within seconds of running the real
+thing against a real database.
+
 Fixed in migration 006 and guarded by
 `server/controllers/__tests__/tenantProvisioning.integration.test.ts`, which
 asserts the end state against a real database rather than trusting a
@@ -155,12 +195,16 @@ paths.
 
 ## How this was verified
 
-- 76 server tests, 12 suites, against databases rebuilt from scratch by
+- 93 server tests, 14 suites, against databases rebuilt from scratch by
   **both** install paths — migrations and `corehealth_database.sql`
 - 10 client tests
 - Both workspaces build and lint; all workflow files parse; shell scripts pass
   `bash -n`
-- The purge script dry-runs clean
+- The purge script dry-runs clean, including the new age-based targets
+- A pristine `corehealth_database.sql` + seed install: zero orphaned
+  references, correct sequence positions, all users verified
+- The API and the separate queue worker both started and served real traffic;
+  the 2x-peak load test ran against the compiled production build
 
 Not verified, and not claimed: `deploy.yml` and the two deploy scripts have
 never run — they need platform credentials. The Terraform has never been

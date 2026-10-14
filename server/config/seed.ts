@@ -14,9 +14,14 @@ const seed = async (): Promise<void> => {
 
     if (adminEmail && adminPassword) {
       const adminHash = await bcrypt.hash(adminPassword, 10);
+      // PRO-11: email_verified_at is set explicitly. Login is refused for an
+      // unverified address, and this account is created by an operator who
+      // supplied the address deliberately — there is no inbox round-trip to
+      // make, and leaving it NULL would create an admin account that cannot
+      // log in, which is a confusing dead end rather than a safety measure.
       await client.query(`
-        INSERT INTO users (name, email, password, role)
-        VALUES ('Admin', $1, $2, 'admin')
+        INSERT INTO users (name, email, password, role, email_verified_at)
+        VALUES ('Admin', $1, $2, 'admin', NOW())
         ON CONFLICT (email) DO NOTHING;
       `, [adminEmail, adminHash]);
       console.log(`Admin account ensured for ${adminEmail}.`);
@@ -24,11 +29,14 @@ const seed = async (): Promise<void> => {
       console.log('SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set — skipping admin seed. Set both to create one.');
     }
 
-    await client.query(`
-      INSERT INTO suppliers (name, contact, phone, email)
-      VALUES ('MedSupply Co.', 'John Doe', '0771234567', 'supplier@medsupply.com')
-      ON CONFLICT DO NOTHING;
-    `);
+    // The supplier row that used to be inserted here is gone. SEC-17 #4 moved
+    // medicines/suppliers out of `public` and into each pharmacy's own
+    // tenant_<slug> schema, and migration 006 dropped the shared tables — so
+    // this INSERT referenced a table that no longer exists and would have
+    // failed the whole seed. There is no sensible shared replacement: a
+    // supplier belongs to one pharmacy now, and which pharmacy is not
+    // something this script can know. Sample suppliers for local development
+    // come from corehealth_seed_data.sql, which creates the tenants first.
 
     console.log('Seed data inserted successfully.');
   } catch (err) {

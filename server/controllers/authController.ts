@@ -8,6 +8,7 @@ import { pool, queryAs, revokeRefreshTokens } from '../config/db';
 import { sendMail } from '../config/mailer';
 import { audit, AuditAction } from '../utils/auditLog';
 import { isEnabled } from '../config/featureFlags';
+import { logger } from '../config/logger';
 import { DbUser } from '../types';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
@@ -226,14 +227,45 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     }
 
     await client.query('COMMIT');
+
+    // PRO-11: send the confirmation link. After COMMIT, deliberately — the
+    // account must exist before a link pointing at it goes out, and a mail
+    // failure must not roll back a successfully created account. If the send
+    // fails the user can ask for another via /auth/resend-verification, so
+    // this is logged rather than surfaced as a registration failure.
+    const verificationRequired = isEnabled('REQUIRE_EMAIL_VERIFICATION');
+    if (verificationRequired) {
+      try {
+        await sendVerificationEmail({ id: user.id, name: user.name, email: user.email });
+      } catch (mailErr) {
+        logger.error({ err: mailErr, userId: user.id }, 'Could not send verification email at registration');
+      }
+    }
+
     if (!user.is_active) {
       res.status(201).json({
         user,
         pending: true,
-        message: 'Your account has been created and is pending admin approval. You will be able to log in once an admin approves it.',
+        emailVerificationRequired: verificationRequired,
+        message: verificationRequired
+          ? 'Your account has been created. Please confirm your email address, then wait for an admin to approve the account.'
+          : 'Your account has been created and is pending admin approval. You will be able to log in once an admin approves it.',
       });
       return;
     }
+
+    // An active account (a patient) still cannot log in until the address is
+    // confirmed, so handing back a session here would contradict the login
+    // check. Say what is needed instead.
+    if (verificationRequired) {
+      res.status(201).json({
+        user,
+        emailVerificationRequired: true,
+        message: 'Your account has been created. Please confirm your email address using the link we just sent, then log in.',
+      });
+      return;
+    }
+
     res.status(201).json({ user, token: generateToken(user as DbUser), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -287,6 +319,28 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
         metadata: { reason: 'inactive_account' },
       });
       res.status(403).json({ message: 'This account is pending admin approval or has been deactivated. Please wait for approval or contact support.' });
+      return;
+    }
+
+    // PRO-11: "the account can act at once" — an unverified address meant
+    // anyone could register as a patient against someone else's email, or a
+    // typo'd one, and immediately use the account. Checked after the password
+    // so this reveals nothing to someone who does not already hold the
+    // credentials. `emailUnverified` lets the client offer a resend button
+    // rather than leaving the user at a dead end.
+    if (!user.email_verified_at && isEnabled('REQUIRE_EMAIL_VERIFICATION')) {
+      audit(req, {
+        action: AuditAction.LOGIN_FAILURE,
+        outcome: 'denied',
+        actorId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
+        metadata: { reason: 'email_unverified' },
+      });
+      res.status(403).json({
+        message: 'Please confirm your email address before logging in. Check your inbox for the confirmation link.',
+        emailUnverified: true,
+      });
       return;
     }
 
@@ -440,7 +494,11 @@ const mfaDisable = async (req: Request, res: Response, next: NextFunction): Prom
 const getMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query<Omit<DbUser, 'password'>>(
-      'SELECT id, name, email, role, is_active, mfa_enabled, created_at FROM users WHERE id = $1',
+      // COMP-02: accepted_terms_version is returned so the client can tell
+      // whether this person is on the current policy version and prompt if
+      // not. email_verified_at goes with it as the same kind of
+      // account-standing fact the UI may need to surface.
+      'SELECT id, name, email, role, is_active, mfa_enabled, created_at, accepted_terms_version, email_verified_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows.length) { res.status(404).json({ message: 'User not found' }); return; }
@@ -629,6 +687,140 @@ const changePassword = async (req: Request, res: Response, next: NextFunction): 
   } catch (err) { next(err); }
 };
 
+// PRO-11 — email verification. Same opaque-token-hashed-at-rest shape as the
+// password reset above, because the threat model is the same.
+const EMAIL_VERIFICATION_HOURS = 48;
+
+// Issues a token and emails the link. Called on registration and by the
+// resend endpoint. Deliberately returns void and swallows nothing — a mail
+// failure must surface, or a user waits forever for an email that was never
+// sent.
+const sendVerificationEmail = async (user: { id: number; name: string; email: string }): Promise<void> => {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_HOURS * 60 * 60 * 1000);
+  await pool.query(
+    'INSERT INTO public.email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+    [user.id, hashRefreshToken(token), expiresAt]
+  );
+
+  const verifyUrl = `${process.env.CLIENT_URL || ''}/verify-email?token=${token}`;
+  await sendMail(
+    user.email,
+    'Confirm your Core Health email address',
+    `<p>Hi ${user.name},</p>
+     <p>Confirm this email address to activate your Core Health account. This link expires in ${EMAIL_VERIFICATION_HOURS} hours.</p>
+     <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+     <p>If you didn't create this account, you can ignore this email — the account cannot be used until the address is confirmed.</p>`
+  );
+};
+
+// Redeems a verification token. used_at is checked as well as expires_at, so
+// a link cannot be replayed within its validity window. Intentionally
+// idempotent-ish from the user's point of view: an already-verified account
+// gets a success response rather than an error, because clicking the link
+// twice is a normal thing for a person to do and failing it looks broken.
+const verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { token } = req.body as { token: string };
+    if (!token) { res.status(400).json({ message: 'A verification token is required' }); return; }
+
+    const { rows } = await pool.query(
+      `SELECT t.id, t.user_id, u.email_verified_at
+       FROM public.email_verification_tokens t
+       JOIN public.users u ON u.id = t.user_id
+       WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > NOW()`,
+      [hashRefreshToken(token)]
+    );
+
+    if (!rows.length) {
+      res.status(400).json({ message: 'This verification link is invalid or has expired. Request a new one.' });
+      return;
+    }
+
+    await pool.query(
+      'UPDATE public.users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = $1',
+      [rows[0].user_id]
+    );
+    await pool.query(
+      'UPDATE public.email_verification_tokens SET used_at = NOW() WHERE id = $1',
+      [rows[0].id]
+    );
+
+    audit(req, {
+      action: AuditAction.EMAIL_VERIFIED,
+      actorId: rows[0].user_id,
+      targetType: 'user',
+      targetId: rows[0].user_id,
+    });
+
+    res.json({ message: 'Email confirmed. You can now log in.' });
+  } catch (err) { next(err); }
+};
+
+// Resend. Always the same generic response whether or not the address exists
+// or is already verified — this endpoint needs no login, so a distinguishing
+// response would make it an account-enumeration oracle, exactly as
+// forgotPassword avoids.
+const resendVerification = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { email } = req.body as { email: string };
+    const generic = { message: 'If that address needs confirming, a new link has been sent.' };
+
+    const { rows } = await pool.query<{ id: number; name: string; email: string; email_verified_at: Date | null }>(
+      'SELECT id, name, email, email_verified_at FROM public.users WHERE email = $1 AND deleted_at IS NULL',
+      [email]
+    );
+    if (!rows.length || rows[0].email_verified_at) { res.json(generic); return; }
+
+    // Cheap per-account ceiling on top of authLimiter's per-IP one: sending
+    // mail costs money and an unthrottled resend is a way to use this server
+    // to spam a third party's inbox.
+    const { rows: recent } = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::bigint AS n FROM public.email_verification_tokens
+       WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+      [rows[0].id]
+    );
+    if (Number(recent[0].n) >= 5) { res.json(generic); return; }
+
+    await sendVerificationEmail(rows[0]);
+    res.json(generic);
+  } catch (err) { next(err); }
+};
+
+// COMP-02: migration 008 recorded which version of the Terms/Privacy Policy
+// each person accepted at sign-up, and left existing users NULL on purpose —
+// they agreed to documents that did not exist yet. This is how they, and
+// anyone on a superseded version after a policy change, accept the current
+// one. Without it the column records a gap that can never be closed.
+//
+// Authenticated: the point is to tie an acceptance to a known person. The
+// version is checked against a bounded string and stored as sent; the
+// timestamp is the database's, so it cannot be backdated by a client.
+const acceptTerms = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { version } = req.body as { version: string };
+    if (!version) { res.status(400).json({ message: 'A version is required' }); return; }
+
+    const { rows } = await pool.query(
+      `UPDATE public.users
+          SET accepted_terms_version = $1, accepted_terms_at = NOW()
+        WHERE id = $2 AND deleted_at IS NULL
+        RETURNING accepted_terms_version, accepted_terms_at`,
+      [version, req.user.id]
+    );
+    if (!rows.length) { res.status(404).json({ message: 'Account not found' }); return; }
+
+    audit(req, {
+      action: AuditAction.TERMS_ACCEPTED,
+      targetType: 'user',
+      targetId: req.user.id,
+      metadata: { version },
+    });
+
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+};
+
 const PASSWORD_RESET_MINUTES = 60;
 
 // SEC-17 (auth): forgot-password, step 1 — always responds the same way
@@ -706,4 +898,4 @@ const resetPassword = async (req: Request, res: Response, next: NextFunction): P
   } catch (err) { next(err); }
 };
 
-export { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };
+export { register, login, verifyEmail, resendVerification, acceptTerms, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };

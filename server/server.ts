@@ -18,7 +18,7 @@ import errorHandler from './middleware/errorHandler';
 import validate from './middleware/validate';
 import { generalApiLimiter, publicFormLimiter, searchLimiter } from './middleware/rateLimiter';
 import { isS3Enabled } from './utils/fileStorage';
-import { startQueue } from './queue/boss';
+import { startQueue, shouldRegisterWorkersHere, QUEUE_WORKER_MODE } from './queue/boss';
 import { register as registerLabReportVitalsWorker } from './queue/jobs/extractLabReportVitals';
 import { register as registerPatientReportVitalsWorker } from './queue/jobs/extractPatientReportVitals';
 import { register as registerConsultationOcrWorker } from './queue/jobs/extractConsultationMedicines';
@@ -325,10 +325,25 @@ const start = async (): Promise<void> => {
   // queryable failed state instead of setImmediate's "lost on restart, no
   // retry" — and can move to a separate worker process later with no job
   // code changes, since pg-boss doesn't care which process calls boss.work().
+  // Always started: enqueueing needs pg-boss even when nothing is processed
+  // here.
   await startQueue();
-  await registerLabReportVitalsWorker();
-  await registerPatientReportVitalsWorker();
-  await registerConsultationOcrWorker();
+
+  // PRO-15: with QUEUE_WORKER_MODE=separate the OCR/extraction jobs are
+  // handled by server/worker.ts in its own process, so this one must NOT
+  // register for them — otherwise both compete for the same jobs and the
+  // memory isolation the split exists for is lost.
+  if (shouldRegisterWorkersHere('api')) {
+    await registerLabReportVitalsWorker();
+    await registerPatientReportVitalsWorker();
+    await registerConsultationOcrWorker();
+    logger.info({ queueWorkerMode: QUEUE_WORKER_MODE }, 'Queue workers registered in the API process');
+  } else {
+    logger.info(
+      { queueWorkerMode: QUEUE_WORKER_MODE },
+      'Queue workers NOT registered here — expecting a separate worker process (server/worker.ts)'
+    );
+  }
 };
 
 // INF-04/INF-06: graceful shutdown (drain HTTP, close sockets, stop the

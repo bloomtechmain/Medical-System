@@ -6,6 +6,7 @@ import { create, getAll, getOne, serveFile, serveFileForDoctor, remove } from '.
 import { uploadLimiter } from '../middleware/rateLimiter';
 import { verifyUploadSignature } from '../utils/uploadSecurity';
 import { enforceUploadQuota } from '../middleware/uploadQuota';
+import { virusScanUpload } from '../middleware/virusScanUpload';
 import { createUploadStorage } from '../utils/fileStorage';
 
 const router = Router();
@@ -24,7 +25,7 @@ router.get('/',                   protect, authorize('patient'), getAll);
 router.get('/:id',                protect, authorize('patient'), getOne);
 router.get('/:id/file',           protect, authorize('patient'), serveFile);
 router.get('/:id/doctor-file',    protect, authorize('doctor'),  serveFileForDoctor);
-router.post('/',                  protect, authorize('patient'), uploadLimiter, upload.single('file'), verifyUploadSignature({ required: true }), enforceUploadQuota('patient-reports'), create);
+router.post('/',                  protect, authorize('patient'), uploadLimiter, upload.single('file'), verifyUploadSignature({ required: true }), enforceUploadQuota('patient-reports'), virusScanUpload('patient-reports'), create);
 router.delete('/:id',             protect, authorize('patient'), remove);
 
 export default router;

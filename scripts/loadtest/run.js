@@ -41,20 +41,58 @@ const login = async () => {
   return body.token;
 };
 
+// PERF-02 asks for a load test "with realistic data and write actions". The
+// original version was read-only, which misses the thing most likely to fall
+// over: writes take row locks, grow tables, and (for vitals) go through the
+// RLS-enforced queryAs path with its own transaction per call.
+//
+// INCLUDE_WRITES=false drops back to the read-only shape for comparison.
+const INCLUDE_WRITES = process.env.INCLUDE_WRITES !== 'false';
+
 const runAutocannon = (token) => new Promise((resolve, reject) => {
   const authHeaders = { Authorization: `Bearer ${token}` };
+  const jsonHeaders = { ...authHeaders, 'Content-Type': 'application/json' };
+
+  const reads = [
+    { method: 'GET', path: '/api/health' },                          // unauthenticated baseline
+    { method: 'GET', path: '/api/ready' },                           // now also checks the DB (INF-02)
+    { method: 'GET', path: '/api/consultations',   headers: authHeaders },
+    { method: 'GET', path: '/api/appointments',     headers: authHeaders },
+    { method: 'GET', path: '/api/lab-requests',     headers: authHeaders },
+    { method: 'GET', path: '/api/patient-reports',  headers: authHeaders },
+    { method: 'GET', path: '/api/notifications',    headers: authHeaders },
+  ];
+
+  // Writes a patient can legitimately make at volume. Deliberately NOT file
+  // uploads: those are rate-limited per user (uploadLimiter, 20/min) and
+  // quota'd, so hammering them measures the limiter rather than the server,
+  // and the OCR path is called out separately in docs/capacity-plan.md as
+  // needing its own soak test.
+  const writes = [
+    {
+      method: 'POST',
+      path: '/api/patient-vitals',
+      headers: jsonHeaders,
+      // Goes through queryAs → BEGIN, set_config, INSERT, COMMIT against an
+      // RLS-protected clinical table: a genuine write, with the real
+      // per-request transaction overhead.
+      body: JSON.stringify({
+        systolic_bp: 120, diastolic_bp: 80, heart_rate: 72,
+        temperature: 36.8, weight: 70, source: 'manual',
+      }),
+    },
+    {
+      method: 'PATCH',
+      path: '/api/notifications/read-all',
+      headers: jsonHeaders,
+    },
+  ];
+
   const instance = autocannon({
     url: TARGET_URL,
     connections: CONNECTIONS,
     duration: DURATION,
-    requests: [
-      { method: 'GET', path: '/api/health' },                          // unauthenticated baseline
-      { method: 'GET', path: '/api/consultations',   headers: authHeaders },
-      { method: 'GET', path: '/api/appointments',     headers: authHeaders },
-      { method: 'GET', path: '/api/lab-requests',     headers: authHeaders },
-      { method: 'GET', path: '/api/patient-reports',  headers: authHeaders },
-      { method: 'GET', path: '/api/notifications',    headers: authHeaders },
-    ],
+    requests: INCLUDE_WRITES ? [...reads, ...writes] : reads,
   }, (err, result) => (err ? reject(err) : resolve(result)));
   autocannon.track(instance, { renderProgressBar: true });
 });

@@ -28,7 +28,9 @@
     "db:check:version": "node dist/scripts/checkDbVersionSettings.js",
     "db:check:bloat": "node dist/scripts/checkAutovacuumBloat.js",
     "db:purge-soft-deleted": "node dist/scripts/purgeSoftDeleted.js",
-    "queue:smoke-test": "node dist/scripts/smokeTestQueue.js"
+    "queue:smoke-test": "node dist/scripts/smokeTestQueue.js",
+    "worker": "node dist/worker.js",
+    "worker:dev": "tsx watch worker.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1148.0",

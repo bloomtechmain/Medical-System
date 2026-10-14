@@ -43,10 +43,45 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-corehealth_dev_only}
       JWT_SECRET: ${JWT_SECRET:-local_loadtest_only_not_for_real_use}
       CLIENT_URL: http://localhost:3000
-      # AWS_S3_BUCKET / REDIS_URL intentionally unset — exercises the local-disk
-      # and in-memory-adapter fallback paths (ARCH-06, ARCH-05), same as today.
+      # PRO-15: the API enqueues OCR jobs but does not process them — the
+      # `worker` service below does, in its own container with its own memory
+      # limit. Set QUEUE_WORKER_MODE=inline on both to go back to one process.
+      QUEUE_WORKER_MODE: ${QUEUE_WORKER_MODE:-separate}
+      # Email verification needs a mail path; without SMTP_HOST the link is
+      # logged to the server's console, which is enough to test the flow
+      # locally (`docker compose logs server`).
+      FEATURE_REQUIRE_EMAIL_VERIFICATION: ${FEATURE_REQUIRE_EMAIL_VERIFICATION:-true}
+      # AWS_S3_BUCKET / REDIS_URL / CLAMAV_HOST intentionally unset — exercises
+      # the local-disk, in-memory-adapter and no-virus-scan fallback paths
+      # (ARCH-06, ARCH-05, PRO-07), same as today.
     ports:
       - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # PRO-15/PERF-06: OCR and PDF extraction in their own process. Same image as
+  # the API — only the command and the memory ceiling differ, which is the
+  # whole point: a tesseract.js job that exhausts memory now kills this
+  # container and gets retried, instead of taking the API down with it.
+  worker:
+    build: ./server
+    command: ["sh", "-c", "node dist/worker.js"]
+    environment:
+      NODE_ENV: production
+      WORKER_HEALTH_PORT: 5001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-corehealth}
+      DB_USER: ${DB_USER:-corehealth}
+      DB_PASSWORD: ${DB_PASSWORD:-corehealth_dev_only}
+      QUEUE_WORKER_MODE: ${QUEUE_WORKER_MODE:-separate}
+      # Deliberately higher than the API's 512MB: this is where the
+      # memory-hungry work lives now, and giving it room is the reason for
+      # splitting it out.
+      NODE_OPTIONS: "--max-old-space-size=1024"
+    # No JWT_SECRET and no ports: the worker signs no tokens and serves no
+    # public traffic. Its health endpoint stays on the compose network.
     depends_on:
       postgres:
         condition: service_healthy
