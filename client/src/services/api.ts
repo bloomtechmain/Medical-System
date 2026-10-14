@@ -80,6 +80,12 @@ api.interceptors.response.use(
 
 export default api;
 
+// The patient's own complete health report, assembled and audited server-side
+// (MON-12) for the downloadable PDF. See utils/healthReportPdf.ts.
+export const healthReportApi = {
+  me: (): Promise<any> => api.get('/health-report/me'),
+};
+
 export const authApi = {
   login:    (data: unknown): Promise<any> => api.post('/auth/login', data),
   register: (data: unknown): Promise<any> => api.post('/auth/register', data),

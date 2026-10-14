@@ -1,145 +1,20 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { jsPDF } from 'jspdf';
+import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import { LucideIcon } from 'lucide-react';
 import {
   Download, Activity, CalendarPlus, Stethoscope, FlaskConical, FolderOpen,
   Phone, MapPin, Droplet, User, Calendar, CreditCard, Settings, ArrowRight,
 } from 'lucide-react';
-import { authApi, consultationApi, labApi, patientVitalsApi } from '../services/api';
+import { authApi, consultationApi, healthReportApi, labApi, patientVitalsApi } from '../services/api';
+import { downloadHealthReport } from '../utils/healthReportPdf';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/helpers';
 import MiniCalendar from '../components/common/MiniCalendar';
 import VitalsOverview from '../components/common/VitalsOverview';
 import Modal from '../components/common/Modal';
-
-function downloadHealthReport(me: any, profile: any, consultations: any[], t: TFunction) {
-  const doc   = new jsPDF({ unit: 'mm', format: 'a4' });
-  const pageW  = doc.internal.pageSize.getWidth();
-  const margin = 20;
-  const colW   = pageW - margin * 2;
-  let y = 0;
-  const val = (v: any) => v || t('pdf.notProvided');
-  const now = new Date();
-
-  doc.setFillColor(13, 148, 136);
-  doc.rect(0, 0, pageW, 38, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  doc.text('Core Health', margin, 16);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('by BloomTech', margin, 22);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(t('pdf.title'), margin, 32);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text(t('pdf.generatedLabel', { date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }), time: now.toLocaleTimeString() }), pageW - margin, 32, { align: 'right' });
-  y = 48;
-
-  const section = (title: string) => {
-    doc.setFillColor(240, 253, 250);
-    doc.roundedRect(margin, y, colW, 7, 1, 1, 'F');
-    doc.setTextColor(15, 118, 110);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(title.toUpperCase(), margin + 3, y + 5);
-    y += 12;
-  };
-
-  const row = (label: string, value: any, highlight = false) => {
-    if (y > 260) { doc.addPage(); y = 20; }
-    if (highlight) { doc.setFillColor(254, 226, 226); doc.rect(margin, y - 1, colW, 7, 'F'); }
-    doc.setTextColor(107, 114, 128);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.text(label, margin + 3, y + 4);
-    doc.setTextColor(17, 24, 39);
-    doc.setFont('helvetica', 'bold');
-    const lines = doc.splitTextToSize(val(value), colW - 60);
-    doc.text(lines[0], margin + 55, y + 4);
-    y += 8;
-  };
-
-  const divider = () => { doc.setDrawColor(229, 231, 235); doc.line(margin, y, margin + colW, y); y += 5; };
-
-  doc.setFillColor(204, 251, 241);
-  doc.roundedRect(margin, y, colW, 14, 2, 2, 'F');
-  doc.setTextColor(13, 148, 136);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(me?.name || t('pdf.patientRole'), margin + 6, y + 9.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(15, 118, 110);
-  doc.text(t('pdf.patientRole') + '  ·  ' + t('pdf.idLine', { id: me?.id || '—' }), pageW - margin - 3, y + 9.5, { align: 'right' });
-  y += 20;
-
-  section(t('pdf.sections.personal'));
-  row(t('pdf.fields.fullName'), me?.name);
-  row(t('pdf.fields.email'),    me?.email);
-  row(t('pdf.fields.phone'),    profile?.phone);
-  row(t('pdf.fields.dob'),      profile?.date_of_birth ? formatDate(profile.date_of_birth) : null);
-  row(t('pdf.fields.gender'),   profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : null);
-  row(t('pdf.fields.address'),  profile?.address);
-  divider();
-
-  section(t('pdf.sections.health'));
-  row(t('pdf.fields.bloodType'),         profile?.blood_type);
-  row(t('pdf.fields.allergies'),         profile?.allergies, !!(profile?.allergies && profile.allergies !== 'None'));
-  row(t('pdf.fields.chronicConditions'), profile?.chronic_conditions);
-  divider();
-
-  section(t('pdf.sections.emergency'));
-  row(t('pdf.fields.contactName'),  profile?.emergency_contact_name);
-  row(t('pdf.fields.contactPhone'), profile?.emergency_contact_phone);
-  divider();
-
-  if (consultations?.length) {
-    section(t('pdf.sections.history'));
-    consultations.slice(0, 10).forEach((c: any) => {
-      if (y > 260) { doc.addPage(); y = 20; }
-      doc.setTextColor(15, 118, 110);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.text(`${formatDate(c.visit_date)} — ${c.diagnosis || c.sick_description || t('pdf.visitFallback')}`, margin + 3, y + 4);
-      y += 7;
-      if (c.treatment_description) {
-        doc.setTextColor(107, 114, 128);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.5);
-        const lines = doc.splitTextToSize(t('pdf.treatmentLine', { text: c.treatment_description }), colW - 10);
-        lines.slice(0, 2).forEach((line: string) => { doc.text(line, margin + 6, y + 3); y += 5; });
-      }
-      y += 2;
-    });
-    divider();
-  }
-
-  const pageH = doc.internal.pageSize.getHeight();
-  doc.setFillColor(13, 148, 136);
-  doc.rect(0, pageH - 14, pageW, 14, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.text(`Core Health by BloomTech  ·  ${t('pdf.footerConfidential')}  ·  ${t('pdf.footerAuthorized')}`, pageW / 2, pageH - 6, { align: 'center' });
-
-  doc.setTextColor(200, 200, 200);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(52);
-  doc.saveGraphicsState();
-  doc.setGState(new (doc as any).GState({ opacity: 0.07 }));
-  doc.text('CORE HEALTH', pageW / 2, pageH / 2, { align: 'center', angle: 45 });
-  doc.restoreGraphicsState();
-
-  const filename = `CoreHealth_Report_${(me?.name || 'Patient').replace(/\s+/g, '_')}_${now.toISOString().slice(0, 10)}.pdf`;
-  doc.save(filename);
-}
 
 function ProfileSetupPrompt({ onComplete, onDismiss }: { onComplete: () => void; onDismiss: () => void }) {
   const { t } = useTranslation('patientDashboard');
@@ -332,14 +207,6 @@ export default function PatientDashboard() {
   const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Patient';
   const showSetupPrompt = !!me && !profile?.phone && !setupDismissed;
 
-  // Kept only for the PDF export, which still lists recent diagnosed visits.
-  const diseases = useMemo(() =>
-    (consultations as any[])
-      .filter((c: any) => c.diagnosis || c.sick_description)
-      .map((c: any) => ({ ...c, title: c.diagnosis || c.sick_description })),
-    [consultations]
-  );
-
   const activeConsultations = useMemo(() => (consultations as any[]).filter((c: any) => c.status === 'active'), [consultations]);
 
   const doctors = useMemo(() =>
@@ -370,10 +237,22 @@ export default function PatientDashboard() {
     [consultations]
   );
 
-  const handleDownload = () => {
+  // The report is assembled server-side (GET /health-report/me) rather than
+  // from the queries this page already has. Those are scoped for display —
+  // the last 100 vitals rows, recent consultations — so a PDF built from them
+  // would silently omit lab tests and uploaded documents, and the patient
+  // would have no way to tell. The server call is also what records the
+  // download in the audit log (MON-12).
+  const handleDownload = async () => {
     setDownloading(true);
-    try { downloadHealthReport(me, profile, diseases, t); }
-    finally { setTimeout(() => setDownloading(false), 800); }
+    try {
+      const report = await healthReportApi.me();
+      downloadHealthReport(report, t);
+    } catch (err) {
+      toast.error((err as { message?: string })?.message || t('downloadFailed'));
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const quickActions: QuickAction[] = [

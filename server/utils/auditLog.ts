@@ -31,6 +31,7 @@ export const AuditAction = {
   IMPERSONATION_STARTED: 'impersonation.started',
   PATIENT_RECORD_VIEWED: 'patient_record.viewed',
   PATIENT_FILE_DOWNLOADED: 'patient_file.downloaded',
+  HEALTH_REPORT_DOWNLOADED: 'health_report.downloaded',
   ACCESS_REQUEST_DECIDED: 'access_request.decided',
 } as const;
 
