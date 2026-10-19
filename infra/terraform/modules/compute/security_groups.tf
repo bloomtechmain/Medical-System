@@ -3,7 +3,7 @@
 
 resource "aws_security_group" "alb" {
   name_prefix = "${var.environment}-sg-alb-"
-  description = "Internet-facing ALB — the one thing in this whole stack reachable from 0.0.0.0/0."
+  description = "Internet-facing ALB - the one thing in this whole stack reachable from 0.0.0.0/0."
   vpc_id      = var.vpc_id
 
   ingress {
@@ -31,7 +31,7 @@ resource "aws_security_group" "alb" {
 
 resource "aws_security_group" "ec2" {
   name_prefix = "${var.environment}-sg-ec2-"
-  description = "ECS (EC2 launch type) instances — reachable only from the ALB, on the dynamic port range bridge-mode tasks use."
+  description = "ECS (EC2 launch type) instances - reachable only from the ALB, on the dynamic port range bridge-mode tasks use."
   vpc_id      = var.vpc_id
 
   tags = { Name = "${var.environment}-sg-ec2" }

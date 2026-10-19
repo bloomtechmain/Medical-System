@@ -48,15 +48,39 @@ const issueRefreshToken = async (userId: number): Promise<string> => {
   return token;
 };
 
-const getOrgForUser = async (userId: number) => {
+// Requirement 1: a user can hold more than one context at once. The obvious
+// case is a doctor who is also registered as the owner of a hospital — they
+// have their own doctor dashboard AND the hospital's.
+//
+// This used to be a single LIMIT 1 lookup, and RoleHome then preferred the
+// organisation over the user's own role. The effect was that picking an
+// existing doctor as a hospital owner silently took away that doctor's
+// dashboard: their credentials only ever reached /hospital from then on, with
+// no route back to /doctor and no indication anything had been lost.
+//
+// Returned as a list so the client can offer a choice and a switcher. Kept as
+// `organization` (the first owned org) as well, for the existing callers that
+// read user.organization — removing that is a separate change.
+const getMembershipsForUser = async (userId: number) => {
   const { rows } = await pool.query(`
-    SELECT o.id, o.name, o.org_type, o.slug, o.is_active
+    SELECT o.id, o.name, o.org_type, o.slug, o.is_active, om.member_role
     FROM public.organizations o
     JOIN public.organization_members om ON om.organization_id = o.id
-    WHERE om.user_id = $1 AND om.member_role = 'owner'
-    LIMIT 1
+    WHERE om.user_id = $1
+      -- A suspended organisation must not appear as somewhere to log in to.
+      AND o.is_active = TRUE
+    ORDER BY
+      -- Ownership first: if someone both owns one org and is a member of
+      -- another, the one they own is the more likely default.
+      CASE WHEN om.member_role = 'owner' THEN 0 ELSE 1 END,
+      o.name
   `, [userId]);
-  return rows[0] || null;
+  return rows;
+};
+
+const getOrgForUser = async (userId: number) => {
+  const memberships = await getMembershipsForUser(userId);
+  return memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
 };
 
 /**
@@ -233,8 +257,17 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     // failure must not roll back a successfully created account. If the send
     // fails the user can ask for another via /auth/resend-verification, so
     // this is logged rather than surfaced as a registration failure.
+    //
+    // SEC-17 #2 interaction: a professional sign-up is inactive until an
+    // admin approves it, so a verification link sent now would be redeemable
+    // long before the account can actually be used — and the 48-hour window
+    // would usually expire while the registration sat in the admin queue,
+    // leaving the user with a dead link and no idea why. The link is sent by
+    // approveUser() instead, at the point it becomes useful. Patients need no
+    // approval, so theirs goes out immediately as before.
     const verificationRequired = isEnabled('REQUIRE_EMAIL_VERIFICATION');
-    if (verificationRequired) {
+    const sendLinkNow = verificationRequired && !requiresApproval;
+    if (sendLinkNow) {
       try {
         await sendVerificationEmail({ id: user.id, name: user.name, email: user.email });
       } catch (mailErr) {
@@ -246,10 +279,13 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
       res.status(201).json({
         user,
         pending: true,
+        awaitingApproval: true,
+        // Nothing for the user to do yet, so do not ask them to check an
+        // inbox — the link has not been sent (see sendLinkNow above).
         emailVerificationRequired: verificationRequired,
         message: verificationRequired
-          ? 'Your account has been created. Please confirm your email address, then wait for an admin to approve the account.'
-          : 'Your account has been created and is pending admin approval. You will be able to log in once an admin approves it.',
+          ? 'Your registration has been received and is waiting for an administrator to approve it. Once approved, we will email you a link to confirm your address, and then you can log in.'
+          : 'Your registration has been received and is waiting for an administrator to approve it. You will be able to log in once it is approved.',
       });
       return;
     }
@@ -310,15 +346,31 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
     }
 
     if (!user.is_active) {
+      // Migration 012: approved_at is what tells these two apart. The old
+      // message said "pending admin approval or has been deactivated", which
+      // is wrong for both readers — a waiting applicant is told they were
+      // switched off, and a suspended account is told to wait for something
+      // that will never come.
+      const awaitingApproval = !user.approved_at;
       audit(req, {
         action: AuditAction.LOGIN_FAILURE,
         outcome: 'denied',
         actorId: user.id,
         actorEmail: user.email,
         actorRole: user.role,
-        metadata: { reason: 'inactive_account' },
+        metadata: { reason: awaitingApproval ? 'awaiting_approval' : 'deactivated' },
       });
-      res.status(403).json({ message: 'This account is pending admin approval or has been deactivated. Please wait for approval or contact support.' });
+      res.status(403).json(
+        awaitingApproval
+          ? {
+              awaitingApproval: true,
+              message: 'Your registration is still waiting for an administrator to approve it. You will be emailed once it is approved — there is nothing you need to do in the meantime.',
+            }
+          : {
+              accountDeactivated: true,
+              message: 'This account has been deactivated. Please contact support if you think this is a mistake.',
+            }
+      );
       return;
     }
 
@@ -376,7 +428,8 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
       return;
     }
 
-    const organization = await getOrgForUser(user.id);
+    const memberships = await getMembershipsForUser(user.id);
+    const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
     const { password: _, mfa_secret: __, ...safeUser } = user;
     audit(req, {
       action: AuditAction.LOGIN_SUCCESS,
@@ -385,7 +438,7 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
       actorRole: user.role,
       metadata: { mfa: false },
     });
-    res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+    res.json({ user: { ...safeUser, organization, memberships }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
@@ -427,7 +480,8 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
       return;
     }
 
-    const organization = await getOrgForUser(user.id);
+    const memberships = await getMembershipsForUser(user.id);
+    const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
     const { password: _, mfa_secret: __, ...safeUser } = user;
     audit(req, {
       action: AuditAction.LOGIN_SUCCESS,
@@ -436,7 +490,7 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
       actorRole: user.role,
       metadata: { mfa: true },
     });
-    res.json({ user: { ...safeUser, organization }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+    res.json({ user: { ...safeUser, organization, memberships }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
@@ -520,8 +574,11 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
       profile = p[0] || null;
     }
 
-    const organization = await getOrgForUser(req.user.id);
-    res.json({ ...user, profile, organization });
+    // Must match what login returns, or refreshing the page would lose the
+    // dashboard switcher until the next sign-in.
+    const memberships = await getMembershipsForUser(req.user.id);
+    const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
+    res.json({ ...user, profile, organization, memberships });
   } catch (err) {
     next(err);
   }
@@ -687,6 +744,23 @@ const changePassword = async (req: Request, res: Response, next: NextFunction): 
   } catch (err) { next(err); }
 };
 
+// Links in emails are built from CLIENT_URL. Unset, the old code produced
+// either a relative URL (useless in an email client) or the literal string
+// "undefined/reset-password?token=..." — a delivered email containing a
+// broken link, which is harder to diagnose than no email at all. Production
+// already requires CLIENT_URL at boot (ARCH-04); this covers development,
+// where it is optional, by refusing to send rather than sending nonsense.
+const buildClientLink = (path: string): string => {
+  const base = process.env.CLIENT_URL?.trim().replace(/\/$/, '');
+  if (!base) {
+    throw Object.assign(
+      new Error('CLIENT_URL is not set, so the link in this email would be broken. Set CLIENT_URL to the client origin (e.g. http://localhost:5173).'),
+      { status: 500 }
+    );
+  }
+  return `${base}${path}`;
+};
+
 // PRO-11 — email verification. Same opaque-token-hashed-at-rest shape as the
 // password reset above, because the threat model is the same.
 const EMAIL_VERIFICATION_HOURS = 48;
@@ -703,7 +777,7 @@ const sendVerificationEmail = async (user: { id: number; name: string; email: st
     [user.id, hashRefreshToken(token), expiresAt]
   );
 
-  const verifyUrl = `${process.env.CLIENT_URL || ''}/verify-email?token=${token}`;
+  const verifyUrl = buildClientLink(`/verify-email?token=${token}`);
   await sendMail(
     user.email,
     'Confirm your Core Health email address',
@@ -845,7 +919,7 @@ const forgotPassword = async (req: Request, res: Response, next: NextFunction): 
       [user.id, hashRefreshToken(token), expiresAt]
     );
 
-    const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
+    const resetUrl = buildClientLink(`/reset-password?token=${token}`);
     await sendMail(
       user.email,
       'Reset your Core Health password',
@@ -898,4 +972,4 @@ const resetPassword = async (req: Request, res: Response, next: NextFunction): P
   } catch (err) { next(err); }
 };
 
-export { register, login, verifyEmail, resendVerification, acceptTerms, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };
+export { register, login, verifyEmail, resendVerification, acceptTerms, sendVerificationEmail, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };

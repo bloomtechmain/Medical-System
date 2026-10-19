@@ -8,6 +8,7 @@ import { Notification } from '../../types';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Bell, User, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Activity, XCircle, MessageCircle } from 'lucide-react';
 import LanguageSwitcher from '../common/LanguageSwitcher';
+import DashboardSwitcher from '../common/DashboardSwitcher';
 
 // ── Notification type icons ───────────────────────────────────────────────────
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -224,6 +225,11 @@ export default function Header() {
             </div>
           )}
         </div>
+
+        {/* Requirement 1: switch between the dashboards this account holds
+            (e.g. a doctor who also owns a hospital). Renders nothing when
+            there is only one, which is the normal case. */}
+        <DashboardSwitcher />
 
         {/* User avatar (matches screenshot — circle with initial) */}
         <div className="w-9 h-9 rounded-xl border-2 border-gray-100 bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center text-sm font-bold select-none ml-1">

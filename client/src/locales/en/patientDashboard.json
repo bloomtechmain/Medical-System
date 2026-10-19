@@ -9,7 +9,10 @@
       "personal": "Personal Information",
       "health": "Health Information",
       "emergency": "Emergency Contact",
-      "history": "Disease & Treatment History"
+      "history": "Disease & Treatment History",
+      "vitals": "Vitals & Laboratory Results",
+      "labTests": "Laboratory Tests",
+      "documents": "Uploaded Documents"
     },
     "fields": {
       "fullName": "Full Name",
@@ -27,7 +30,37 @@
     "visitFallback": "Visit",
     "treatmentLine": "Treatment: {{text}}",
     "footerConfidential": "Confidential Medical Record",
-    "footerAuthorized": "For authorized use only"
+    "footerAuthorized": "For authorized use only",
+    "vitalsSummary": "{{total}} measurements on record · {{abnormal}} outside the reference range",
+    "vitalsCritical": "Needs attention ({{count}}): {{names}}",
+    "vitalsRecorded": "Most recent reading: {{date}}. Values may have changed since.",
+    "vitalsTable": {
+      "measurement": "Measurement",
+      "result": "Result",
+      "unit": "Unit",
+      "range": "Reference",
+      "status": "Status",
+      "source": "Source"
+    },
+    "vitalStatus": {
+      "normal": "Normal",
+      "low": "Low",
+      "high": "High",
+      "critical": "Critical"
+    },
+    "vitalSource": {
+      "labReport": "Lab report",
+      "yourUpload": "Your upload",
+      "manualEntry": "Self-entered"
+    },
+    "labStatus": {
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "completed": "Completed"
+    },
+    "labReportAvailable": "Report available",
+    "documentsNote": "Listed for reference. The files themselves are not included in this PDF — sign in to view or download them.",
+    "pageOf": "Page {{page}} of {{total}}"
   },
   "welcomeBanner": {
     "welcomeBack": "Welcome back,",
@@ -161,5 +194,6 @@
     "message": "Complete your profile — phone, date of birth, blood type, emergency contact and more — so doctors and labs have what they need to care for you.",
     "completeButton": "Complete Setup",
     "laterButton": "Later"
-  }
+  },
+  "downloadFailed": "Could not prepare your health report. Please try again."
 }

@@ -5,110 +5,16 @@ import type { TFunction } from 'i18next';
 import { Activity, Edit3, X, Save, RefreshCw, FlaskConical, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
 import { patientVitalsApi } from '../../services/api';
 import { formatDateTime } from '../../utils/helpers';
+import {
+  VITALS, GROUPS, GROUP_META, groupLabel, vitalLabel, getStatus,
+  STATUS_STYLE, statusLabel, SOURCE_META, sourceLabel,
+} from '../../constants/vitals';
+import type { VitalDef, VitalFieldMeta } from '../../constants/vitals';
 
-// ── Vital definitions with ranges ─────────────────────────────────────────────
-interface VitalDef {
-  key: string;
-  unit: string;
-  min: number;
-  max: number;
-  step: string;
-  critLow?: number;
-  critHigh?: number;
-  group: string;
-  inputType?: 'integer';
-}
-
-const VITALS: VitalDef[] = [
-  // CBC Panel
-  { key: 'wbc',             unit: '10³/µL', min: 4.5,  max: 11.0, step: '0.1',  critLow: 2.0,  critHigh: 20.0,  group: 'CBC' },
-  { key: 'rbc',             unit: '10⁶/µL', min: 4.5,  max: 6.0,  step: '0.01', critLow: 3.0,  critHigh: 7.0,   group: 'CBC' },
-  { key: 'hemoglobin',      unit: 'g/dL',   min: 12.0, max: 18.0, step: '0.1',  critLow: 7.0,  critHigh: 20.0,  group: 'CBC' },
-  { key: 'hematocrit',      unit: '%',      min: 37.0, max: 52.0, step: '0.1',  critLow: 20.0, critHigh: 60.0,  group: 'CBC' },
-  { key: 'mcv',             unit: 'fL',     min: 80.0, max: 99.0, step: '0.1',  group: 'CBC' },
-  { key: 'mch',             unit: 'pg',     min: 27.0, max: 34.5, step: '0.1',  group: 'CBC' },
-  { key: 'mchc',            unit: 'g/dL',   min: 32.0, max: 36.5, step: '0.1',  group: 'CBC' },
-  { key: 'rdw',             unit: '%',      min: 11.0, max: 15.0, step: '0.1',  group: 'CBC' },
-  { key: 'platelets',       unit: '10³/µL', min: 150,  max: 450,  step: '1',    critLow: 50,   critHigh: 1000,  group: 'CBC', inputType: 'integer' },
-  { key: 'mpv',             unit: 'fL',     min: 7.4,  max: 12.0, step: '0.1',  group: 'CBC' },
-  // Metabolic
-  { key: 'blood_glucose',   unit: 'mg/dL',  min: 70,   max: 100,  step: '0.1',  critLow: 40,   critHigh: 500,   group: 'Metabolic' },
-  { key: 'hba1c',           unit: '%',      min: 4.0,  max: 5.6,  step: '0.1',  critHigh: 14,  group: 'Metabolic' },
-  { key: 'creatinine',      unit: 'mg/dL',  min: 0.7,  max: 1.2,  step: '0.01', critHigh: 10,  group: 'Metabolic' },
-  // Lipid Panel
-  { key: 'cholesterol',     unit: 'mg/dL',  min: 125,  max: 200,  step: '1',    critHigh: 300, group: 'Lipid', inputType: 'integer' },
-  { key: 'hdl',             unit: 'mg/dL',  min: 40,   max: 60,   step: '1',    group: 'Lipid', inputType: 'integer' },
-  { key: 'ldl',             unit: 'mg/dL',  min: 0,    max: 100,  step: '1',    critHigh: 190, group: 'Lipid', inputType: 'integer' },
-  { key: 'triglycerides',   unit: 'mg/dL',  min: 0,    max: 150,  step: '1',    critHigh: 500, group: 'Lipid', inputType: 'integer' },
-  // Basic Vitals
-  { key: 'bp_systolic',     unit: 'mmHg',   min: 90,   max: 120,  step: '1',    critLow: 70,   critHigh: 180,   group: 'Vitals', inputType: 'integer' },
-  { key: 'bp_diastolic',    unit: 'mmHg',   min: 60,   max: 80,   step: '1',    critLow: 40,   critHigh: 120,   group: 'Vitals', inputType: 'integer' },
-  { key: 'heart_rate',      unit: 'bpm',    min: 60,   max: 100,  step: '1',    critLow: 40,   critHigh: 150,   group: 'Vitals', inputType: 'integer' },
-  { key: 'temperature',     unit: '°C',     min: 36.1, max: 37.2, step: '0.1',  critLow: 34,   critHigh: 41,    group: 'Vitals' },
-  { key: 'oxygen_saturation', unit: '%',    min: 95,   max: 100,  step: '0.1',  critLow: 85,   group: 'Vitals' },
-];
-
-// Maps a VitalDef.key to its camelCase suffix under vitalsOverview.vitalsDef.*
-const VITAL_I18N_KEY: Record<string, string> = {
-  wbc: 'wbc', rbc: 'rbc', hemoglobin: 'hemoglobin', hematocrit: 'hematocrit',
-  mcv: 'mcv', mch: 'mch', mchc: 'mchc', rdw: 'rdw', platelets: 'platelets', mpv: 'mpv',
-  blood_glucose: 'bloodGlucose', hba1c: 'hba1c', creatinine: 'creatinine',
-  cholesterol: 'cholesterol', hdl: 'hdl', ldl: 'ldl', triglycerides: 'triglycerides',
-  bp_systolic: 'bpSystolic', bp_diastolic: 'bpDiastolic', heart_rate: 'heartRate',
-  temperature: 'temperature', oxygen_saturation: 'oxygenSaturation',
-};
-const vitalLabel = (def: VitalDef, t: TFunction): string => t(`vitalsOverview.vitalsDef.${VITAL_I18N_KEY[def.key]}`);
-
-const GROUPS = ['CBC', 'Metabolic', 'Lipid', 'Vitals'];
-
-const GROUP_META: Record<string, { icon: string; color: string }> = {
-  CBC:       { icon: '🩸', color: 'text-rose-600'   },
-  Metabolic: { icon: '⚗️', color: 'text-amber-600'  },
-  Lipid:     { icon: '💧', color: 'text-blue-600'   },
-  Vitals:    { icon: '❤️', color: 'text-teal-600'   },
-};
-const GROUP_I18N_KEY: Record<string, string> = { CBC: 'cbc', Metabolic: 'metabolic', Lipid: 'lipid', Vitals: 'vitals' };
-const groupLabel = (g: string, t: TFunction): string => t(`vitalsOverview.groups.${GROUP_I18N_KEY[g]}`);
-
-// ── Status calculation ────────────────────────────────────────────────────────
-function getStatus(value: number, def: VitalDef): 'normal' | 'low' | 'high' | 'critical-low' | 'critical-high' {
-  if (def.critLow  !== undefined && value < def.critLow)  return 'critical-low';
-  if (def.critHigh !== undefined && value > def.critHigh) return 'critical-high';
-  if (value < def.min) return 'low';
-  if (value > def.max) return 'high';
-  return 'normal';
-}
-
-const STATUS_STYLE: Record<string, { badge: string; color: string; pulse?: boolean }> = {
-  'normal':        { badge: 'bg-teal-500  text-white', color: '#14b8a6' },
-  'low':           { badge: 'bg-blue-500  text-white', color: '#3b82f6' },
-  'high':          { badge: 'bg-amber-500 text-white', color: '#f59e0b' },
-  'critical-low':  { badge: 'bg-red-600   text-white', color: '#dc2626', pulse: true },
-  'critical-high': { badge: 'bg-red-600   text-white', color: '#dc2626', pulse: true },
-};
-const statusLabel = (status: string, tc: TFunction): string => {
-  if (status === 'normal') return tc('status.normal');
-  if (status === 'low') return tc('status.low');
-  if (status === 'high') return tc('status.high');
-  return tc('status.critical');
-};
-
-// ── Source badge (per-field provenance) ────────────────────────────────────────
-const SOURCE_META: Record<string, { icon: string; className: string }> = {
-  lab_report:     { icon: '🧪', className: 'bg-primary-50 text-primary-700' },
-  patient_upload: { icon: '📄', className: 'bg-violet-50 text-violet-700' },
-  manual:         { icon: '✍️', className: 'bg-gray-100 text-gray-600' },
-};
-const SOURCE_I18N_KEY: Record<string, string> = { lab_report: 'labReport', patient_upload: 'yourUpload', manual: 'manualEntry' };
-const sourceLabel = (src: string, t: TFunction): string => t(`vitalsOverview.source.${SOURCE_I18N_KEY[src]}`);
-
-interface VitalFieldMeta {
-  source: string;
-  recorded_at: string;
-  previous?: number | null;
-  delta?: number | null;
-  direction?: 'up' | 'down' | 'same' | null;
-}
+// Clinical ranges, status rules, group and source metadata all live in
+// src/constants/vitals.ts — shared with the downloadable health report
+// (utils/healthReportPdf.ts), so a value flagged "high" here can never print
+// as "normal" in the PDF a patient hands to a doctor.
 
 // ── VitalCard ─────────────────────────────────────────────────────────────────
 function VitalCard({ def, value, meta, onClick }: { def: VitalDef; value: number; meta?: VitalFieldMeta; onClick?: () => void }) {

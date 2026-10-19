@@ -22,7 +22,14 @@ export interface User {
   created_at: string;
   updated_at: string;
   profile?: DoctorProfile | PatientProfile | PharmacistProfile | LaboratoryProfile | null;
+  /** The first organisation this user owns (or belongs to). Kept for existing
+   *  callers; prefer `memberships`, which lists all of them. */
   organization?: UserOrganization | null;
+  /** Requirement 1: every organisation this user belongs to, so the client can
+   *  offer a dashboard choice and a switcher. A doctor who owns a hospital has
+   *  both their own doctor dashboard and the hospital's — preferring one and
+   *  hiding the other is the bug this replaced. */
+  memberships?: (UserOrganization & { member_role: string })[];
 }
 
 export interface PatientProfile {

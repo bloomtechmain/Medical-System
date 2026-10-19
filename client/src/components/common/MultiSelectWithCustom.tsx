@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, CheckCheck, Eraser } from 'lucide-react';
 
 interface MultiSelectWithCustomProps {
   options: string[];
@@ -23,12 +23,50 @@ export default function MultiSelectWithCustom({ options, selected, onChange, cus
 
   const remove = (v: string) => onChange(selected.filter(s => s !== v));
 
+  // Requirement 2: "There should be one button like as select to all of
+  // specializations!" A large hospital offers most of the list, and ticking
+  // seventeen boxes one at a time is the thing being complained about.
+  //
+  // Union, not replace: a custom entry the user has already added must
+  // survive selecting all of the predefined ones.
+  const allSelected = options.length > 0 && options.every(o => selected.includes(o));
+  const selectAll = () => onChange([...new Set([...selected, ...options])]);
+  // Clears only the predefined options, leaving custom entries alone — they
+  // were typed by hand and are the more expensive thing to lose.
+  const clearPredefined = () => onChange(selected.filter(s => !options.includes(s)));
+
   // Anything selected that isn't in the predefined list is a custom entry — show
   // it as its own removable chip below the checkbox grid.
   const customSelected = selected.filter(s => !options.includes(s));
 
   return (
     <div>
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <p className="text-xs text-gray-400">
+          {selected.length > 0
+            ? `${selected.length} selected`
+            : 'None selected'}
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={selectAll}
+            disabled={allSelected}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-2.5 py-1 hover:bg-teal-100 disabled:opacity-40 disabled:cursor-default"
+          >
+            <CheckCheck size={13} strokeWidth={2.5} /> Select all
+          </button>
+          <button
+            type="button"
+            onClick={clearPredefined}
+            disabled={selected.length === 0}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-default"
+          >
+            <Eraser size={13} strokeWidth={2.5} /> Clear
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {options.map(opt => (
           <label key={opt} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">

@@ -35,3 +35,8 @@ server/uploads/
 # Load test output (regenerated on every run — narrative results live in
 # docs/capacity-plan.md instead)
 scripts/loadtest/last-result.json
+
+# Generated health report PDFs. An earlier version of
+# healthReportPdf.test.ts called save() for real and left one of these in
+# client/ — they are patient data by nature and must never be committed.
+CoreHealth_Report_*.pdf

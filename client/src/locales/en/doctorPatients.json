@@ -208,16 +208,37 @@
     },
     "hospitals": {
       "title": "My Hospitals / Clinics",
-      "description": "Affiliate with the hospitals or clinics where you practice — set different hours for each from below.",
+      "description": "Request to channel at a hospital or clinic — they review it before you're affiliated.",
       "searchPlaceholder": "Search for a hospital or clinic...",
       "searching": "Searching…",
       "noResults": "No matching hospitals or clinics found",
-      "toastAdded": "Added to your hospitals",
-      "toastAddFailed": "Failed to add that affiliation",
-      "toastRemoved": "Removed from your hospitals",
-      "toastRemoveFailed": "Failed to remove that affiliation",
+      "toastRemoved": "You've left that hospital",
+      "toastRemoveFailed": "Failed to leave that affiliation",
+      "toastRequestSent": "Request sent — waiting for the hospital to review it",
+      "toastRequestFailed": "That didn't go through",
+      "toastRequestCancelled": "Request withdrawn",
+      "toastRemovalAccepted": "You've been removed from that hospital",
+      "toastRemovalDeclined": "You declined — you're still affiliated",
       "editingHoursFor": "Editing hours for:",
-      "general": "General (no specific location)"
+      "general": "General (no specific location)",
+      "leaveBtn": "Leave",
+      "leaveConfirm": "Leave {{name}}? They'll be notified you're no longer channeling there.",
+      "pendingJoinTitle": "Pending requests",
+      "pendingJoinItem": "{{name}} — awaiting approval",
+      "cancelRequestBtn": "Cancel",
+      "pendingRemoveTitle": "Removal requests",
+      "pendingRemoveItem": "{{name}} wants to end your channeling affiliation. You need to accept before it takes effect.",
+      "acceptRemovalBtn": "Accept",
+      "declineRemovalBtn": "Decline",
+      "requestModal": {
+        "title": "Request to channel at {{name}}",
+        "subtitle": "The hospital will review this before you're affiliated.",
+        "messageLabel": "Message (optional)",
+        "messagePlaceholder": "A short note for the hospital...",
+        "hoursLabel": "Proposed hours (optional)",
+        "hoursDesc": "If approved, these become your weekly schedule there right away. You can skip this and set hours later.",
+        "submitBtn": "Send request"
+      }
     }
   }
 }

@@ -4,8 +4,9 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import {
   Calendar, Clock, CheckCircle2, XCircle, X, Settings, ClipboardList, Ban, Building2, Plus,
+  Hourglass, Send, LogOut,
 } from 'lucide-react';
-import { appointmentApi, userApi } from '../services/api';
+import { appointmentApi, userApi, orgMembershipRequestApi } from '../services/api';
 import { formatDate } from '../utils/helpers';
 import HospitalSearchAdd from '../components/common/HospitalSearchAdd';
 
@@ -213,20 +214,137 @@ function AppointmentsPanel() {
   );
 }
 
+// Requirement 1: a doctor picking a hospital no longer joins instantly — the
+// owner has to approve it. This modal is the one request-time chance to also
+// propose the hours they'd channel there, so approving and going live happen
+// together instead of the doctor having to come back to Availability Settings
+// afterward (they still can, either way).
+interface ReqDayForm { enabled: boolean; start: string; end: string; slot: number; }
+const DEFAULT_REQ_DAY: ReqDayForm = { enabled: false, start: '09:00', end: '17:00', slot: 30 };
+
+function JoinRequestModal({ org, onClose, onSent }: { org: any; onClose: () => void; onSent: () => void }) {
+  const { t } = useTranslation('doctorPatients');
+  const { t: tc } = useTranslation('common');
+  const WEEKDAYS = t('appointments.weekdays', { returnObjects: true }) as string[];
+  const [message, setMessage] = useState('');
+  const [form, setForm] = useState<ReqDayForm[]>(() => Array.from({ length: 7 }, () => ({ ...DEFAULT_REQ_DAY })));
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const schedule = form
+        .map((d, day_of_week) => ({ ...d, day_of_week }))
+        .filter(d => d.enabled)
+        .map(d => ({ day_of_week: d.day_of_week, start_time: d.start, end_time: d.end, slot_duration_minutes: d.slot }));
+      return orgMembershipRequestApi.requestJoin(org.id, {
+        message: message.trim() || undefined,
+        proposed_schedule: schedule.length ? schedule : undefined,
+      });
+    },
+    onSuccess: () => { toast.success(t('appointments.hospitals.toastRequestSent')); onSent(); },
+    onError:   (err: any) => toast.error(err.message || t('appointments.hospitals.toastRequestFailed')),
+  });
+
+  const updateDay = (i: number, patch: Partial<ReqDayForm>) =>
+    setForm(f => f.map((d, idx) => idx === i ? { ...d, ...patch } : d));
+  const invalid = (d: ReqDayForm) => d.enabled && d.start >= d.end;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white">
+          <div>
+            <p className="text-sm font-bold text-gray-900">{t('appointments.hospitals.requestModal.title', { name: org.name })}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{t('appointments.hospitals.requestModal.subtitle')}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="label">{t('appointments.hospitals.requestModal.messageLabel')}</label>
+            <textarea rows={2} className="input text-sm resize-none w-full"
+              placeholder={t('appointments.hospitals.requestModal.messagePlaceholder') as string}
+              value={message} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)} />
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">{t('appointments.hospitals.requestModal.hoursLabel')}</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-2">{t('appointments.hospitals.requestModal.hoursDesc')}</p>
+            <div className="space-y-1.5">
+              {form.map((d, i) => (
+                <div key={i} className={`flex items-center gap-2 flex-wrap rounded-lg border p-2 ${d.enabled ? 'border-primary-100 bg-primary-50/30' : 'border-gray-100'}`}>
+                  <button type="button" role="switch" aria-checked={d.enabled}
+                    onClick={() => updateDay(i, { enabled: !d.enabled })}
+                    className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${d.enabled ? 'bg-primary-600' : 'bg-gray-200'}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${d.enabled ? 'translate-x-4' : ''}`} />
+                  </button>
+                  <p className={`text-xs font-semibold w-20 shrink-0 ${d.enabled ? 'text-gray-900' : 'text-gray-400'}`}>{WEEKDAYS[i]}</p>
+                  {d.enabled && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <input type="time" value={d.start} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateDay(i, { start: e.target.value })} className="input text-xs py-1 w-24" />
+                      <span className="text-gray-400 text-xs">{t('appointments.availability.to')}</span>
+                      <input type="time" value={d.end} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateDay(i, { end: e.target.value })} className="input text-xs py-1 w-24" />
+                      {invalid(d) && <span className="text-[11px] text-red-500">{t('appointments.availability.endTimeError')}</span>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50">
+              {tc('actions.cancel')}
+            </button>
+            <button type="button" disabled={mutation.isPending || form.some(invalid)}
+              onClick={() => mutation.mutate()}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl disabled:opacity-50">
+              {mutation.isPending ? <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Send size={14} strokeWidth={2.5} />}
+              {t('appointments.hospitals.requestModal.submitBtn')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MyHospitalsCard({ myOrgs }: { myOrgs: any[] }) {
   const { t } = useTranslation('doctorPatients');
   const qc = useQueryClient();
+  const [requestingOrg, setRequestingOrg] = useState<any | null>(null);
 
-  const joinMutation = useMutation({
-    mutationFn: (organizationId: number) => userApi.joinOrganization(organizationId),
-    onSuccess: () => { toast.success(t('appointments.hospitals.toastAdded')); qc.invalidateQueries({ queryKey: ['my-organizations'] }); },
-    onError:   (err: any) => toast.error(err.message || t('appointments.hospitals.toastAddFailed')),
+  const { data: myRequests = [] } = useQuery({
+    queryKey: ['org-membership-requests-mine'],
+    queryFn:  orgMembershipRequestApi.mine,
   });
+  const pendingJoins   = (myRequests as any[]).filter(r => r.kind === 'join'   && r.status === 'pending');
+  const pendingRemoves = (myRequests as any[]).filter(r => r.kind === 'remove' && r.status === 'pending');
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ['my-organizations'] });
+    qc.invalidateQueries({ queryKey: ['org-membership-requests-mine'] });
+  };
 
   const leaveMutation = useMutation({
     mutationFn: (organizationId: number) => userApi.leaveOrganization(organizationId),
-    onSuccess: () => { toast.success(t('appointments.hospitals.toastRemoved')); qc.invalidateQueries({ queryKey: ['my-organizations'] }); },
+    onSuccess: () => { toast.success(t('appointments.hospitals.toastRemoved')); invalidateAll(); },
     onError:   (err: any) => toast.error(err.message || t('appointments.hospitals.toastRemoveFailed')),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: number) => orgMembershipRequestApi.cancel(id),
+    onSuccess: () => { toast.success(t('appointments.hospitals.toastRequestCancelled')); invalidateAll(); },
+    onError:   (err: any) => toast.error(err.message || t('appointments.hospitals.toastRequestFailed')),
+  });
+
+  const respondMutation = useMutation({
+    mutationFn: ({ id, decision }: { id: number; decision: 'accept' | 'decline' }) => orgMembershipRequestApi.respond(id, decision),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.decision === 'accept' ? t('appointments.hospitals.toastRemovalAccepted') : t('appointments.hospitals.toastRemovalDeclined'));
+      invalidateAll();
+    },
+    onError: (err: any) => toast.error(err.message || t('appointments.hospitals.toastRequestFailed')),
   });
 
   return (
@@ -241,11 +359,55 @@ function MyHospitalsCard({ myOrgs }: { myOrgs: any[] }) {
               <Building2 size={13} strokeWidth={2} />
               {org.name}
               {org.member_role !== 'owner' && (
-                <button onClick={() => leaveMutation.mutate(org.id)} disabled={leaveMutation.isPending}
+                <button
+                  onClick={() => { if (window.confirm(t('appointments.hospitals.leaveConfirm', { name: org.name }))) leaveMutation.mutate(org.id); }}
+                  disabled={leaveMutation.isPending}
+                  title={t('appointments.hospitals.leaveBtn') as string}
                   className="text-primary-400 hover:text-red-500 ml-0.5">
-                  <X size={13} strokeWidth={2.5} />
+                  <LogOut size={13} strokeWidth={2.5} />
                 </button>
               )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pendingJoins.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{t('appointments.hospitals.pendingJoinTitle')}</p>
+          {pendingJoins.map((r: any) => (
+            <div key={r.id} className="flex items-center justify-between gap-2 bg-yellow-50 border border-yellow-100 rounded-xl px-3 py-2">
+              <span className="flex items-center gap-2 text-sm text-yellow-800 min-w-0">
+                <Hourglass size={13} strokeWidth={2} className="shrink-0" />
+                <span className="truncate">{t('appointments.hospitals.pendingJoinItem', { name: r.organization_name })}</span>
+              </span>
+              <button onClick={() => cancelMutation.mutate(r.id)} disabled={cancelMutation.isPending}
+                className="text-xs font-semibold text-yellow-700 hover:text-red-600 shrink-0">
+                {t('appointments.hospitals.cancelRequestBtn')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pendingRemoves.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{t('appointments.hospitals.pendingRemoveTitle')}</p>
+          {pendingRemoves.map((r: any) => (
+            <div key={r.id} className="bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+              <p className="text-sm text-red-800">{t('appointments.hospitals.pendingRemoveItem', { name: r.organization_name })}</p>
+              <div className="flex gap-2 mt-2">
+                <button disabled={respondMutation.isPending}
+                  onClick={() => respondMutation.mutate({ id: r.id, decision: 'accept' })}
+                  className="flex items-center gap-1 text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
+                  <CheckCircle2 size={12} strokeWidth={2.5} /> {t('appointments.hospitals.acceptRemovalBtn')}
+                </button>
+                <button disabled={respondMutation.isPending}
+                  onClick={() => respondMutation.mutate({ id: r.id, decision: 'decline' })}
+                  className="flex items-center gap-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg disabled:opacity-50">
+                  <XCircle size={12} strokeWidth={2.5} /> {t('appointments.hospitals.declineRemovalBtn')}
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -254,9 +416,20 @@ function MyHospitalsCard({ myOrgs }: { myOrgs: any[] }) {
       <div className="mt-3 flex items-center gap-2">
         <Plus size={14} strokeWidth={2.5} className="text-gray-400 shrink-0" />
         <div className="flex-1">
-          <HospitalSearchAdd onAdd={(org) => joinMutation.mutate(org.id)} excludeIds={myOrgs.map(o => o.id)} />
+          <HospitalSearchAdd
+            onAdd={(org) => setRequestingOrg(org)}
+            excludeIds={[...myOrgs.map(o => o.id), ...pendingJoins.map((r: any) => r.organization_id)]}
+          />
         </div>
       </div>
+
+      {requestingOrg && (
+        <JoinRequestModal
+          org={requestingOrg}
+          onClose={() => setRequestingOrg(null)}
+          onSent={() => { setRequestingOrg(null); invalidateAll(); }}
+        />
+      )}
     </div>
   );
 }

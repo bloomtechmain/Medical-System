@@ -164,6 +164,15 @@ CREATE TABLE public.users (
   -- the demo fixtures in corehealth_seed_data.sql) must set this explicitly
   -- or it creates an account nobody can log into.
   email_verified_at      TIMESTAMPTZ,
+  -- SEC-17 #2: professional sign-ups are inactive until an admin approves
+  -- them. is_active alone cannot say WHY an account is off — these two
+  -- columns distinguish "waiting for approval" from "deactivated by an
+  -- admin", which are different messages to the user and different lists to
+  -- the admin. See migration 012.
+  --   is_active = false, approved_at IS NULL     -> waiting for approval
+  --   is_active = false, approved_at IS NOT NULL -> deactivated
+  approved_at            TIMESTAMPTZ,
+  approved_by            INTEGER      REFERENCES public.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -173,6 +182,10 @@ CREATE INDEX idx_users_email ON public.users(email);
 -- has accepted the current version.
 CREATE INDEX idx_users_accepted_terms_pending ON public.users(id)
   WHERE accepted_terms_version IS NULL AND deleted_at IS NULL;
+-- The admin approval queue. Partial, so it holds only what is actually
+-- waiting — a worklist, not a growing table.
+CREATE INDEX idx_users_pending_approval ON public.users(created_at)
+  WHERE is_active = FALSE AND approved_at IS NULL AND deleted_at IS NULL;
 CREATE INDEX idx_users_role  ON public.users(role);
 CREATE INDEX idx_users_deleted_at ON public.users(deleted_at) WHERE deleted_at IS NOT NULL;
 
@@ -302,6 +315,35 @@ CREATE TABLE public.organization_members (
 CREATE INDEX idx_orgmem_user ON public.organization_members(user_id);
 CREATE INDEX idx_orgmem_org  ON public.organization_members(organization_id);
 
+-- 2.3b organization_membership_requests (migration 013) — the approval layer
+-- in front of organization_members for the doctor<->hospital/clinic
+-- channeling relationship specifically. kind='join' is doctor-initiated, the
+-- org owner accepts/declines; kind='remove' is owner-initiated, the doctor
+-- accepts/declines. A doctor leaving on their own stays an immediate,
+-- unilateral delete from organization_members (see userController.leaveOrganization)
+-- and never creates a row here.
+CREATE TABLE public.organization_membership_requests (
+  id               SERIAL      PRIMARY KEY,
+  organization_id  INTEGER     NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  doctor_id        INTEGER     NOT NULL REFERENCES public.users(id)         ON DELETE CASCADE,
+  kind             VARCHAR(10) NOT NULL CHECK (kind IN ('join','remove')),
+  status           VARCHAR(10) NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','accepted','declined','cancelled')),
+  requested_by     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  message          TEXT,
+  -- 'join' only: proposed weekly hours, same shape as
+  -- doctor_weekly_availability, applied the moment the owner accepts.
+  proposed_schedule JSONB,
+  responded_by     INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
+  responded_at     TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX idx_omr_one_pending ON public.organization_membership_requests (organization_id, doctor_id, kind)
+  WHERE status = 'pending';
+CREATE INDEX idx_omr_org    ON public.organization_membership_requests(organization_id, status);
+CREATE INDEX idx_omr_doctor ON public.organization_membership_requests(doctor_id, status);
+
 -- What medical specialties a hospital/clinic organization offers (distinct from
 -- the single owning doctor's own personal doctor_profiles.specialization) —
 -- a free-form tag list, multi-select + custom entries at registration time.
@@ -403,6 +445,15 @@ CREATE TABLE IF NOT EXISTS public.platform_stats_cache (
   total_appointments      BIGINT       NOT NULL DEFAULT 0,
   upcoming_appointments   BIGINT       NOT NULL DEFAULT 0,
   completed_appointments  BIGINT       NOT NULL DEFAULT 0,
+  -- SEC-17 #4 (mirrors server/migrations/004_security_fixes.sql): medicines'
+  -- admin-dashboard totals are cached like sales/appointments, now that
+  -- medicines is a cross-tenant UNION ALL rather than one table. These were
+  -- added by 004 but not mirrored here, so a fresh database built from this
+  -- file had no such columns and userController.getCachedPlatformStats
+  -- (GET /api/users/stats) failed with 42703 on every admin dashboard load.
+  total_medicines         BIGINT       NOT NULL DEFAULT 0,
+  low_stock               BIGINT       NOT NULL DEFAULT 0,
+  expired                 BIGINT       NOT NULL DEFAULT 0,
   computed_at             TIMESTAMPTZ  NOT NULL DEFAULT '-infinity'
 );
 
@@ -1354,6 +1405,26 @@ BEGIN
         CONSTRAINT medicines_cost_price_nonneg CHECK (cost_price >= 0),
         CONSTRAINT medicines_stock_nonneg      CHECK (stock_quantity >= 0)
       )$t$, v_schema, v_schema);
+    -- A tenant provisioned by an OLDER version of this function already has a
+    -- medicines table, so CREATE TABLE IF NOT EXISTS above is a no-op and the
+    -- newer columns are simply absent. The index on deleted_at below then
+    -- fails with "column deleted_at does not exist" — which is exactly what
+    -- happens adopting migrations on a database whose tenant schemas were
+    -- built from corehealth_database.sql before deleted_at existed. Verified
+    -- against a copy of such a database: 004 aborts without these ALTERs and
+    -- completes with them. They make the function idempotent against the
+    -- older shape as well as the current one.
+    EXECUTE format('ALTER TABLE %I.medicines ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ', v_schema);
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_price_nonneg      CHECK (price >= 0)',          v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_cost_price_nonneg CHECK (cost_price >= 0)',     v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.medicines ADD CONSTRAINT medicines_stock_nonneg      CHECK (stock_quantity >= 0)', v_schema);
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_name     ON %I.medicines(name)',     v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_category ON %I.medicines(category)', v_schema);
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_medicines_supplier ON %I.medicines(supplier_id)', v_schema);

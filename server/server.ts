@@ -14,6 +14,7 @@ import { logger, httpLogger } from './config/logger';
 import { isEnabled, logFlagState } from './config/featureFlags';
 import { initErrorTracking } from './config/errorTracking';
 import { registerLifecycle, isShuttingDown } from './config/lifecycle';
+import { verifySchema } from './config/schemaCheck';
 import errorHandler from './middleware/errorHandler';
 import validate from './middleware/validate';
 import { generalApiLimiter, publicFormLimiter, searchLimiter } from './middleware/rateLimiter';
@@ -181,7 +182,9 @@ import appointmentRoutes     from './routes/appointmentRoutes';
 import labCatalogRoutes      from './routes/labCatalogRoutes';
 import metricsRoutes         from './routes/metricsRoutes';
 import dataExportRoutes     from './routes/dataExportRoutes';
+import healthReportRoutes   from './routes/healthReportRoutes';
 import prescriptionAssignmentRoutes from './routes/prescriptionAssignmentRoutes';
+import orgMembershipRequestRoutes from './routes/orgMembershipRequestRoutes';
 
 app.use('/api/auth',              authRoutes);
 app.use('/api/users',             userRoutes);
@@ -201,7 +204,9 @@ app.use('/api/appointments',      appointmentRoutes);
 app.use('/api/lab-catalog',       labCatalogRoutes);
 app.use('/api/metrics',           metricsRoutes);
 app.use('/api/data-export',       dataExportRoutes);
+app.use('/api/health-report',     healthReportRoutes);
 app.use('/api/prescription-assignments', prescriptionAssignmentRoutes);
+app.use('/api/org-membership-requests', orgMembershipRequestRoutes);
 // Public self-registration — mounted before the admin-gated organizations router
 // so it is never touched by the protect/authorize middleware.
 // PRO-06 point 5 / PRO-10: public self-registration had no checks on email
@@ -318,6 +323,12 @@ const start = async (): Promise<void> => {
   // flag-dependent bug is otherwise unreproducible after the fact.
   logFlagState();
   await connectDB();
+
+  // Before anything serves a request: confirm the database actually has the
+  // columns and tables this build reads. A missing column reads as undefined
+  // rather than throwing, so without this check a database that is behind the
+  // code starts up and then refuses every login with a misleading message.
+  await verifySchema();
 
   // PERF-06: start the job queue and register this process as a worker for
   // the OCR/PDF-extraction jobs. Running the worker in the same process as

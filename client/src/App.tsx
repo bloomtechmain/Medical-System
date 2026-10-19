@@ -1,9 +1,10 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ReactNode, Suspense, lazy } from 'react';
 import { useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 import Layout from './components/layout/Layout';
 import TermsGate from './components/common/TermsGate';
+import { dashboardContexts, resolveActiveContext } from './constants/dashboards';
 
 // PERF-10: every page was a static import, so the client shipped as one
 // ~2 MB bundle regardless of role — a patient's browser downloaded the
@@ -17,6 +18,7 @@ const OrgRegister           = lazy(() => import('./pages/OrgRegister'));
 const ForgotPassword        = lazy(() => import('./pages/ForgotPassword'));
 const PrivacyPolicy         = lazy(() => import('./pages/PrivacyPolicy'));
 const VerifyEmail           = lazy(() => import('./pages/VerifyEmail'));
+const ChooseDashboard       = lazy(() => import('./pages/ChooseDashboard'));
 const Terms                 = lazy(() => import('./pages/Terms'));
 const ResetPassword         = lazy(() => import('./pages/ResetPassword'));
 const HospitalDashboard     = lazy(() => import('./pages/HospitalDashboard'));
@@ -65,32 +67,52 @@ interface PrivateRouteProps {
 
 const PrivateRoute = ({ children, roles }: PrivateRouteProps) => {
   const { user, token } = useAuth();
+  const location = useLocation();
   if (!token || !user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role as UserRole)) return <Navigate to="/" replace />;
+
+  if (roles && !roles.includes(user.role as UserRole)) {
+    // Requirement 1: a guard on role alone locks an organisation owner out of
+    // their own organisation's dashboard whenever the two do not coincide.
+    // /laboratory required role 'laboratory', so a DOCTOR who registers a
+    // laboratory could never open it — the exact "same procedure for lab
+    // type" case. Same for a pharmacist or lab owning a hospital, since
+    // /hospital required role 'doctor'.
+    //
+    // So: allow through if this route is one of the user's organisation
+    // dashboards. Membership is the authorisation here, and the server
+    // enforces it independently on every request — this only decides which
+    // screen the client will render.
+    const base = '/' + (location.pathname.split('/')[1] ?? '');
+    const viaOrg = dashboardContexts(user).some(c => c.kind === 'org' && c.path === base);
+    if (!viaOrg) return <Navigate to="/" replace />;
+  }
   return <>{children}</>;
 };
 
-const ROLE_ROUTES: Record<string, string> = {
-  admin: '/admin', doctor: '/doctor', pharmacist: '/pharmacist',
-  patient: '/patient', laboratory: '/laboratory',
-};
-
-const ORG_ROUTES: Record<string, string> = {
-  hospital: '/hospital', clinic: '/clinic',
-  pharmacy: '/pharmacist', laboratory: '/laboratory',
-};
-
+// Requirement 1: route tables and labels now live in constants/dashboards.ts,
+// shared with the chooser and the switcher so the three cannot disagree about
+// which dashboards exist.
+//
+// The old version read `user.organization?.org_type` FIRST and only fell back
+// to `user.role`. That is what made a doctor-owner lose their doctor
+// dashboard: with an organisation attached, /doctor was never reachable again.
 const RoleHome = () => {
   const { user, logout } = useAuth();
-  const orgType = user?.organization?.org_type;
-  const dest = orgType
-    ? (ORG_ROUTES[orgType] ?? ROLE_ROUTES[user?.role ?? ''])
-    : (user?.role ? ROLE_ROUTES[user.role] : null);
-  if (!dest) {
+  const contexts = dashboardContexts(user);
+
+  if (contexts.length === 0) {
+    // No usable dashboard at all — a role the client does not know how to
+    // route. Signing out is better than looping on a blank screen.
     logout();
     return <Navigate to="/login" replace />;
   }
-  return <Navigate to={dest} replace />;
+
+  // More than one, and no remembered choice: ask instead of guessing. Guessing
+  // is exactly the behaviour that hid the personal dashboard.
+  const active = resolveActiveContext(user);
+  if (!active) return <Navigate to="/choose-dashboard" replace />;
+
+  return <Navigate to={active.path} replace />;
 };
 
 export default function App() {
@@ -114,6 +136,10 @@ export default function App() {
           exists — a person may well click the confirmation link while already
           signed in on another account. */}
       <Route path="/verify-email" element={<VerifyEmail />} />
+
+      {/* Requirement 1: the dashboard chooser. Authenticated only — there is
+          nothing to choose without a session. */}
+      <Route path="/choose-dashboard" element={<PrivateRoute><ChooseDashboard /></PrivateRoute>} />
 
       {/* COMP-02: both documents must be readable before anyone has an
           account — the sign-up form links to them — so these stay public and

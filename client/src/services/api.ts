@@ -80,6 +80,12 @@ api.interceptors.response.use(
 
 export default api;
 
+// The patient's own complete health report, assembled and audited server-side
+// (MON-12) for the downloadable PDF. See utils/healthReportPdf.ts.
+export const healthReportApi = {
+  me: (): Promise<any> => api.get('/health-report/me'),
+};
+
 export const authApi = {
   login:    (data: unknown): Promise<any> => api.post('/auth/login', data),
   register: (data: unknown): Promise<any> => api.post('/auth/register', data),
@@ -259,6 +265,21 @@ export const orgTeamApi = {
   remove:     (orgId: number, userId: number): Promise<any>    => api.delete(`/org-team/${orgId}/members/${userId}`),
 };
 
+// Requirement 1: a doctor picking a hospital to channel at no longer joins
+// instantly — the owner has to approve it (and, the other direction, the
+// owner removing a doctor needs the doctor to accept). See
+// server/controllers/orgMembershipRequestController.ts.
+export const orgMembershipRequestApi = {
+  requestJoin: (organizationId: number, data?: { message?: string; proposed_schedule?: unknown[] }): Promise<any> =>
+    api.post('/org-membership-requests/join', { organization_id: organizationId, ...data }),
+  requestRemove: (organizationId: number, doctorId: number, message?: string): Promise<any> =>
+    api.post('/org-membership-requests/remove', { organization_id: organizationId, doctor_id: doctorId, message }),
+  mine:    (): Promise<any>                                        => api.get('/org-membership-requests/mine'),
+  forOrg:  (organizationId: number): Promise<any>                  => api.get(`/org-membership-requests/org/${organizationId}`),
+  respond: (id: number, decision: 'accept' | 'decline'): Promise<any> => api.post(`/org-membership-requests/${id}/respond`, { decision }),
+  cancel:  (id: number): Promise<any>                               => api.delete(`/org-membership-requests/${id}`),
+};
+
 export const userApi = {
   getAll:              (params?: unknown): Promise<any>          => api.get('/users', { params }),
   searchPatients:      (q: string): Promise<any>                 => api.get('/users/patients', { params: { q } }),
@@ -271,9 +292,15 @@ export const userApi = {
   updateProfile:       (id: number, data: unknown): Promise<any> => api.put(`/users/${id}/profile`, data),
   updateMyProfile:     (data: unknown): Promise<any>              => api.put('/users/me/profile', data),
   getMyOrganizations:  (): Promise<any>                          => api.get('/users/me/organizations'),
-  joinOrganization:    (organizationId: number): Promise<any>    => api.post('/users/me/organizations', { organization_id: organizationId }),
+  // Joining now goes through orgMembershipRequestApi.requestJoin (owner approval required).
   leaveOrganization:   (organizationId: number): Promise<any>    => api.delete(`/users/me/organizations/${organizationId}`),
   toggle:              (id: number): Promise<any>                => api.patch(`/users/${id}/toggle`),
+  // SEC-17 #2: professional sign-ups wait for an admin. Without a list, a
+  // registration was indistinguishable from a deactivated account and sat
+  // unapproved indefinitely.
+  pendingApprovals:    (): Promise<any>                          => api.get('/users/pending-approvals'),
+  approve:             (id: number): Promise<any>                => api.post(`/users/${id}/approve`),
+  decline:             (id: number, reason?: string): Promise<any> => api.post(`/users/${id}/decline`, { reason }),
   remove:              (id: number): Promise<any>                => api.delete(`/users/${id}`),
   getStats:            (): Promise<any>                          => api.get('/users/stats'),
 };

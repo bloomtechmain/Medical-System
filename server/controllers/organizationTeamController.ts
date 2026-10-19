@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/db';
 import { createProfile } from './authController';
+import { createRemovalRequest } from './orgMembershipRequestController';
 
 // Each org type's one "working" login role for a new team member — mirrors
 // organizationController.ts's ORG_OWNER_ROLE used at self-registration time.
@@ -75,6 +76,13 @@ const inviteMember = async (req: Request, res: Response, next: NextFunction): Pr
   }
 };
 
+// A doctor member is not removed here directly — requirement: "hospital can
+// remove doctor anytime but if the hospital want to remove doctor it should
+// be accept by the doctor". This creates a pending removal request instead
+// (see orgMembershipRequestController) and the membership row stays exactly
+// as it is until the doctor accepts. Every other member role (pharmacist,
+// laboratory, staff, owner) is removed immediately, unchanged from before —
+// the requirement is specific to the doctor channeling relationship.
 const removeMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const orgId = parseInt(String(req.params.orgId), 10);
@@ -92,6 +100,20 @@ const removeMember = async (req: Request, res: Response, next: NextFunction): Pr
         [orgId]
       );
       if (owners[0].n <= 1) { res.status(400).json({ message: 'Cannot remove the last owner' }); return; }
+    }
+
+    if (target.member_role === 'doctor') {
+      let request;
+      try {
+        request = await createRemovalRequest(orgId, targetUserId, req.user.id);
+      } catch (err) {
+        if ((err as { code?: string }).code === '23505') {
+          res.status(409).json({ message: 'A removal request for that doctor is already pending' }); return;
+        }
+        throw err;
+      }
+      res.status(202).json({ pending: true, message: 'Removal requested — the doctor must accept before this takes effect.', request });
+      return;
     }
 
     await pool.query(

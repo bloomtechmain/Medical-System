@@ -9,7 +9,10 @@
       "personal": "පුද්ගලික තොරතුරු",
       "health": "සෞඛ්‍ය තොරතුරු",
       "emergency": "හදිසි සම්බන්ධතාවය",
-      "history": "රෝග හා ප්‍රතිකාර ඉතිහාසය"
+      "history": "රෝග හා ප්‍රතිකාර ඉතිහාසය",
+      "vitals": "ජීව ලක්ෂණ සහ රසායනාගාර ප්‍රතිඵල",
+      "labTests": "රසායනාගාර පරීක්ෂණ",
+      "documents": "උඩුගත කළ ලේඛන"
     },
     "fields": {
       "fullName": "සම්පූර්ණ නම",
@@ -27,7 +30,37 @@
     "visitFallback": "හමුවීම",
     "treatmentLine": "ප්‍රතිකාරය: {{text}}",
     "footerConfidential": "රහස්‍ය වෛද්‍ය වාර්තාවකි",
-    "footerAuthorized": "අවසර ලත් භාවිතය සඳහා පමණි"
+    "footerAuthorized": "අවසර ලත් භාවිතය සඳහා පමණි",
+    "vitalsSummary": "වාර්තාගත මැනුම් {{total}} · යොමු පරාසයෙන් පිටත {{abnormal}}",
+    "vitalsCritical": "අවධානය අවශ්‍ය ({{count}}): {{names}}",
+    "vitalsRecorded": "නවතම කියවීම: {{date}}. අගයන් වෙනස් වී තිබිය හැක.",
+    "vitalsTable": {
+      "measurement": "මැනුම",
+      "result": "ප්‍රතිඵලය",
+      "unit": "ඒකකය",
+      "range": "යොමුව",
+      "status": "තත්ත්වය",
+      "source": "මූලාශ්‍රය"
+    },
+    "vitalStatus": {
+      "normal": "සාමාන්‍ය",
+      "low": "අඩු",
+      "high": "වැඩි",
+      "critical": "බරපතළ"
+    },
+    "vitalSource": {
+      "labReport": "රසායනාගාර වාර්තාව",
+      "yourUpload": "ඔබේ උඩුගත කිරීම",
+      "manualEntry": "ස්වයං-ඇතුළත් කළ"
+    },
+    "labStatus": {
+      "pending": "පොරොත්තුවෙන්",
+      "in_progress": "ක්‍රියාත්මක වෙමින්",
+      "completed": "සම්පූර්ණ"
+    },
+    "labReportAvailable": "වාර්තාව ලබා ගත හැක",
+    "documentsNote": "යොමුව සඳහා ලැයිස්තුගත කර ඇත. ගොනු මෙම PDF හි ඇතුළත් නොවේ — බැලීමට පිවිසෙන්න.",
+    "pageOf": "පිටුව {{page}} / {{total}}"
   },
   "welcomeBanner": {
     "welcomeBack": "නැවත සාදරයෙන් පිළිගනිමු,",
@@ -161,5 +194,6 @@
     "message": "ඔබේ ප්‍රොෆයිලය සම්පූර්ණ කරන්න — දුරකථන අංකය, උපන් දිනය, රුධිර වර්ගය, හදිසි සම්බන්ධතාව සහ තවත් — වෛද්‍යවරුන්ට සහ රසායනාගාරවලට ඔබව රැකබලා ගැනීමට අවශ්‍ය තොරතුරු ලබා දීම සඳහා.",
     "completeButton": "සැකසුම සම්පූර්ණ කරන්න",
     "laterButton": "පසුව"
-  }
+  },
+  "downloadFailed": "ඔබේ සෞඛ්‍ය වාර්තාව සකස් කළ නොහැකි විය. නැවත උත්සාහ කරන්න."
 }

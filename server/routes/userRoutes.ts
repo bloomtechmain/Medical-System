@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, getMyOrganizations, joinOrganization, leaveOrganization, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors } from '../controllers/userController';
+import { listPendingApprovals, approveUser, declineUser, getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, getMyOrganizations, leaveOrganization, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors } from '../controllers/userController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
 import { searchLimiter } from '../middleware/rateLimiter';
@@ -14,10 +14,23 @@ router.get('/laboratories', protect, authorize('admin', 'doctor', 'patient'),   
 router.get('/doctors',      protect, authorize('admin', 'laboratory', 'patient'), searchLimiter, searchDoctors);
 router.put('/me/profile',   protect,                                                   updateMyProfile);
 router.get('/me/organizations',                 protect, getMyOrganizations);
-router.post('/me/organizations',                protect, joinOrganization);
+// Requesting to join a hospital/clinic now goes through POST
+// /api/org-membership-requests/join (requires owner approval, requirement 1)
+// — leaving stays here since it is unilateral, no approval needed.
 router.delete('/me/organizations/:organizationId', protect, leaveOrganization);
 
 router.use(protect, authorize('admin'));
+
+// SEC-17 #2: the admin side of professional sign-up approval. Without these
+// a registration sat inactive forever and the applicant's "pending admin
+// approval" message never resolved, because nothing in the UI listed them.
+router.get('/pending-approvals', listPendingApprovals);
+router.post('/:id/approve',      approveUser);
+router.post('/:id/decline',
+  [body('reason').optional({ nullable: true }).isString().isLength({ max: 500 })],
+  validate,
+  declineUser
+);
 router.get('/', getAll);
 router.get('/:id/profile', getOneWithProfile);
 router.get('/:id', getOne);
