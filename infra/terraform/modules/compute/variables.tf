@@ -116,3 +116,9 @@ variable "uploads_bucket_name" {
   type        = string
   default     = null
 }
+
+variable "feature_require_email_verification" {
+  description = "server/config/mailer.ts refuses to start in production if this is true and no SMTP is configured (PRO-11: prevents a silent new-account lockout). No SMTP provider exists in Terraform yet, so this must be false until one does — true by default so production fails loudly rather than silently accepting unverified signups."
+  type        = bool
+  default     = true
+}

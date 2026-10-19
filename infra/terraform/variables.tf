@@ -96,3 +96,9 @@ variable "cloudfront_acm_certificate_arn" {
   type        = string
   default     = null
 }
+
+variable "feature_require_email_verification" {
+  description = "See modules/compute/variables.tf — false only where no SMTP provider is configured yet (staging). Must be true (or a real SMTP secret added) before production holds real patient signups."
+  type        = bool
+  default     = true
+}

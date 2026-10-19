@@ -17,6 +17,12 @@ db_multi_az            = false
 db_deletion_protection = false
 db_skip_final_snapshot = true
 
+# TEMPORARY: no SMTP provider configured yet, so the app refuses to start
+# with email verification required (see mailer.ts). Fine for a disposable
+# staging smoke test; must be reverted (or real SMTP added) before this ever
+# holds data people might mistake for real registrations.
+feature_require_email_verification = false
+
 # TEMPORARY: self-signed cert imported into ACM (no public domain yet). Same
 # cert reused across staging/production since it isn't environment-specific.
 # Browsers will show an untrusted-cert warning. Swap for a real ACM-issued

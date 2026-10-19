@@ -53,6 +53,12 @@ WORKDIR /app
 COPY --from=builder --chown=node:node /app/package*.json ./
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist ./dist
+# node-pg-migrate (run by the CMD below) reads .sql files directly, not the
+# compiled dist/ output — never hit on Railway, where deploy.yml runs
+# migrations as a separate CI step against the full checkout before the
+# image is even built; ECS runs them from inside this container instead, so
+# the folder actually has to be here.
+COPY --from=builder --chown=node:node /app/migrations ./migrations
 
 USER node
 
@@ -88,6 +94,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 # database + CREATEROLE) overrides DATABASE_URL only for this one command;
 # node dist/server.js afterwards still runs with the real DATABASE_URL
 # (corehealth_app). Falls back to DATABASE_URL if DATABASE_MIGRATOR_URL is
-# unset. See server/migrations/BASELINE.md before pointing this at the
-# existing production database for the first time.
-CMD ["sh", "-c", "DATABASE_URL=\"${DATABASE_MIGRATOR_URL:-$DATABASE_URL}\" node_modules/.bin/node-pg-migrate up && node dist/server.js"]
+# unset, and further falls back to building one from the discrete DB_HOST/
+# DB_PORT/DB_NAME/DB_USER/DB_PASSWORD vars (same fallback db.ts already
+# supports, see docs/environments.md) when neither URL var is set — this is
+# what ECS uses, since it injects DB_USER/DB_PASSWORD from Secrets Manager
+# as discrete values rather than a pre-built connection string. See
+# server/migrations/BASELINE.md before pointing this at the existing
+# production database for the first time.
+CMD ["sh", "-c", "DATABASE_URL=\"${DATABASE_MIGRATOR_URL:-${DATABASE_URL:-postgres://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=no-verify}}\" node_modules/.bin/node-pg-migrate up --ignore-pattern \"BASELINE.*\" && node dist/server.js"]
