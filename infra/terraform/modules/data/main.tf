@@ -13,7 +13,7 @@ resource "aws_db_subnet_group" "this" {
 
 resource "aws_security_group" "rds" {
   name_prefix = "${var.environment}-sg-rds-"
-  description = "Postgres — inbound 5432 from the compute security group only, no outbound internet needed."
+  description = "Postgres - inbound 5432 from the compute security group only, no outbound internet needed."
   vpc_id      = var.vpc_id
 
   tags = { Name = "${var.environment}-sg-rds" }
@@ -39,10 +39,11 @@ resource "aws_security_group_rule" "rds_ingress" {
 resource "aws_db_instance" "this" {
   identifier = "${var.environment}-corehealth"
   engine     = "postgres"
-  # NOTE: verify this is still a currently-supported RDS Postgres version at
-  # apply time (no AWS API access from where this was written) — matches
-  # the postgres:16-alpine image used in docker-compose.yml for consistency.
-  engine_version = "16.4"
+  # Verified against `aws rds describe-db-engine-versions` at apply time
+  # (2026-10-19, ap-south-1) — matches the postgres:16-alpine image used in
+  # docker-compose.yml for consistency. 16.4 is no longer offered; this is
+  # the latest available 16.x.
+  engine_version = "16.15"
 
   instance_class        = var.instance_class
   allocated_storage     = var.allocated_storage_gb

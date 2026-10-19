@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { UserPlus, X, Shield, Mail } from 'lucide-react';
-import { orgTeamApi } from '../services/api';
+import { UserPlus, X, Shield, Mail, Hourglass, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { orgTeamApi, orgMembershipRequestApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/common/PageHeader';
 
@@ -71,6 +71,84 @@ function InviteMemberModal({ orgId, onClose }: { orgId: number; onClose: () => v
   );
 }
 
+// Requirement 1: "hospital can remove doctor anytime but if the hospital
+// want to remove doctor it should be accept by the doctor". Join requests
+// from doctors land here too, with whatever hours they proposed — accepting
+// creates the membership AND applies those hours in one step.
+function ChannelingRequests({ orgId }: { orgId: number }) {
+  const { t } = useTranslation('orgTeam');
+  const { t: tc } = useTranslation('common');
+  const qc = useQueryClient();
+  const DAYS = tc('calendar.days', { returnObjects: true }) as string[];
+
+  const { data: requests = [] } = useQuery({
+    queryKey: ['org-membership-requests', orgId],
+    queryFn:  () => orgMembershipRequestApi.forOrg(orgId),
+  });
+  const pending = (requests as any[]).filter(r => r.kind === 'join' && r.status === 'pending');
+
+  const respondMutation = useMutation({
+    mutationFn: ({ id, decision }: { id: number; decision: 'accept' | 'decline' }) => orgMembershipRequestApi.respond(id, decision),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.decision === 'accept' ? t('channeling.toastAccepted') : t('channeling.toastDeclined'));
+      qc.invalidateQueries({ queryKey: ['org-membership-requests', orgId] });
+      qc.invalidateQueries({ queryKey: ['org-team', orgId] });
+    },
+    onError: (err: any) => toast.error(err.message || t('channeling.toastFailed')),
+  });
+
+  if (pending.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+      <p className="text-sm font-bold text-gray-900">{t('channeling.title')}</p>
+      <p className="text-xs text-gray-400 mt-0.5">{t('channeling.subtitle')}</p>
+
+      <div className="space-y-3 mt-4">
+        {pending.map((r: any) => (
+          <div key={r.id} className="rounded-xl border border-yellow-100 bg-yellow-50/60 p-4">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                  <Hourglass size={13} strokeWidth={2} className="text-yellow-600 shrink-0" />
+                  Dr. {r.doctor_name}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">{r.doctor_email}</p>
+                {r.doctor_specialization && (
+                  <p className="text-xs text-gray-400 mt-0.5">{r.doctor_specialization}{r.doctor_license_number ? ` · ${r.doctor_license_number}` : ''}</p>
+                )}
+                {r.message && <p className="text-xs text-gray-600 italic mt-1.5">"{r.message}"</p>}
+                {Array.isArray(r.proposed_schedule) && r.proposed_schedule.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                    <Clock size={12} strokeWidth={2} className="text-gray-400" />
+                    {r.proposed_schedule.map((b: any, i: number) => (
+                      <span key={i} className="text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-2 py-0.5">
+                        {DAYS[b.day_of_week]} {b.start_time?.slice(0, 5)}–{b.end_time?.slice(0, 5)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button disabled={respondMutation.isPending}
+                  onClick={() => respondMutation.mutate({ id: r.id, decision: 'accept' })}
+                  className="flex items-center gap-1 text-xs font-bold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
+                  <CheckCircle2 size={12} strokeWidth={2.5} /> {t('channeling.acceptBtn')}
+                </button>
+                <button disabled={respondMutation.isPending}
+                  onClick={() => respondMutation.mutate({ id: r.id, decision: 'decline' })}
+                  className="flex items-center gap-1 text-xs font-bold text-red-600 bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg disabled:opacity-50">
+                  <XCircle size={12} strokeWidth={2.5} /> {t('channeling.declineBtn')}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OrgTeamSettings() {
   const { t } = useTranslation('orgTeam');
   const { t: tc } = useTranslation('common');
@@ -87,8 +165,11 @@ export default function OrgTeamSettings() {
 
   const removeMutation = useMutation({
     mutationFn: (userId: number) => orgTeamApi.remove(orgId as number, userId),
-    onSuccess: () => { toast.success(t('toastRemoved')); qc.invalidateQueries({ queryKey: ['org-team', orgId] }); },
-    onError:   (err: any) => toast.error(err.message || t('toastRemoveFailed')),
+    onSuccess: (data: any) => {
+      toast.success(data?.pending ? t('removalRequestedToast') : t('toastRemoved'));
+      qc.invalidateQueries({ queryKey: ['org-team', orgId] });
+    },
+    onError: (err: any) => toast.error(err.message || t('toastRemoveFailed')),
   });
 
   if (!orgId) {
@@ -113,8 +194,12 @@ export default function OrgTeamSettings() {
         }
       />
 
+      <div className="mt-6">
+        <ChannelingRequests orgId={orgId} />
+      </div>
+
       {isLoading ? (
-        <div className="text-sm text-gray-400 mt-6">{tc('actions.loading')}</div>
+        <div className="text-sm text-gray-400">{tc('actions.loading')}</div>
       ) : (members as any[]).length === 0 ? (
         <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center mt-6">
           <p className="text-gray-600 font-medium">{t('emptyTitle')}</p>
@@ -144,11 +229,14 @@ export default function OrgTeamSettings() {
               </div>
               {m.user_id !== user?.id && (
                 <button
-                  onClick={() => { if (window.confirm(t('removeConfirm', { name: m.name }))) removeMutation.mutate(m.user_id); }}
+                  onClick={() => {
+                    const confirmMsg = m.member_role === 'doctor' ? t('removeDoctorConfirm', { name: m.name }) : t('removeConfirm', { name: m.name });
+                    if (window.confirm(confirmMsg)) removeMutation.mutate(m.user_id);
+                  }}
                   disabled={removeMutation.isPending}
                   className="text-xs font-semibold text-red-500 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50"
                 >
-                  {t('removeBtn')}
+                  {m.member_role === 'doctor' ? t('requestRemovalBtn') : t('removeBtn')}
                 </button>
               )}
             </div>

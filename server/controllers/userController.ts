@@ -8,6 +8,7 @@ import { logger } from '../config/logger';
 // Approving is what makes the account usable, so it is also what sends the
 // confirmation link — see approveUser below.
 import { sendVerificationEmail } from './authController';
+import { sendNotification } from '../utils/notify';
 
 // clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
 // live behind row-level security — queries against them must carry the
@@ -288,40 +289,63 @@ const getMyOrganizations = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-// Self-service join — a doctor adding another hospital/clinic affiliation later
-// from Settings. Only doctors may join as 'doctor'; the org must be a hospital/clinic.
-const joinOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    if (req.user.role !== 'doctor') { res.status(403).json({ message: 'Only doctors can join a hospital/clinic this way' }); return; }
-    const { organization_id } = req.body as { organization_id?: number };
-    if (!organization_id) { res.status(400).json({ message: 'organization_id is required' }); return; }
+// Requesting to join a hospital/clinic for channeling now goes through
+// orgMembershipRequestController.requestJoin (owner approval required) — see
+// POST /org-membership-requests/join. This endpoint used to insert the
+// membership row directly on request; that is the exact behaviour requirement
+// 1 asked to change (a doctor used to be affiliated the instant they picked a
+// hospital, with the owner never in the loop).
 
-    const { rows: org } = await pool.query(
-      "SELECT id, org_type FROM public.organizations WHERE id=$1 AND is_active=TRUE AND org_type IN ('hospital','clinic')",
-      [organization_id]
-    );
-    if (!org.length) { res.status(404).json({ message: 'Organization not found' }); return; }
-
-    const { rows } = await pool.query(`
-      INSERT INTO public.organization_members (organization_id, user_id, member_role)
-      VALUES ($1, $2, 'doctor')
-      ON CONFLICT (organization_id, user_id) DO NOTHING
-      RETURNING *
-    `, [organization_id, req.user.id]);
-
-    res.status(201).json(rows[0] || { organization_id, user_id: req.user.id, member_role: 'doctor' });
-  } catch (err) { next(err); }
-};
-
+// Self-service leave — unilateral, same as it always was. The only change is
+// that the other party now finds out: the owner is notified, the doctor's
+// weekly hours/overrides for this org are cleared (no dangling bookable slots
+// at a place they no longer channel), and it is now audited.
 const leaveOrganization = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const client = await pool.connect();
   try {
-    const { rowCount } = await pool.query(
-      "DELETE FROM public.organization_members WHERE organization_id=$1 AND user_id=$2 AND member_role != 'owner'",
-      [req.params.organizationId, req.user.id]
+    const organizationId = parseInt(String(req.params.organizationId), 10);
+
+    await client.query('BEGIN');
+    // clinical.* is RLS-protected (doctor_weekly_availability/overrides below)
+    // — this transaction's connection needs the same session-local identity
+    // queryAs() would set, or those deletes silently match zero rows.
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true), set_config('app.role', $2, true)`,
+      [String(req.user.id), req.user.role]
     );
-    if (!rowCount) { res.status(404).json({ message: 'Membership not found (or you are the owner and cannot leave)' }); return; }
+    const { rowCount } = await client.query(
+      "DELETE FROM public.organization_members WHERE organization_id=$1 AND user_id=$2 AND member_role != 'owner'",
+      [organizationId, req.user.id]
+    );
+    if (!rowCount) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ message: 'Membership not found (or you are the owner and cannot leave)' }); return;
+    }
+    await client.query('DELETE FROM clinical.doctor_weekly_availability WHERE doctor_id=$1 AND organization_id=$2', [req.user.id, organizationId]);
+    await client.query('DELETE FROM clinical.doctor_availability_overrides WHERE doctor_id=$1 AND organization_id=$2', [req.user.id, organizationId]);
+    await client.query('COMMIT');
+
+    audit(req, { action: AuditAction.ORG_LEFT, targetType: 'organization', targetId: organizationId });
+
+    const { rows: owner } = await pool.query(
+      "SELECT user_id FROM public.organization_members WHERE organization_id=$1 AND member_role='owner' LIMIT 1",
+      [organizationId]
+    );
+    const { rows: [org] } = await pool.query('SELECT name FROM public.organizations WHERE id=$1', [organizationId]);
+    if (owner.length && req.user.role === 'doctor') {
+      const { rows: [doctor] } = await pool.query('SELECT name FROM public.users WHERE id=$1', [req.user.id]);
+      await sendNotification(owner[0].user_id, 'org_doctor_left', 'Doctor Left',
+        `Dr. ${doctor?.name || 'A doctor'} is no longer channeling at ${org?.name || 'your organization'}.`,
+        { organization_id: organizationId, doctor_id: req.user.id });
+    }
+
     res.status(204).end();
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 };
 
 // SEC-17 #2 made professional sign-ups inactive pending admin review, but
@@ -740,4 +764,4 @@ const searchLaboratories = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-export { listPendingApprovals, approveUser, declineUser, getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, getMyOrganizations, joinOrganization, leaveOrganization, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors };
+export { listPendingApprovals, approveUser, declineUser, getAll, getOne, getOneWithProfile, update, updateWithProfile, updateMyProfile, getMyOrganizations, leaveOrganization, toggleActive, remove, getStats, searchPatients, searchPharmacists, searchLaboratories, searchDoctors };

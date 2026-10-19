@@ -315,6 +315,35 @@ CREATE TABLE public.organization_members (
 CREATE INDEX idx_orgmem_user ON public.organization_members(user_id);
 CREATE INDEX idx_orgmem_org  ON public.organization_members(organization_id);
 
+-- 2.3b organization_membership_requests (migration 013) — the approval layer
+-- in front of organization_members for the doctor<->hospital/clinic
+-- channeling relationship specifically. kind='join' is doctor-initiated, the
+-- org owner accepts/declines; kind='remove' is owner-initiated, the doctor
+-- accepts/declines. A doctor leaving on their own stays an immediate,
+-- unilateral delete from organization_members (see userController.leaveOrganization)
+-- and never creates a row here.
+CREATE TABLE public.organization_membership_requests (
+  id               SERIAL      PRIMARY KEY,
+  organization_id  INTEGER     NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  doctor_id        INTEGER     NOT NULL REFERENCES public.users(id)         ON DELETE CASCADE,
+  kind             VARCHAR(10) NOT NULL CHECK (kind IN ('join','remove')),
+  status           VARCHAR(10) NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','accepted','declined','cancelled')),
+  requested_by     INTEGER     NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  message          TEXT,
+  -- 'join' only: proposed weekly hours, same shape as
+  -- doctor_weekly_availability, applied the moment the owner accepts.
+  proposed_schedule JSONB,
+  responded_by     INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
+  responded_at     TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX idx_omr_one_pending ON public.organization_membership_requests (organization_id, doctor_id, kind)
+  WHERE status = 'pending';
+CREATE INDEX idx_omr_org    ON public.organization_membership_requests(organization_id, status);
+CREATE INDEX idx_omr_doctor ON public.organization_membership_requests(doctor_id, status);
+
 -- What medical specialties a hospital/clinic organization offers (distinct from
 -- the single owning doctor's own personal doctor_profiles.specialization) —
 -- a free-form tag list, multi-select + custom entries at registration time.

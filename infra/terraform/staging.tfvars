@@ -16,3 +16,9 @@ db_instance_class      = "db.t4g.micro"
 db_multi_az            = false
 db_deletion_protection = false
 db_skip_final_snapshot = true
+
+# TEMPORARY: self-signed cert imported into ACM (no public domain yet). Same
+# cert reused across staging/production since it isn't environment-specific.
+# Browsers will show an untrusted-cert warning. Swap for a real ACM-issued
+# cert once a domain exists — see docs/decisions/0002-railway-then-aws.md.
+alb_acm_certificate_arn = "arn:aws:acm:ap-south-1:336246706489:certificate/761e7421-f0e2-4c75-8cd4-c296d9c90950"

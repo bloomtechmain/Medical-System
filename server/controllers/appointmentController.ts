@@ -159,14 +159,58 @@ const getWeeklyAvailability = async (req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 };
 
-// Replaces one organization's weekly pattern for this doctor (organization_id may be
-// null for "general/no specific location"). Other organizations' patterns for the
-// same doctor are untouched — this is what lets a doctor have different hours at
-// different hospitals on the same weekday.
+interface ScheduleBlock { day_of_week: number; start_time: string; end_time: string; slot_duration_minutes: number; }
+
+const isValidScheduleBlock = (block: ScheduleBlock): boolean =>
+  typeof block.day_of_week === 'number' && block.day_of_week >= 0 && block.day_of_week <= 6 &&
+  TIME_RE.test(block.start_time) && TIME_RE.test(block.end_time) &&
+  timeToMinutes(block.start_time) < timeToMinutes(block.end_time) &&
+  Number.isInteger(block.slot_duration_minutes) &&
+  block.slot_duration_minutes >= MIN_SLOT_MINUTES && block.slot_duration_minutes <= MAX_SLOT_MINUTES;
+
+// Full-replace of one organization's weekly pattern for one doctor
+// (organization_id may be null for "general/no specific location"). Other
+// organizations' patterns for the same doctor are untouched — this is what
+// lets a doctor have different hours at different hospitals on the same
+// weekday. Pulled out of setWeeklyAvailability so orgMembershipRequestController
+// can run the exact same replace when an owner accepts a join request that
+// proposed hours — approval and going live happen as one step, not two.
+//
+// Runs impersonating the doctor (not necessarily the caller — an owner
+// accepting a request writes this on the doctor's behalf), matching the
+// admin-impersonation pattern notify.ts uses for the same reason: the RLS
+// policy only allows the owning doctor or 'admin' to write these rows.
+const applyWeeklySchedule = async (doctorId: number, orgId: number | null, schedule: ScheduleBlock[]): Promise<void> => {
+  for (const block of schedule) {
+    if (!isValidScheduleBlock(block)) throw new Error('Invalid availability block');
+  }
+
+  const doctorActor: RLSActor = { id: doctorId, role: 'doctor' };
+
+  await queryAs(doctorActor,
+    'DELETE FROM doctor_weekly_availability WHERE doctor_id=$1 AND organization_id IS NOT DISTINCT FROM $2',
+    [doctorId, orgId]
+  );
+
+  if (schedule.length > 0) {
+    const values: string[] = [];
+    const params: unknown[] = [];
+    schedule.forEach((b, i) => {
+      const base = i * 6;
+      values.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
+      params.push(doctorId, orgId, b.day_of_week, b.start_time, b.end_time, b.slot_duration_minutes);
+    });
+    await queryAs(doctorActor, `
+      INSERT INTO doctor_weekly_availability (doctor_id, organization_id, day_of_week, start_time, end_time, slot_duration_minutes)
+      VALUES ${values.join(',')}
+    `, params);
+  }
+};
+
 const setWeeklyAvailability = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { schedule, organization_id } = req.body as {
-      schedule?: { day_of_week: number; start_time: string; end_time: string; slot_duration_minutes: number }[];
+      schedule?: ScheduleBlock[];
       organization_id?: number | null;
     };
     if (!Array.isArray(schedule)) { res.status(400).json({ message: 'schedule must be an array' }); return; }
@@ -176,41 +220,16 @@ const setWeeklyAvailability = async (req: Request, res: Response, next: NextFunc
 
     if (orgId !== null) {
       const { rows: member } = await pool.query(
-        "SELECT 1 FROM public.organization_members WHERE organization_id=$1 AND user_id=$2",
+        'SELECT 1 FROM public.organization_members WHERE organization_id=$1 AND user_id=$2',
         [orgId, doctorId]
       );
       if (!member.length) { res.status(403).json({ message: 'Not a member of that organization' }); return; }
     }
 
-    for (const block of schedule) {
-      if (
-        typeof block.day_of_week !== 'number' || block.day_of_week < 0 || block.day_of_week > 6 ||
-        !TIME_RE.test(block.start_time) || !TIME_RE.test(block.end_time) ||
-        timeToMinutes(block.start_time) >= timeToMinutes(block.end_time) ||
-        !Number.isInteger(block.slot_duration_minutes) ||
-        block.slot_duration_minutes < MIN_SLOT_MINUTES || block.slot_duration_minutes > MAX_SLOT_MINUTES
-      ) {
-        res.status(400).json({ message: 'Invalid availability block' }); return;
-      }
-    }
-
-    await queryAs(actor(req),
-      'DELETE FROM doctor_weekly_availability WHERE doctor_id=$1 AND organization_id IS NOT DISTINCT FROM $2',
-      [doctorId, orgId]
-    );
-
-    if (schedule.length > 0) {
-      const values: string[] = [];
-      const params: unknown[] = [];
-      schedule.forEach((b, i) => {
-        const base = i * 6;
-        values.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
-        params.push(doctorId, orgId, b.day_of_week, b.start_time, b.end_time, b.slot_duration_minutes);
-      });
-      await queryAs(actor(req), `
-        INSERT INTO doctor_weekly_availability (doctor_id, organization_id, day_of_week, start_time, end_time, slot_duration_minutes)
-        VALUES ${values.join(',')}
-      `, params);
+    try {
+      await applyWeeklySchedule(doctorId, orgId, schedule);
+    } catch {
+      res.status(400).json({ message: 'Invalid availability block' }); return;
     }
 
     const { rows } = await queryAs(actor(req),
@@ -249,6 +268,13 @@ const setOverride = async (req: Request, res: Response, next: NextFunction): Pro
     if (date < businessTodayStr())        { res.status(400).json({ message: 'Cannot set availability for a past date' }); return; }
 
     const orgId = organization_id ?? null;
+    if (orgId !== null) {
+      const { rows: member } = await pool.query(
+        'SELECT 1 FROM public.organization_members WHERE organization_id=$1 AND user_id=$2',
+        [orgId, req.user.id]
+      );
+      if (!member.length) { res.status(403).json({ message: 'Not a member of that organization' }); return; }
+    }
     const { rows: [row] } = await queryAs(actor(req), `
       INSERT INTO doctor_availability_overrides (doctor_id, organization_id, override_date, is_available, reason)
       VALUES ($1,$2,$3,$4,$5)
@@ -417,5 +443,6 @@ export {
   getDoctorSlots, getWeeklyAvailability, setWeeklyAvailability,
   getOverrides, setOverride, deleteOverride,
   createAppointment, getAll, updateStatus,
-  businessTodayStr,
+  businessTodayStr, applyWeeklySchedule, isValidScheduleBlock,
 };
+export type { ScheduleBlock };

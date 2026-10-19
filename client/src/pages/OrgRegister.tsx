@@ -86,8 +86,8 @@ function slugify(str: string): string {
 }
 
 const STEP3_FIELDS: Record<string, string[]> = {
-  hospital:   ['phone', 'specialization', 'license_number'],
-  clinic:     ['phone', 'specialization', 'license_number'],
+  hospital:   ['phone', 'license_number'],
+  clinic:     ['phone', 'license_number'],
   pharmacy:   ['phone', 'license_number', 'pharmacy_name'],
   laboratory: ['phone', 'license_number', 'lab_name', 'address'],
 };
@@ -167,7 +167,7 @@ export default function OrgRegister() {
     try {
       const profile: Record<string, any> = {};
       const profileFields = [
-        'phone','specialization','license_number','medical_school',
+        'phone','license_number','medical_school',
         'years_experience','hospital_affiliation','consultation_fee','bio',
         'pharmacy_name','pharmacy_address','specialization_area',
         'lab_name','lab_type','accreditation','address','services_offered',
@@ -387,14 +387,6 @@ export default function OrgRegister() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-400">*</span></label>
                     <input className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="+94 11 234 5678" {...register('phone', { required: 'Phone is required' })} />
                     {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone.message as string}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Specialization <span className="text-red-400">*</span></label>
-                    <select className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" {...register('specialization', { required: 'Required' })}>
-                      <option value="">Select...</option>
-                      {SPECIALIZATIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {errors.specialization && <p className="text-xs text-red-500 mt-1">{errors.specialization.message as string}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Medical License No. <span className="text-red-400">*</span></label>

@@ -34,6 +34,11 @@ export const AuditAction = {
   PATIENT_FILE_DOWNLOADED: 'patient_file.downloaded',
   HEALTH_REPORT_DOWNLOADED: 'health_report.downloaded',
   ACCESS_REQUEST_DECIDED: 'access_request.decided',
+  ORG_JOIN_REQUESTED: 'org_membership.join_requested',
+  ORG_JOIN_DECIDED: 'org_membership.join_decided',
+  ORG_LEFT: 'org_membership.left',
+  ORG_REMOVAL_REQUESTED: 'org_membership.removal_requested',
+  ORG_REMOVAL_DECIDED: 'org_membership.removal_decided',
 } as const;
 
 export type AuditActionName = (typeof AuditAction)[keyof typeof AuditAction];
