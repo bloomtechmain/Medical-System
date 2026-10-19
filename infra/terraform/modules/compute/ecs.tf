@@ -74,6 +74,14 @@ resource "aws_ecs_task_definition" "api" {
           { name = "DB_PORT", value = "5432" },
           { name = "DB_NAME", value = var.db_name },
           { name = "CLIENT_URL", value = var.client_url },
+          # RDS requires an encrypted connection (confirmed at apply time: a
+          # plaintext connection gets "no pg_hba.conf entry ... no encryption").
+          # REJECT_UNAUTHORIZED=false is a temporary gap, same category as the
+          # self-signed ALB cert — fix by pinning the real RDS CA via DB_SSL_CA
+          # before this holds production data.
+          { name = "DB_SSL", value = "true" },
+          { name = "DB_SSL_REJECT_UNAUTHORIZED", value = "false" },
+          { name = "FEATURE_REQUIRE_EMAIL_VERIFICATION", value = tostring(var.feature_require_email_verification) },
           # REDIS_URL intentionally absent — no Redis module yet. Falls back
           # to Socket.IO's in-memory adapter (ARCH-05) until one exists.
         ],

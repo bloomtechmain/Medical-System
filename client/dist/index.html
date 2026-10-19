@@ -8,10 +8,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <title>Core Health — by BloomTech</title>
-    <script type="module" crossorigin src="/assets/index-C7BpTafO.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CpVqUb_H.css">
+    <script type="module" crossorigin src="/assets/index--yiPLhgH.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-feOCaMQ1.js">
+    <link rel="stylesheet" crossorigin href="/assets/index--abKlnOs.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
+    <!-- Must load before main.tsx — provides window.__APP_CONFIG__.API_URL at
+         runtime so one Docker image can run against any backend (see env.ts). -->
+    <script src="/config.js"></script>
   </body>
 </html>

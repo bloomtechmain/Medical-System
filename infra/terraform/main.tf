@@ -75,4 +75,6 @@ module "compute" {
   client_url = var.domain_name != null ? "https://${var.domain_name}" : "https://${module.edge.cloudfront_domain_name}"
 
   acm_certificate_arn = var.alb_acm_certificate_arn
+
+  feature_require_email_verification = var.feature_require_email_verification
 }
