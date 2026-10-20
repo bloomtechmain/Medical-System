@@ -28,11 +28,20 @@ RUN npm run build
 # ── Runtime stage ──────────────────────────────────────────────────────────────
 FROM node:22.12.0-slim
 
+# SEC: apt-get upgrade picks up Debian security patches (e.g. libgnutls30,
+# perl-base) released after this base image tag was built — node:22.12.0-slim
+# is a fixed snapshot and doesn't track them on its own.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy package files and install only production deps (includes serve).
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+    # Global npm/npx are unused after this point — docker-entrypoint.sh calls
+    # node_modules/.bin/serve directly — and npm bundles its own `tar`
+    # dependency that's a separate CVE source, so drop it from the image.
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # --chown: dist/ must stay writable by the non-root "node" user below —
 # docker-entrypoint.sh writes dist/config.js there at container start.

@@ -37,7 +37,14 @@ RUN npm prune --omit=dev
 # ---- runtime image: same canvas libs, but shared runtime .so's only ----
 FROM node:22.12.0-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# SEC: apt-get upgrade picks up Debian security patches (e.g. libgnutls30,
+# perl-base) released after this base image tag was built — node:22.12.0-slim
+# is a fixed snapshot and doesn't track them on its own. Removing the global
+# npm/npx afterward drops its bundled `tar` dependency (a separate CVE
+# source) along with it; nothing in this image's CMD invokes npm — migrations
+# run via node_modules/.bin/node-pg-migrate and the server via `node
+# dist/server.js` directly.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
@@ -45,7 +52,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg62-turbo \
     libgif7 \
     librsvg2-2 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /app
 # --chown: the "node" user (uid 1000, built into the official image) owns
