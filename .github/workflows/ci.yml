@@ -122,9 +122,14 @@ jobs:
         working-directory: ./client
         run: npm ci
 
+      # --omit=dev: a critical in a devDependency (e.g. tinypool, vitest's
+      # internal worker pool) never ships in `npm run build`'s output, so it
+      # shouldn't gate the same way a critical in a shipped dependency does.
+      # Dev deps still get the same npm ci + audit treatment, just not the
+      # hard critical gate.
       - name: Audit client dependencies (critical)
         working-directory: ./client
-        run: npm audit --audit-level=critical
+        run: npm audit --omit=dev --audit-level=critical
 
       - name: Lint client
         working-directory: ./client
