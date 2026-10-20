@@ -41,3 +41,23 @@ output "frontend_bucket_name" {
   description = "Where the frontend deploy pipeline syncs the Vite build."
   value       = module.edge.frontend_bucket_name
 }
+
+output "ecs_service_name" {
+  description = "Copy into the deploy workflow's ECS_SERVICE repo variable."
+  value       = module.compute.ecs_service_name
+}
+
+output "db_instance_identifier" {
+  description = "Copy into the deploy workflow's RDS_INSTANCE_IDENTIFIER repo variable."
+  value       = module.data.db_instance_identifier
+}
+
+output "cloudfront_distribution_id" {
+  description = "Copy into the deploy workflow's CLOUDFRONT_DISTRIBUTION_ID repo variable."
+  value       = module.edge.cloudfront_distribution_id
+}
+
+output "github_actions_deploy_role_arn" {
+  description = "Copy into the deploy workflow's AWS_ROLE_ARN repo secret. See github_actions.tf."
+  value       = aws_iam_role.github_actions_deploy.arn
+}
