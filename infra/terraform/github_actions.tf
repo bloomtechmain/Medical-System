@@ -110,9 +110,18 @@ data "aws_iam_policy_document" "github_actions_deploy" {
   }
 
   statement {
-    sid       = "RdsSnapshot"
-    actions   = ["rds:CreateDBSnapshot", "rds:DescribeDBSnapshots"]
-    resources = [module.data.db_instance_arn]
+    # CreateDBSnapshot needs authorization on BOTH the source DB instance AND
+    # the snapshot resource it's about to create — the instance ARN alone
+    # isn't enough, which is what the AccessDenied on the snapshot ARN was
+    # about. Scoped to scripts/deploy/snapshot-database.sh's own naming
+    # convention ("pre-migration-<environment>-<timestamp>") rather than
+    # snapshot:* .
+    sid     = "RdsSnapshot"
+    actions = ["rds:CreateDBSnapshot", "rds:DescribeDBSnapshots"]
+    resources = [
+      module.data.db_instance_arn,
+      "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:snapshot:pre-migration-*",
+    ]
   }
 
   statement {
