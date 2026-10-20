@@ -102,3 +102,9 @@ variable "feature_require_email_verification" {
   type        = bool
   default     = true
 }
+
+variable "github_repository" {
+  description = "owner/repo — scopes the GitHub Actions OIDC trust policy (github_actions.tf) so only workflows in this repo can assume the deploy role. Not a secret, safe to default."
+  type        = string
+  default     = "TharushaTDK/Medical-System"
+}

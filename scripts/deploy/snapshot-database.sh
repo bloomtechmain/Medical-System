@@ -11,23 +11,41 @@
 # one time nobody will check.
 #
 # Usage: scripts/deploy/snapshot-database.sh <environment>
-# Needs: DATABASE_MIGRATOR_URL, and pg_dump on PATH.
+# Needs: either RDS_INSTANCE_IDENTIFIER (AWS target — calls the RDS snapshot
+# API directly, see below), or DATABASE_MIGRATOR_URL + pg_dump on PATH
+# (Railway/production target — the rest of this file).
 #
-# Where the snapshot goes, in order of preference:
+# Where the pg_dump path's snapshot goes, in order of preference:
 #   1. BACKUP_S3_BUCKET set  → pg_dump piped to S3 (durable, versioned)
 #   2. otherwise             → a CI artifact path, which is better than
 #                              nothing but expires with the run
-#
-# On a managed platform you may prefer the provider's own snapshot API
-# (Railway/RDS), which is faster and does not move the data through CI. If you
-# switch to that, keep the "wait for it to complete" part — see the RDS
-# variant at the bottom.
 
 set -euo pipefail
 
 ENVIRONMENT="${1:?usage: snapshot-database.sh <environment>}"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LABEL="pre-migration-${ENVIRONMENT}-${TIMESTAMP}"
+
+# RDS-native path (the AWS target): used whenever RDS_INSTANCE_IDENTIFIER is
+# set, which is also the only option that works there — the instance has no
+# route from a GitHub-hosted runner, so pg_dump below can't reach it anyway.
+# This calls AWS's own snapshot API instead of moving data through CI, and
+# WAITS for it, which is the part that actually satisfies BKP-09.
+if [ -n "${RDS_INSTANCE_IDENTIFIER:-}" ]; then
+  echo "==> Taking an RDS snapshot of ${RDS_INSTANCE_IDENTIFIER} (${LABEL})"
+  aws rds create-db-snapshot \
+    --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
+    --db-snapshot-identifier "$LABEL" >/dev/null
+
+  echo "==> Waiting for it to finish (this is what makes it a real restore point)"
+  aws rds wait db-snapshot-available \
+    --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
+    --db-snapshot-identifier "$LABEL"
+
+  echo "==> Snapshot complete: ${LABEL}"
+  echo "SNAPSHOT_LOCATION=rds-snapshot:${LABEL}" >> "${GITHUB_ENV:-/dev/null}"
+  exit 0
+fi
 
 if [ -z "${DATABASE_MIGRATOR_URL:-}" ]; then
   echo "ERROR: DATABASE_MIGRATOR_URL is not set. Refusing to migrate without a backup." >&2
@@ -102,15 +120,3 @@ fi
 
 echo "==> Snapshot complete: ${LABEL}"
 echo "    Restoring from it: see runbooks/restore-from-backup.md"
-
-# ── Managed-provider alternative ────────────────────────────────────────────
-# On RDS (the AWS target), prefer the provider's snapshot and keep the wait:
-#
-#   aws rds create-db-snapshot \
-#     --db-instance-identifier "$RDS_INSTANCE_ID" \
-#     --db-snapshot-identifier "$LABEL"
-#   aws rds wait db-snapshot-available \
-#     --db-snapshot-identifier "$LABEL"      # <- this is the part that matters
-#
-# `aws rds wait` is what makes "and waits for it" true. Without it the deploy
-# races the snapshot and BKP-09 is not actually fixed.

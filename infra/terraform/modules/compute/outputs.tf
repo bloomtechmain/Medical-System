@@ -20,3 +20,22 @@ output "ec2_security_group_id" {
 output "ecs_cluster_name" {
   value = aws_ecs_cluster.this.name
 }
+
+output "ecr_repository_arn" {
+  description = "For scoping the CI deploy role's ECR push/pull policy to exactly this repo."
+  value       = aws_ecr_repository.api.arn
+}
+
+output "ecs_cluster_arn" {
+  description = "For scoping the CI deploy role's ecs:DescribeServices/ListTasks policy."
+  value       = aws_ecs_cluster.this.arn
+}
+
+output "ecs_service_name" {
+  value = aws_ecs_service.api.name
+}
+
+output "ecs_service_arn" {
+  description = "aws_ecs_service's id is the service ARN on provider v5 — for scoping the CI deploy role's ecs:UpdateService policy."
+  value       = aws_ecs_service.api.id
+}
