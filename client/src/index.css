@@ -213,3 +213,82 @@
     @apply hover:bg-gray-50/60 transition-colors;
   }
 }
+
+/* ── Suwela landing ──────────────────────────────────────────── */
+@keyframes sw-float {
+  0%, 100% { transform: translateY(0) rotate(var(--sw-rot, 0deg)); }
+  50%      { transform: translateY(-14px) rotate(calc(var(--sw-rot, 0deg) + 6deg)); }
+}
+.sw-float { animation: sw-float var(--sw-dur, 7s) ease-in-out infinite; }
+
+@keyframes sw-spin { to { transform: rotate(360deg); } }
+.sw-orbit       { animation: sw-spin 70s linear infinite; }
+.sw-orbit-keep  { animation: sw-spin 70s linear infinite reverse; }
+.sw-orbit-paused, .sw-orbit-paused .sw-orbit-keep { animation-play-state: paused; }
+
+@keyframes sw-ring {
+  0%   { transform: scale(.85); opacity: .55; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+.sw-ring { animation: sw-ring 3.2s ease-out infinite; }
+
+@keyframes sw-dash { to { stroke-dashoffset: -40; } }
+.sw-road { stroke-dasharray: 14 12; animation: sw-dash 1.2s linear infinite; }
+
+@keyframes sw-marquee { to { transform: translateX(-50%); } }
+.sw-marquee { animation: sw-marquee 38s linear infinite; }
+.sw-marquee:hover { animation-play-state: paused; }
+
+@keyframes sw-breathe {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.06); opacity: .85; }
+}
+.sw-breathe { animation: sw-breathe 1.8s ease-in-out infinite; transform-origin: center; }
+
+@keyframes sw-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+.sw-sweep { animation: sw-sweep 1.4s ease-in-out infinite; }
+
+@keyframes sw-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sw-rise { animation: sw-rise .6s cubic-bezier(.2,.7,.2,1) both; }
+
+@keyframes sw-pop {
+  0%   { transform: scale(.6); opacity: 0; }
+  70%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.sw-pop { animation: sw-pop .5s cubic-bezier(.2,.8,.3,1.2) both; }
+
+@keyframes sw-wiggle {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+.group:hover .sw-wiggle { animation: sw-wiggle .5s ease-in-out; }
+
+/* A floating shape reacts to the pointer (parallax via --mx/--my set on the
+   field) and spins when poked. */
+.sw-shape {
+  transform: translate(calc(var(--mx, 0) * var(--depth, 10) * 1px), calc(var(--my, 0) * var(--depth, 10) * 1px));
+  transition: transform .5s cubic-bezier(.2,.7,.2,1);
+}
+.sw-shape > * { transition: transform .6s cubic-bezier(.2,.8,.3,1.3), filter .3s; }
+.sw-shape:hover > * { transform: scale(1.18) rotate(24deg); filter: saturate(1.2); }
+
+@keyframes sw-word {
+  from { opacity: 0; transform: translateY(60%) rotate(-3deg); }
+  to   { opacity: 1; transform: translateY(0) rotate(0); }
+}
+.sw-word { animation: sw-word .55s cubic-bezier(.2,.8,.3,1.15) both; }
+
+@keyframes sw-fill { from { width: 0; } to { width: 100%; } }
+.sw-fill { animation: sw-fill 4.5s linear both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sw-fill { animation: none; width: 100%; }
+  .sw-word,
+  .sw-float, .sw-orbit, .sw-orbit-keep, .sw-ring, .sw-road, .sw-marquee,
+  .sw-breathe, .sw-sweep, .sw-rise, .sw-pop { animation: none; }
+}
