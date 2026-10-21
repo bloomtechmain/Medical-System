@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
+import AuthShell from '../components/landing/AuthShell';
 
 interface LoginFormData {
   email: string;
@@ -104,66 +105,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-700 to-primary-900 flex-col justify-between p-12">
-        <Link to="/welcome" className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
-            <svg className="w-6 h-6 text-primary-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 12h15m-7.5-7.5v15M9 7.5H6a1.5 1.5 0 00-1.5 1.5v9A1.5 1.5 0 006 19.5h12a1.5 1.5 0 001.5-1.5V9A1.5 1.5 0 0018 7.5h-3" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-white font-bold text-lg leading-none">Core Health</p>
-            <p className="text-primary-200 text-xs">by BloomTech</p>
-          </div>
-        </Link>
-
-        <div>
-          <h2 className="text-4xl font-bold text-white leading-tight mb-4">
-            Your health,<br />our priority.
-          </h2>
-          <p className="text-primary-200 text-lg max-w-sm">
-            A unified platform for patients, doctors, and pharmacists — delivering seamless healthcare management.
-          </p>
-
-          <div className="mt-10 space-y-4">
-            {[
-              { icon: '🩺', title: 'Doctors', desc: 'Manage patients & prescriptions' },
-              { icon: '💊', title: 'Pharmacists', desc: 'Inventory, orders & dispensing' },
-              { icon: '🏥', title: 'Patients', desc: 'Your health records in one place' },
-            ].map((item) => (
-              <div key={item.title} className="flex items-center gap-3 bg-white/10 rounded-xl px-4 py-3">
-                <span className="text-2xl">{item.icon}</span>
-                <div>
-                  <p className="text-white font-semibold text-sm">{item.title}</p>
-                  <p className="text-primary-200 text-xs">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-primary-300 text-xs">© 2024 Core Health by BloomTech. All rights reserved.</p>
-      </div>
-
-      {/* Right panel */}
-      <div className="flex-1 flex items-center justify-center p-6">
+    <AuthShell
+      title={<>Your health, <em className="text-suwela-mint">one sign-in away.</em></>}
+      text="Patients, doctors, pharmacies, laboratories, hospitals and clinics all sign in here — Suwela opens the right dashboard for you.">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <Link to="/welcome" className="lg:hidden text-center mb-8 block">
-            <div className="inline-flex items-center gap-2 mb-2">
-              <div className="w-9 h-9 bg-primary-600 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-              <span className="text-xl font-bold text-gray-900">Core Health</span>
-            </div>
-            <p className="text-sm text-gray-500">by BloomTech</p>
-          </Link>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          <div className="sw-rise bg-white rounded-[32px] shadow-[0_24px_60px_-34px_rgba(14,44,82,0.5)] p-7 sm:p-9">
             {blocked ? (
               <>
                 <div className="mb-6">
@@ -306,8 +252,8 @@ export default function Login() {
             ) : (
             <>
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
-              <p className="text-gray-500 text-sm mt-1">Sign in to your Core Health account</p>
+              <h1 className="font-display text-4xl text-suwela-navy">Welcome back</h1>
+              <p className="text-suwela-slate mt-2">Sign in to your Suwela account</p>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -347,7 +293,8 @@ export default function Login() {
 
               <button
                 type="submit"
-                className="btn-primary w-full mt-2 py-2.5"
+                className="btn-primary w-full mt-2 py-3 rounded-full text-base"
+                style={{ backgroundImage: 'linear-gradient(90deg, #1598E9, #13A58F)' }}
                 disabled={loading}
               >
                 {loading ? (
@@ -379,10 +326,9 @@ export default function Login() {
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">
-            Core Health by BloomTech · Secure Medical Platform
+            Suwela Medical Hub · Built by BloomTech
           </p>
         </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }
