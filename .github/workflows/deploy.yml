@@ -253,12 +253,22 @@ jobs:
 
       # CICD-09: no smoke test ran after a deploy, so a deploy that broke
       # login was found by a user.
+      #
+      # SMOKE_INSECURE_TLS: staging's ALB has no real domain yet
+      # (infra/terraform/staging.tfvars: domain_name = null), so its 443
+      # listener serves a self-signed placeholder cert — every TLS-verifying
+      # client, this smoke test included, failed the handshake before getting
+      # any HTTP response at all. Staging-only: production's SMOKE_INSECURE_TLS
+      # is deliberately left unset below, so it keeps verifying TLS for real.
+      # Remove this once staging has a real domain_name + DNS-validated ACM
+      # cert (infra/terraform/variables.tf) and SMOKE_BASE_URL points at it.
       - name: Smoke test
         env:
           SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
           SMOKE_CLIENT_URL: ${{ secrets.SMOKE_CLIENT_URL }}
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
           SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+          SMOKE_INSECURE_TLS: "true"
         run: ./scripts/deploy/smoke-test.sh
 
   # CICD-10: the `production` GitHub environment carries required reviewers,
