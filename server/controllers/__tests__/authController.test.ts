@@ -67,6 +67,9 @@ describe('authController.login', () => {
         // account holds, so the client can offer a choice and a switcher.
         // Empty here because this user belongs to no organisation.
         memberships: [],
+        // Migration 014: patients are never on a package — everything is
+        // free for them — so there is no plan, and no plan query was made.
+        plan: null,
       },
       token: 'fake-token',
       refreshToken: expect.any(String),
@@ -86,9 +89,16 @@ describe('authController.login', () => {
       { id: 10, name: 'Nawaloka Hospital', org_type: 'hospital', slug: 'nawaloka', is_active: true, member_role: 'owner' },
       { id: 11, name: 'City Medical Lab', org_type: 'laboratory', slug: 'citylab', is_active: true, member_role: 'owner' },
     ];
+    const freePlan = {
+      id: 1, audience: 'doctor', code: 'free', name: 'Free', description: null,
+      price_monthly: 0, price_yearly: 0, currency: 'LKR', is_default: true, is_active: true, sort_order: 0,
+      features: { consultations_per_month: 30, lab_requests: false },
+    };
     query
       .mockResolvedValueOnce({ rows: [user] })        // SELECT * FROM users
       .mockResolvedValueOnce({ rows: memberships })   // getMembershipsForUser
+      .mockResolvedValueOnce({ rows: [{ plan_id: null }] }) // personal plan: users.plan_id
+      .mockResolvedValueOnce({ rows: [freePlan] })    // → the doctor audience's default plan
       .mockResolvedValueOnce({ rows: [] });           // issueRefreshToken
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
     (jwt.sign as jest.Mock).mockReturnValue('fake-token');
@@ -103,6 +113,11 @@ describe('authController.login', () => {
     // `organization` is kept for existing callers and resolves to the owned
     // org, but it must no longer be the only thing returned.
     expect(payload.user.organization).toMatchObject({ name: 'Nawaloka Hospital' });
+    // Migration 014: a doctor with no explicit package is on the default one,
+    // and every catalogue feature comes back with a definite value.
+    expect(payload.user.plan).toMatchObject({ code: 'free', audience: 'doctor' });
+    expect(payload.user.plan.features.lab_requests).toBe(false);
+    expect(payload.user.plan.features.e_prescriptions).toBe(false);
   });
 
   // PRO-11: "Sign-up needs no email verification ... and the account can act

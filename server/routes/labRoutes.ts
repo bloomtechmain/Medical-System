@@ -11,6 +11,7 @@ import { enforceUploadQuota } from '../middleware/uploadQuota';
 import { virusScanUpload } from '../middleware/virusScanUpload';
 import { createUploadStorage } from '../utils/fileStorage';
 import validate from '../middleware/validate';
+import { requireFeature, requireWithinLimit } from '../middleware/planGate';
 
 const router = Router();
 
@@ -62,9 +63,9 @@ router.get('/:id', protect, authorize('doctor', 'patient', 'laboratory', 'admin'
 // SEC-28: replaces the removed unauthenticated /uploads/... static route.
 router.get('/:id/report-file',   protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReportFile);
 router.get('/:id/referral-file', protect, authorize('doctor', 'patient', 'laboratory', 'admin'), serveReferralFile);
-router.post('/',   protect, authorize('doctor', 'patient'), uploadLimiter, uploadReferral.single('referral'), verifyUploadSignature(), createValidators, validate, create);
-router.post('/direct', protect, authorize('laboratory'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), enforceUploadQuota('lab-reports'), virusScanUpload('lab-reports'), createDirectValidators, validate, createDirect);
-router.patch('/:id/report',  protect, authorize('laboratory'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), enforceUploadQuota('lab-reports'), virusScanUpload('lab-reports'), uploadReport);
+router.post('/',   protect, authorize('doctor', 'patient'), requireFeature('lab_requests'), uploadLimiter, uploadReferral.single('referral'), verifyUploadSignature(), createValidators, validate, create);
+router.post('/direct', protect, authorize('laboratory'), requireFeature('direct_reports'), requireWithinLimit('reports_per_month'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), enforceUploadQuota('lab-reports'), virusScanUpload('lab-reports'), createDirectValidators, validate, createDirect);
+router.patch('/:id/report',  protect, authorize('laboratory'), requireWithinLimit('reports_per_month'), uploadLimiter, upload.single('report'), verifyUploadSignature({ required: true }), enforceUploadQuota('lab-reports'), virusScanUpload('lab-reports'), uploadReport);
 router.patch('/:id/status',  protect, authorize('laboratory'), updateStatus);
 router.patch('/:id/reject',  protect, authorize('laboratory'), reject);
 router.patch('/:id/price',   protect, authorize('laboratory'), setPrice);

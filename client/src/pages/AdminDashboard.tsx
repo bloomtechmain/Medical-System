@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { userApi, authApi } from '../services/api';
+import PlanSummaryCard from '../components/plans/PlanSummaryCard';
 import { formatDate, formatCurrency } from '../utils/helpers';
 import {
   Users, Stethoscope, FlaskConical, Pill, Truck,
@@ -145,6 +146,9 @@ export default function AdminDashboard() {
           })()}
         </div>
       </section>
+
+      {/* Migration 014: who is on which package, per dashboard type */}
+      <PlanSummaryCard />
 
       {/* Organizations */}
       <section>

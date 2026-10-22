@@ -5,13 +5,14 @@ import {
   getOverrides, setOverride, deleteOverride,
   createAppointment, getAll, updateStatus,
 } from '../controllers/appointmentController';
+import { requireFeature } from '../middleware/planGate';
 
 const router = Router();
 
 router.get('/availability/weekly',        protect, authorize('doctor'),          getWeeklyAvailability);
-router.put('/availability/weekly',        protect, authorize('doctor'),          setWeeklyAvailability);
+router.put('/availability/weekly',        protect, authorize('doctor'), requireFeature('online_booking'),          setWeeklyAvailability);
 router.get('/availability/overrides',     protect, authorize('doctor'),          getOverrides);
-router.post('/availability/overrides',    protect, authorize('doctor'),          setOverride);
+router.post('/availability/overrides',    protect, authorize('doctor'), requireFeature('online_booking'),          setOverride);
 router.delete('/availability/overrides/:id', protect, authorize('doctor'),       deleteOverride);
 
 router.get('/doctor/:doctorId/slots',     protect, authorize('patient', 'admin'), getDoctorSlots);

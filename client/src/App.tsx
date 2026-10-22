@@ -5,6 +5,7 @@ import { UserRole } from './types';
 import Layout from './components/layout/Layout';
 import TermsGate from './components/common/TermsGate';
 import { dashboardContexts, resolveActiveContext } from './constants/dashboards';
+import RequireFeature from './components/plans/RequireFeature';
 
 // PERF-10: every page was a static import, so the client shipped as one
 // ~2 MB bundle regardless of role — a patient's browser downloaded the
@@ -55,6 +56,9 @@ const Sales                 = lazy(() => import('./pages/Sales'));
 const Inventory             = lazy(() => import('./pages/Inventory'));
 const Users                 = lazy(() => import('./pages/Users'));
 const Organizations         = lazy(() => import('./pages/Organizations'));
+// Migration 014: subscription packages
+const MyPackage             = lazy(() => import('./pages/MyPackage'));
+const AdminPlans            = lazy(() => import('./pages/AdminPlans'));
 
 const RouteFallback = () => (
   <div className="flex items-center justify-center h-screen text-gray-400">Loading…</div>
@@ -157,6 +161,7 @@ export default function App() {
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="organizations" element={<Organizations />} />
+        <Route path="plans" element={<AdminPlans />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 
@@ -164,36 +169,39 @@ export default function App() {
       <Route path="/hospital" element={<PrivateRoute roles={['doctor']}><Layout /></PrivateRoute>}>
         <Route index element={<HospitalDashboard />} />
         <Route path="consultations"       element={<DoctorConsultations />} />
-        <Route path="lab-requests"        element={<DoctorLabRequests />} />
+        <Route path="lab-requests"        element={<RequireFeature feature="lab_requests"><DoctorLabRequests /></RequireFeature>} />
         <Route path="patients/:patientId" element={<DoctorPatientView />} />
-        <Route path="requests"            element={<DoctorAccessRequests />} />
-        <Route path="appointments"        element={<DoctorAppointments />} />
+        <Route path="requests"            element={<RequireFeature feature="access_requests"><DoctorAccessRequests /></RequireFeature>} />
+        <Route path="appointments"        element={<RequireFeature feature="channeling"><DoctorAppointments /></RequireFeature>} />
         <Route path="settings"            element={<DoctorSettings />} />
         <Route path="team"                element={<OrgTeamSettings />} />
+        <Route path="package"             element={<MyPackage />} />
       </Route>
 
       {/* Clinic routes */}
       <Route path="/clinic" element={<PrivateRoute roles={['doctor']}><Layout /></PrivateRoute>}>
         <Route index element={<ClinicDashboard />} />
         <Route path="consultations"       element={<DoctorConsultations />} />
-        <Route path="lab-requests"        element={<DoctorLabRequests />} />
+        <Route path="lab-requests"        element={<RequireFeature feature="lab_requests"><DoctorLabRequests /></RequireFeature>} />
         <Route path="patients/:patientId" element={<DoctorPatientView />} />
-        <Route path="requests"            element={<DoctorAccessRequests />} />
-        <Route path="appointments"        element={<DoctorAppointments />} />
+        <Route path="requests"            element={<RequireFeature feature="access_requests"><DoctorAccessRequests /></RequireFeature>} />
+        <Route path="appointments"        element={<RequireFeature feature="channeling"><DoctorAppointments /></RequireFeature>} />
         <Route path="settings"            element={<DoctorSettings />} />
         <Route path="team"                element={<OrgTeamSettings />} />
+        <Route path="package"             element={<MyPackage />} />
       </Route>
 
       {/* Doctor routes */}
       <Route path="/doctor" element={<PrivateRoute roles={['doctor']}><Layout /></PrivateRoute>}>
         <Route index element={<DoctorDashboard />} />
         <Route path="consultations"   element={<DoctorConsultations />} />
-        <Route path="lab-requests"    element={<DoctorLabRequests />} />
+        <Route path="lab-requests"    element={<RequireFeature feature="lab_requests"><DoctorLabRequests /></RequireFeature>} />
         <Route path="patients"        element={<DoctorDashboard />} />
         <Route path="patients/:patientId" element={<DoctorPatientView />} />
-        <Route path="requests"        element={<DoctorAccessRequests />} />
-        <Route path="appointments"    element={<DoctorAppointments />} />
+        <Route path="requests"        element={<RequireFeature feature="patient_records_access"><DoctorAccessRequests /></RequireFeature>} />
+        <Route path="appointments"    element={<RequireFeature feature="online_booking"><DoctorAppointments /></RequireFeature>} />
         <Route path="settings"        element={<DoctorSettings />} />
+        <Route path="package"         element={<MyPackage />} />
       </Route>
 
       {/* Pharmacist routes */}
@@ -202,11 +210,12 @@ export default function App() {
         <Route path="consultations" element={<PharmacistConsultations />} />
         <Route path="medicines"     element={<Medicines />} />
         <Route path="suppliers"     element={<Suppliers />} />
-        <Route path="orders"        element={<Orders />} />
+        <Route path="orders"        element={<RequireFeature feature="purchase_orders"><Orders /></RequireFeature>} />
         <Route path="sales"         element={<Sales />} />
-        <Route path="inventory"     element={<Inventory />} />
+        <Route path="inventory"     element={<RequireFeature feature="inventory_reports"><Inventory /></RequireFeature>} />
         <Route path="settings"      element={<PharmacistSettings />} />
         <Route path="team"          element={<OrgTeamSettings />} />
+        <Route path="package"       element={<MyPackage />} />
       </Route>
 
       {/* Patient routes */}
@@ -228,6 +237,7 @@ export default function App() {
         <Route path="catalog" element={<LaboratoryCatalog />} />
         <Route path="settings" element={<LaboratorySettings />} />
         <Route path="team" element={<OrgTeamSettings />} />
+        <Route path="package" element={<MyPackage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

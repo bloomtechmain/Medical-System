@@ -68,6 +68,12 @@ const REQUIREMENTS: Requirement[] = [
   // 011 — email verification. THE one that caused the silent lockout.
   column('public', 'users', 'email_verified_at', '011_email_verification'),
   table('public', 'email_verification_tokens', '011_email_verification'),
+
+  // 014 — subscription packages. Read on every gated professional request
+  // and by /auth/me.
+  table('public', 'plans', '014_subscription_plans'),
+  column('public', 'users', 'plan_id', '014_subscription_plans'),
+  column('public', 'organizations', 'plan_id', '014_subscription_plans'),
 ];
 
 const verifySchema = async (): Promise<void> => {

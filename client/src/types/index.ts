@@ -29,7 +29,12 @@ export interface User {
    *  offer a dashboard choice and a switcher. A doctor who owns a hospital has
    *  both their own doctor dashboard and the hospital's — preferring one and
    *  hiding the other is the bug this replaced. */
-  memberships?: (UserOrganization & { member_role: string })[];
+  memberships?: (UserOrganization & { member_role: string; plan?: Plan | null })[];
+  /** Migration 014: the package behind this user's own dashboard (for a
+   *  pharmacist or laboratory user, their organisation's). null for patients
+   *  and admins, who are never on a package. A snapshot from sign-in — use
+   *  the useDashboardPlan hook for the live value. */
+  plan?: Plan | null;
 }
 
 export interface PatientProfile {
@@ -327,6 +332,11 @@ export interface Organization {
   approved_at: string | null;
   created_at: string;
   member_count?: number;
+  /** Migration 014: the organisation's package (the default one if none is set). */
+  plan_id?: number | null;
+  plan_name?: string | null;
+  plan_code?: string | null;
+  plan_is_default?: boolean;
 }
 
 export interface OrganizationMember {
@@ -398,4 +408,79 @@ export interface UserStats {
 export interface Toast {
   msg: string;
   type: 'success' | 'error';
+}
+
+// ── Subscription packages (migration 014) ─────────────────────────────────────
+
+export type PlanAudience = 'doctor' | 'pharmacy' | 'laboratory' | 'hospital' | 'clinic';
+
+/** A boolean feature is true/false; a limit is a number, or null for unlimited. */
+export type PlanFeatureValues = Record<string, boolean | number | null>;
+
+export interface PlanFeatureDefinition {
+  key: string;
+  label: string;
+  description: string;
+  type: 'boolean' | 'limit';
+  fallback: boolean | number | null;
+  enforcedBy: 'server' | 'dashboard';
+  unit?: string;
+}
+
+export interface Plan {
+  id: number;
+  audience: PlanAudience;
+  code: string;
+  name: string;
+  description: string | null;
+  price_monthly: number;
+  price_yearly: number | null;
+  currency: string;
+  features: PlanFeatureValues;
+  is_default: boolean;
+  is_active: boolean;
+  sort_order: number;
+  subscribers?: number;
+  active_subscribers?: number;
+}
+
+export interface PlanSubject {
+  kind: 'user' | 'organization';
+  id: number;
+  audience: PlanAudience;
+}
+
+export interface MyPlan {
+  subject: PlanSubject | null;
+  plan: Plan | null;
+  features: PlanFeatureDefinition[];
+  usage: Record<string, number>;
+}
+
+export interface PlanSubscriber {
+  kind: 'user' | 'organization';
+  id: number;
+  name: string;
+  contact: string | null;
+  audience: PlanAudience;
+  is_active: boolean;
+  approved_at: string | null;
+  created_at: string;
+  on_default: boolean;
+  plan_id: number;
+  plan_code: string;
+  plan_name: string;
+  price_monthly: number;
+  currency: string;
+  plan_changed_at: string | null;
+}
+
+export interface PlanSummary {
+  patients: { total: number };
+  audiences: {
+    audience: PlanAudience;
+    total: number;
+    estimated_monthly_revenue: number;
+    plans: { plan_id: number; code: string; name: string; price_monthly: number; currency: string; is_default: boolean; is_active: boolean; subscribers: number; active_subscribers: number }[];
+  }[];
 }
