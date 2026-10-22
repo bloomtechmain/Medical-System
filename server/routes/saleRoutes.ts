@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import { getAll, getOne, create, getAnalytics } from '../controllers/saleController';
 import { protect } from '../middleware/auth';
 import validate from '../middleware/validate';
+import { requireFeature } from '../middleware/planGate';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ const createValidators = [
 ];
 
 router.get('/', getAll);
-router.get('/analytics', getAnalytics);
+router.get('/analytics', requireFeature('sales_analytics'), getAnalytics);
 router.get('/:id', getOne);
 router.post('/', createValidators, validate, create);
 

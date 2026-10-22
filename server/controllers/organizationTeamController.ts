@@ -3,6 +3,8 @@ import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/db';
 import { createProfile } from './authController';
 import { createRemovalRequest } from './orgMembershipRequestController';
+import { planForOrganization, checkWithinLimit } from '../utils/plans';
+import { sendPlanDenial } from '../middleware/planGate';
 
 // Each org type's one "working" login role for a new team member — mirrors
 // organizationController.ts's ORG_OWNER_ROLE used at self-registration time.
@@ -41,6 +43,16 @@ const inviteMember = async (req: Request, res: Response, next: NextFunction): Pr
     if (!org) { res.status(404).json({ message: 'Organization not found' }); return; }
     const workingRole = ORG_WORKING_ROLE[org.org_type];
     if (!workingRole) { res.status(400).json({ message: 'Unsupported organization type' }); return; }
+
+    // Migration 014: the organisation's package caps its team. A hospital or
+    // clinic team member is a doctor, so it counts against the same panel
+    // limit as an accepted channeling request. Co-owners are not counted.
+    if (!is_owner) {
+      const found = await planForOrganization(orgId);
+      const key = org.org_type === 'hospital' || org.org_type === 'clinic' ? 'affiliated_doctors' : 'team_members';
+      const denial = found && await checkWithinLimit(found.subject, found.plan, key);
+      if (denial) { sendPlanDenial(res, denial); return; }
+    }
 
     const existingEmail = await client.query('SELECT id FROM public.users WHERE email = $1', [email]);
     if (existingEmail.rows.length) { res.status(409).json({ message: 'Email already in use' }); return; }

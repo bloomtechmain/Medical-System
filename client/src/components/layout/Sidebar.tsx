@@ -8,8 +8,10 @@ import {
   LayoutDashboard, Stethoscope, Activity,
   FolderOpen, Users, Pill, Truck, ShoppingCart, Receipt, BarChart2,
   ClipboardList, Microscope, LogOut, Settings, UserSearch, ShieldCheck, Building2,
-  CalendarClock, CalendarPlus,
+  CalendarClock, CalendarPlus, Package,
 } from 'lucide-react';
+import { useDashboardPlan } from '../../hooks/useDashboardPlan';
+import { featureForPath, DASHBOARD_AUDIENCE } from '../../constants/plans';
 
 // ── 4-dot logo mark ───────────────────────────────────────────────────────────
 function LogoMark() {
@@ -37,6 +39,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/admin',                labelKey: 'nav.dashboard',     icon: LayoutDashboard, exact: true },
     { to: '/admin/organizations',  labelKey: 'nav.organizations', icon: Building2 },
     { to: '/admin/users',          labelKey: 'nav.users',         icon: Users },
+    { to: '/admin/plans',          labelKey: 'nav.packages',      icon: Package },
     { to: '/admin/medicines',      labelKey: 'nav.medicines',     icon: Pill },
     { to: '/admin/suppliers',      labelKey: 'nav.suppliers',     icon: Truck },
     { to: '/admin/inventory',      labelKey: 'nav.inventory',     icon: BarChart2 },
@@ -126,7 +129,15 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const orgType = user?.organization?.org_type;
   const navKey  = orgType ? (ORG_NAV_KEY[orgType] ?? user?.role ?? '') : (user?.role ?? '');
-  const items   = NAV[navKey] || [];
+  // Migration 014: sections the dashboard's package does not include are
+  // left out of the menu (the route itself shows an upgrade notice if
+  // reached directly).
+  const { has } = useDashboardPlan(navKey);
+  const items   = (NAV[navKey] || []).filter(item => {
+    const feature = featureForPath(item.to);
+    return !feature || has(feature);
+  });
+  const hasPackage = !!DASHBOARD_AUDIENCE[navKey];
 
   // Fetch pending access-request counts for badge indicators
   const { data: accessRequests = [] } = useQuery({
@@ -273,6 +284,22 @@ export default function Sidebar() {
               {t('nav.team')}
             </span>
           </button>
+        )}
+
+        {/* Package — every dashboard that is sold as a package */}
+        {hasPackage && (
+          <NavLink
+            to={`/${navKey}/package`}
+            className={({ isActive }) => `flex items-center gap-3 rounded-2xl transition-all duration-150 overflow-hidden ${
+              isActive ? 'bg-white/[0.08] text-slate-100' : 'text-slate-500 hover:bg-white/[0.08] hover:text-slate-200'}`}
+          >
+            <span className="w-11 h-11 flex items-center justify-center shrink-0">
+              <Package size={19} strokeWidth={1.8} />
+            </span>
+            <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-75 pr-2">
+              {t('nav.package')}
+            </span>
+          </NavLink>
         )}
 
         {/* Settings */}

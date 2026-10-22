@@ -6,8 +6,10 @@ import { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Stethoscope, Activity, FolderOpen, Users, Pill,
   Truck, ShoppingCart, Receipt, BarChart2, ClipboardList, Microscope,
-  ShieldCheck, MoreHorizontal, X, LogOut, CalendarClock, CalendarPlus, Settings,
+  ShieldCheck, MoreHorizontal, X, LogOut, CalendarClock, CalendarPlus, Settings, Package,
 } from 'lucide-react';
+import { useDashboardPlan } from '../../hooks/useDashboardPlan';
+import { featureForPath } from '../../constants/plans';
 import { useAuth } from '../../context/AuthContext';
 import { accessRequestApi, labViewRequestApi, appointmentApi } from '../../services/api';
 
@@ -37,6 +39,7 @@ const TABS: Record<string, TabConfig> = {
     more: [
       { to: '/hospital/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
       { to: '/hospital/settings',     labelKey: 'navShort.settings',     icon: Settings },
+      { to: '/hospital/package', labelKey: 'navShort.package',      icon: Package },
     ],
   },
   clinic: {
@@ -49,6 +52,7 @@ const TABS: Record<string, TabConfig> = {
     more: [
       { to: '/clinic/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
       { to: '/clinic/settings',     labelKey: 'navShort.settings',     icon: Settings },
+      { to: '/clinic/package', labelKey: 'navShort.package',      icon: Package },
     ],
   },
   patient: {
@@ -75,6 +79,7 @@ const TABS: Record<string, TabConfig> = {
     more: [
       { to: '/doctor/appointments', labelKey: 'navShort.appointments', icon: CalendarClock, badge: 'apptRequests' },
       { to: '/doctor/settings',     labelKey: 'navShort.settings',     icon: Settings },
+      { to: '/doctor/package', labelKey: 'navShort.package',      icon: Package },
     ],
   },
   admin: {
@@ -88,6 +93,7 @@ const TABS: Record<string, TabConfig> = {
       { to: '/admin/suppliers', labelKey: 'navShort.suppliers', icon: Truck },
       { to: '/admin/sales',     labelKey: 'navShort.sales',     icon: Receipt },
       { to: '/admin/inventory', labelKey: 'navShort.inventory', icon: BarChart2 },
+      { to: '/admin/plans',     labelKey: 'navShort.packages',  icon: Package },
       { to: '/admin/settings',  labelKey: 'navShort.settings',  icon: Settings },
     ],
   },
@@ -103,6 +109,7 @@ const TABS: Record<string, TabConfig> = {
       { to: '/pharmacist/orders',    labelKey: 'navShort.orders',    icon: ShoppingCart },
       { to: '/pharmacist/inventory', labelKey: 'navShort.inventory', icon: BarChart2 },
       { to: '/pharmacist/settings',  labelKey: 'navShort.settings',  icon: Settings },
+      { to: '/pharmacist/package',   labelKey: 'navShort.package',   icon: Package },
     ],
   },
   laboratory: {
@@ -113,6 +120,7 @@ const TABS: Record<string, TabConfig> = {
     more: [
       { to: '/laboratory/catalog',  labelKey: 'navShort.catalog',  icon: Receipt },
       { to: '/laboratory/settings', labelKey: 'navShort.settings', icon: Settings },
+      { to: '/laboratory/package',  labelKey: 'navShort.package',  icon: Package },
     ],
   },
 };
@@ -233,7 +241,10 @@ export default function MobileBottomNav() {
   const orgType   = user?.organization?.org_type;
   const tabKey    = orgType && TABS[orgType] ? orgType : role;
   const tabConf   = TABS[tabKey] || TABS.patient;
-  const primary   = tabConf.primary;
+  // Migration 014: leave out sections the dashboard's package does not include.
+  const { has }   = useDashboardPlan(tabKey);
+  const allowed   = (item: NavItem) => { const f = featureForPath(item.to); return !f || has(f); };
+  const primary   = tabConf.primary.filter(allowed);
   // Team (member management) only applies to org dashboards, and only when this
   // user is the owner — user.organization is already owner-only, so its mere
   // presence is the owner check (mirrors Sidebar.tsx's desktop nav).
@@ -241,9 +252,9 @@ export default function MobileBottomNav() {
     hospital: '/hospital/team', clinic: '/clinic/team',
     pharmacist: '/pharmacist/team', laboratory: '/laboratory/team',
   };
-  const moreItems = teamRoute[tabKey] && user?.organization
+  const moreItems = (teamRoute[tabKey] && user?.organization
     ? [...tabConf.more, { to: teamRoute[tabKey], labelKey: 'navShort.team', icon: Users }]
-    : tabConf.more;
+    : tabConf.more).filter(allowed);
   const hasMore   = moreItems.length > 0;
 
   const isRequestsRole = role === 'patient' || role === 'doctor';

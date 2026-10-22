@@ -1,0 +1,179 @@
+{
+  "audience": {
+    "doctor": "Doctors",
+    "pharmacy": "Pharmacies",
+    "laboratory": "Laboratories",
+    "hospital": "Hospitals",
+    "clinic": "Clinics",
+    "patient": "Patients"
+  },
+  "audienceOne": {
+    "doctor": "Doctor",
+    "pharmacy": "Pharmacy",
+    "laboratory": "Laboratory",
+    "hospital": "Hospital",
+    "clinic": "Clinic"
+  },
+  "free": "Free",
+  "perMonth": "/ month",
+  "perYear": "{{price}} / year",
+  "unlimited": "Unlimited",
+  "included": "Included",
+  "notIncluded": "Not included",
+  "default": "Default",
+  "archived": "Archived",
+  "current": "Current package",
+  "recommended": "Most popular",
+  "usedOf": "{{used}} of {{limit}} used",
+  "usedUnlimited": "{{used}} used",
+  "picker": {
+    "title": "Choose your package",
+    "subtitle": "You can change your package later. Paid packages are activated by an administrator when your registration is approved.",
+    "loading": "Loading packages…",
+    "error": "Packages could not be loaded. You will start on the free package.",
+    "select": "Select",
+    "selected": "Selected",
+    "continue": "Continue with {{name}}"
+  },
+  "locked": {
+    "title": "{{feature}} is not in your package",
+    "body": "Your {{plan}} package does not include this. Upgrade your package to unlock it.",
+    "viewPackages": "View packages"
+  },
+  "my": {
+    "title": "My Package",
+    "subtitle": "What your package includes and how much of it you have used this month.",
+    "patientFree": "Everything is free for patients.",
+    "none": "This dashboard is not on a package.",
+    "features": "Features & limits",
+    "compare": "Available packages",
+    "request": "Request this package",
+    "requestSent": "Request sent",
+    "requestHint": "There is no online payment yet: an administrator will confirm the change and you will be notified.",
+    "ownerOnly": "Only the organization owner can request a package change.",
+    "dashboardOnly": "Shown or hidden on this dashboard"
+  },
+  "nav": {
+    "package": "Package",
+    "packages": "Packages"
+  },
+  "admin": {
+    "title": "Packages & Subscriptions",
+    "subtitle": "Define the packages for every dashboard, what each one includes, and who is on which package. Patients are always free.",
+    "tabPackages": "Packages",
+    "tabSubscribers": "Subscribers",
+    "newPackage": "New package",
+    "edit": "Edit",
+    "save": "Save package",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "makeDefault": "Make default",
+    "archive": "Archive",
+    "restore": "Restore",
+    "delete": "Delete",
+    "confirmDelete": "Delete the {{name}} package? This cannot be undone.",
+    "confirmDefault": "Make {{name}} the default package for new {{audience}}? Accounts on the current default stay on it.",
+    "subscribers": "{{count}} subscribers",
+    "fields": {
+      "name": "Name",
+      "code": "Code",
+      "codeHint": "Lowercase identifier, cannot be changed later",
+      "description": "Description",
+      "priceMonthly": "Monthly price",
+      "priceYearly": "Yearly price",
+      "currency": "Currency",
+      "sortOrder": "Display order",
+      "unlimited": "Unlimited"
+    },
+    "dashboardEnforced": "Hides this section of the dashboard",
+    "serverEnforced": "Enforced on every request",
+    "toast": {
+      "saved": "Package saved",
+      "created": "Package created",
+      "deleted": "Package deleted",
+      "defaultChanged": "Default package changed",
+      "assigned": "Package changed",
+      "failed": "Something went wrong"
+    },
+    "filters": {
+      "allTypes": "All dashboard types",
+      "allPackages": "All packages",
+      "allKinds": "Individuals & organizations",
+      "individuals": "Individual doctors",
+      "organizations": "Organizations",
+      "search": "Search name or email…"
+    },
+    "table": {
+      "account": "Account",
+      "type": "Dashboard",
+      "package": "Package",
+      "status": "Status",
+      "since": "Joined",
+      "changed": "Package changed",
+      "actions": "Change package",
+      "active": "Active",
+      "inactive": "Inactive",
+      "pending": "Pending approval",
+      "onDefault": "on default",
+      "empty": "No accounts match these filters.",
+      "showing": "Showing {{shown}} of {{total}}",
+      "loadMore": "Load more"
+    },
+    "assign": {
+      "title": "Change package — {{name}}",
+      "note": "Note (optional)",
+      "notePlaceholder": "e.g. Paid by bank transfer, ref 1234",
+      "confirm": "Change package",
+      "history": "Package history",
+      "noHistory": "No changes recorded yet.",
+      "registration": "chosen at registration",
+      "by": "by {{name}}",
+      "usage": "Current usage"
+    }
+  },
+  "summary": {
+    "title": "Packages",
+    "subtitle": "Who is on which package, per dashboard",
+    "manage": "Manage packages",
+    "estimated": "≈ {{amount}} / month at list price",
+    "patients": "{{count}} patients — always free"
+  },
+  "feature": {
+    "doctor": {
+      "consultations_per_month": "Consultations per month",
+      "appointments_per_month": "Confirmed appointments per month",
+      "online_booking": "Online appointment booking",
+      "patient_records_access": "Patient record access",
+      "lab_requests": "Lab test orders",
+      "lab_report_access": "Lab report requests",
+      "e_prescriptions": "E-prescriptions to pharmacies",
+      "hospital_affiliations": "Hospital / clinic affiliations"
+    },
+    "pharmacy": {
+      "medicines": "Medicines in catalogue",
+      "suppliers": "Suppliers",
+      "purchase_orders": "Purchase orders",
+      "sales_analytics": "Sales analytics",
+      "inventory_reports": "Inventory reports",
+      "team_members": "Team members"
+    },
+    "laboratory": {
+      "reports_per_month": "Reports per month",
+      "test_catalog": "Tests in catalogue",
+      "direct_reports": "Walk-in report uploads",
+      "team_members": "Team members"
+    },
+    "hospital": {
+      "affiliated_doctors": "Doctors on the panel",
+      "channeling": "Channeling & appointments",
+      "lab_requests": "Lab reports section",
+      "access_requests": "Patient access requests section"
+    },
+    "clinic": {
+      "affiliated_doctors": "Doctors on the panel",
+      "channeling": "Channeling & appointments",
+      "lab_requests": "Lab reports section",
+      "access_requests": "Patient access requests section"
+    }
+  }
+}

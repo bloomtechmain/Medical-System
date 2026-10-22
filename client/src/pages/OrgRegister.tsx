@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -7,6 +7,8 @@ import { useDebounce } from '../hooks/useDebounce';
 import OperatingHoursPicker from '../components/common/OperatingHoursPicker';
 import MultiSelectWithCustom from '../components/common/MultiSelectWithCustom';
 import { LEGAL_VERSION } from '../legal';
+import PlanPicker from '../components/plans/PlanPicker';
+import { Plan, PlanAudience } from '../types';
 
 interface OwnerCandidate {
   id: number;
@@ -99,15 +101,20 @@ const STEP3_TITLE: Record<string, string> = {
   laboratory: 'Laboratory Details',
 };
 
-const STEP_LABELS = ['Organization Type', 'Organization Details', 'Role Details', 'Owner Account'];
+const STEP_LABELS = ['Organization Type', 'Package', 'Organization Details', 'Role Details', 'Owner Account'];
+
+type Step = 1 | 2 | 3 | 4 | 5;
 
 export default function OrgRegister() {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<Step>(1);
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [orgSpecializations, setOrgSpecializations] = useState<string[]>([]);
   const [showPwd, setShowPwd] = useState(false);
+  // Migration 014: the package this organisation signs up for.
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const choosePlan = useCallback((p: Plan) => setPlan(p), []);
 
   const { register, handleSubmit, watch, setValue, trigger, formState: { errors } } = useForm();
   const password = watch('owner_password');
@@ -116,7 +123,7 @@ export default function OrgRegister() {
 
   const goNext = async (fields: string[]) => {
     const ok = await trigger(fields);
-    if (ok) setStep(s => (s + 1) as 1 | 2 | 3 | 4);
+    if (ok) setStep(s => (s + 1) as Step);
   };
 
   // Owner search — lets the form reuse an existing, already-approved user as
@@ -188,6 +195,7 @@ export default function OrgRegister() {
         profile: Object.keys(profile).length ? profile : undefined,
         specializations: orgSpecializations.length ? orgSpecializations : undefined,
         accepted_terms_version: LEGAL_VERSION,
+        plan_id:        plan?.id,
       });
 
       setDone(true);
@@ -257,7 +265,7 @@ export default function OrgRegister() {
         </div>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-4 py-10 pb-20">
+      <div className={`${step === 2 ? 'max-w-5xl' : 'max-w-2xl'} mx-auto px-4 py-10 pb-20`}>
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Register Your Organization</h1>
@@ -265,17 +273,17 @@ export default function OrgRegister() {
 
           {/* Step indicator */}
           <div className="flex items-center justify-center gap-2 mt-5">
-            {[1, 2, 3, 4].map(s => (
+            {[1, 2, 3, 4, 5].map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                   step >= s ? 'bg-teal-600 text-white' : 'bg-gray-200 text-gray-500'
                 }`}>{s}</div>
-                {s < 4 && <div className={`w-10 sm:w-14 h-0.5 transition-colors ${step > s ? 'bg-teal-600' : 'bg-gray-200'}`} />}
+                {s < 5 && <div className={`w-8 sm:w-12 h-0.5 transition-colors ${step > s ? 'bg-teal-600' : 'bg-gray-200'}`} />}
               </div>
             ))}
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            {`Step ${step} — ${step === 3 ? (STEP3_TITLE[selectedType] || STEP_LABELS[2]) : STEP_LABELS[step - 1]}`}
+            {`Step ${step} — ${step === 4 ? (STEP3_TITLE[selectedType] || STEP_LABELS[3]) : STEP_LABELS[step - 1]}`}
           </p>
         </div>
 
@@ -290,7 +298,7 @@ export default function OrgRegister() {
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => { setSelectedType(t.id); setOrgSpecializations([]); setStep(2); }}
+                  onClick={() => { setSelectedType(t.id); setOrgSpecializations([]); setPlan(null); setStep(2); }}
                   className={`group relative text-left p-6 rounded-2xl border-2 bg-white transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${t.color}`}
                 >
                   <svg className="absolute top-5 right-5 w-5 h-5 text-gray-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -313,12 +321,47 @@ export default function OrgRegister() {
           </div>
         )}
 
-        {/* Steps 2-4: Full form, one step shown at a time */}
-        {step >= 2 && (
+        {/* Step 2: Package — migration 014. Every organisation type is sold as a
+            package; the free one is preselected. */}
+        {step === 2 && selectedType && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                Back
+              </button>
+              {selectedTypeInfo && (
+                <span className={`text-xs px-3 py-1 rounded-full font-medium ${selectedTypeInfo.badge}`}>
+                  {selectedTypeInfo.icon} {selectedTypeInfo.label}
+                </span>
+              )}
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Choose a package for your {selectedTypeInfo?.label.toLowerCase()}</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Start free, or pick a package with more features. Paid packages are activated by an administrator when your registration is approved, and you can change package later.
+              </p>
+            </div>
+            <PlanPicker audience={selectedType as PlanAudience} value={plan?.id ?? null} onChange={choosePlan} />
+            <button
+              type="button"
+              disabled={!plan}
+              onClick={() => setStep(3)}
+              className="w-full py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-50"
+            >
+              {plan ? `Continue with ${plan.name}` : 'Continue'}
+            </button>
+          </div>
+        )}
+
+        {/* Steps 3-5: Full form, one step shown at a time */}
+        {step >= 3 && (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {/* Back + type badge */}
             <div className="flex items-center justify-between mb-1">
-              <button type="button" onClick={() => setStep(s => (s === 2 ? 1 : s - 1) as 1 | 2 | 3 | 4)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+              <button type="button" onClick={() => setStep(s => (s - 1) as Step)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
@@ -332,7 +375,7 @@ export default function OrgRegister() {
             </div>
 
             {/* Step 2: Organization details */}
-            {step === 2 && (
+            {step === 3 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Organization Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -369,7 +412,7 @@ export default function OrgRegister() {
             </div>
             )}
 
-            {step === 2 && (
+            {step === 3 && (
               <button type="button" onClick={() => goNext(['org_name', 'slug'])}
                 className="w-full py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors">
                 Continue
@@ -377,7 +420,7 @@ export default function OrgRegister() {
             )}
 
             {/* Step 3: Role-specific profile fields */}
-            {step === 3 && (
+            {step === 4 && (
             <>
             {(selectedType === 'hospital' || selectedType === 'clinic') && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -525,7 +568,7 @@ export default function OrgRegister() {
             )}
 
             {/* Step 4: Owner / Account */}
-            {step === 4 && (
+            {step === 5 && (
             <>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">

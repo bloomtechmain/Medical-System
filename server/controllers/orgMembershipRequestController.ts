@@ -4,6 +4,8 @@ import { logger } from '../config/logger';
 import { sendNotification } from '../utils/notify';
 import { audit, AuditAction } from '../utils/auditLog';
 import { applyWeeklySchedule, isValidScheduleBlock, ScheduleBlock } from './appointmentController';
+import { planForSubject, planForOrganization, checkWithinLimit, PlanSubject } from '../utils/plans';
+import { sendPlanDenial } from '../middleware/planGate';
 
 // The approval layer in front of organization_members for the doctor<->
 // hospital/clinic channeling relationship (migration 013). Two independent
@@ -68,6 +70,12 @@ const requestJoin = async (req: Request, res: Response, next: NextFunction): Pro
       [organization_id, req.user.id]
     );
     if (existing.length) { res.status(409).json({ message: 'You are already affiliated with that organization' }); return; }
+
+    // Migration 014: the doctor's package caps how many hospitals/clinics they
+    // channel at, pending requests included.
+    const doctor: PlanSubject = { kind: 'user', id: req.user.id, audience: 'doctor' };
+    const affiliationDenial = await checkWithinLimit(doctor, await planForSubject(doctor), 'hospital_affiliations');
+    if (affiliationDenial) { sendPlanDenial(res, affiliationDenial); return; }
 
     let request;
     try {
@@ -214,6 +222,14 @@ const respond = async (req: Request, res: Response, next: NextFunction): Promise
       if (!(await isOwnerOf(request.organization_id, req.user.id))) { res.status(403).json({ message: 'Only the organization owner can decide this request' }); return; }
     } else {
       if (req.user.id !== request.doctor_id) { res.status(403).json({ message: 'Only the affected doctor can decide this request' }); return; }
+    }
+
+    // Migration 014: accepting a doctor uses a place on the organisation's
+    // panel, which its package caps. Checked before anything is written.
+    if (decision === 'accept' && request.kind === 'join') {
+      const org = await planForOrganization(request.organization_id);
+      const denial = org && await checkWithinLimit(org.subject, org.plan, 'affiliated_doctors');
+      if (denial) { sendPlanDenial(res, denial); return; }
     }
 
     await client.query('BEGIN');
