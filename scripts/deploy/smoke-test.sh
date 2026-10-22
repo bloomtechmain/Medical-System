@@ -24,6 +24,26 @@ EMAIL="${SMOKE_TEST_EMAIL:-}"
 PASSWORD="${SMOKE_TEST_PASSWORD:-}"
 TIMEOUT="${SMOKE_TIMEOUT_SECONDS:-15}"
 
+# Staging's ALB has no real domain yet (infra/terraform/staging.tfvars has
+# domain_name = null), so its HTTPS listener is serving a self-signed
+# placeholder cert (CN=corehealth-system.local) rather than anything a public
+# CA signed. Every TLS-verifying client — this script included — fails the
+# handshake before a single HTTP response comes back, which is why a broken
+# deploy and a healthy one looked identical: both produced curl's connection
+# code "000", never a real status.
+#
+# SMOKE_INSECURE_TLS=true skips certificate verification so the checks below
+# can actually run against that placeholder cert. Set it ONLY on the staging
+# job (.github/workflows/deploy.yml) — never on production, which must keep
+# verifying TLS for real. Remove this once staging has a real domain_name and
+# a DNS-validated ACM certificate (see infra/terraform/variables.tf) and point
+# SMOKE_BASE_URL at that domain instead of the raw ALB hostname.
+CURL_TLS_OPTS=()
+if [ "${SMOKE_INSECURE_TLS:-false}" = "true" ]; then
+  CURL_TLS_OPTS=(--insecure)
+  echo "::warning::SMOKE_INSECURE_TLS=true — not verifying the TLS certificate. This must only be set for staging."
+fi
+
 pass() { echo "  PASS  $1"; }
 fail() { echo "  FAIL  $1" >&2; exit 1; }
 
@@ -36,7 +56,7 @@ echo "==> Smoke testing ${BASE}"
 echo "--> Readiness"
 DEADLINE=$(( $(date +%s) + ${SMOKE_READY_WAIT_SECONDS:-120} ))
 until [ "$(date +%s)" -ge "$DEADLINE" ]; do
-  CODE=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" "${BASE}/api/ready" 2>/dev/null || echo "000")
+  CODE=$(curl -fsS "${CURL_TLS_OPTS[@]}" -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" "${BASE}/api/ready" 2>/dev/null || echo "000")
   [ "$CODE" = "200" ] && break
   echo "    not ready yet (HTTP ${CODE}) — retrying"
   sleep 5
@@ -46,7 +66,7 @@ pass "/api/ready returns 200 (process up AND database reachable)"
 
 # ── 2. Liveness, and the headers that should be on every response ──────────
 echo "--> Liveness and security headers"
-HEADERS=$(curl -fsS -D - -o /dev/null --max-time "$TIMEOUT" "${BASE}/api/health")
+HEADERS=$(curl -fsS "${CURL_TLS_OPTS[@]}" -D - -o /dev/null --max-time "$TIMEOUT" "${BASE}/api/health")
 grep -qi '^x-request-id:' <<<"$HEADERS" \
   || fail "no x-request-id response header — the request logger (MON-06) is not mounted"
 pass "x-request-id present"
@@ -83,7 +103,7 @@ if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
 fi
 
 echo "--> Login"
-LOGIN_BODY=$(curl -sS --max-time "$TIMEOUT" \
+LOGIN_BODY=$(curl -sS "${CURL_TLS_OPTS[@]}" --max-time "$TIMEOUT" \
   -X POST "${BASE}/api/auth/login" \
   -H 'Content-Type: application/json' \
   -d "$(jq -nc --arg e "$EMAIL" --arg p "$PASSWORD" '{email:$e,password:$p}')")
@@ -97,7 +117,7 @@ fi
 pass "login returns a session token"
 
 echo "--> Authenticated read"
-ME=$(curl -fsS --max-time "$TIMEOUT" \
+ME=$(curl -fsS "${CURL_TLS_OPTS[@]}" --max-time "$TIMEOUT" \
   -H "Authorization: Bearer ${TOKEN}" \
   "${BASE}/api/auth/me")
 ME_EMAIL=$(jq -r '.email // empty' <<<"$ME")
@@ -109,7 +129,7 @@ pass "/api/auth/me returns the logged-in user"
 # A deploy that accidentally removed `protect` from a router would pass every
 # check above. This one would catch it.
 echo "--> Authorization"
-UNAUTH_CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" "${BASE}/api/users")
+UNAUTH_CODE=$(curl -sS "${CURL_TLS_OPTS[@]}" -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" "${BASE}/api/users")
 case "$UNAUTH_CODE" in
   401|403) pass "unauthenticated /api/users is rejected (${UNAUTH_CODE})" ;;
   *)       fail "unauthenticated /api/users returned ${UNAUTH_CODE} — authentication may not be enforced" ;;
