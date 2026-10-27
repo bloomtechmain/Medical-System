@@ -10,6 +10,7 @@ import { formatDate } from '../utils/helpers';
 import { FlaskConical, Upload, Eye, X, ChevronDown, ChevronUp, Search, Send, Plus, Stethoscope, Download, Beaker, XCircle, MessageCircle, Banknote } from 'lucide-react';
 import { SERVER_ORIGIN } from '../env';
 import ChatPanel from '../components/common/ChatPanel';
+import { useDashboardPlan } from '../hooks/useDashboardPlan';
 
 const API_BASE = SERVER_ORIGIN || 'http://localhost:5000';
 
@@ -1023,13 +1024,18 @@ export default function LaboratoryReports() {
     queryFn:  labApi.getAll,
   });
 
+  // Migration 014: sending a report without a request ("walk-in") is a
+  // package feature; the server refuses it otherwise, so do not offer it.
+  const { has } = useDashboardPlan('laboratory');
+  const canSendDirect = has('direct_reports');
+
   // Dashboard "New Report" quick action navigates here with this flag
   useEffect(() => {
     if ((location.state as any)?.openNewReport) {
-      setSending(true);
+      if (canSendDirect) setSending(true);
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, location.pathname, navigate]);
+  }, [location.state, location.pathname, navigate, canSendDirect]);
 
   const openUpload = async (id: number) => {
     try { setUploading(await labApi.getOne(id)); }
@@ -1056,11 +1062,13 @@ export default function LaboratoryReports() {
           <p className="text-sm text-gray-500 mt-0.5">{t('reports.page.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {canSendDirect && (
           <button onClick={() => setSending(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl shadow-sm hover:opacity-90 transition-opacity">
             <Plus size={15} strokeWidth={2.5} />
             {t('reports.page.newReportButton')}
           </button>
+          )}
           <button onClick={() => exportReportsCSV(
               filtered as any[],
               [t('reports.csv.patient'), t('reports.csv.doctor'), t('reports.csv.reportType'), tc('fields.status'), t('reports.csv.sampleId'), t('reports.csv.sampleCollected'), t('reports.csv.requested'), t('reports.csv.tests')],

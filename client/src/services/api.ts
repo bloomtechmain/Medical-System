@@ -304,3 +304,23 @@ export const userApi = {
   remove:              (id: number): Promise<any>                => api.delete(`/users/${id}`),
   getStats:            (): Promise<any>                          => api.get('/users/stats'),
 };
+
+// Subscription packages (migration 014). `public` is unauthenticated — the
+// registration pages use it before an account exists.
+export const planApi = {
+  listPublic:    (audience: string): Promise<any>                => api.get('/plans/public', { params: { audience } }),
+  mine:          (organization_id?: number | null): Promise<any> => api.get('/plans/me', { params: organization_id ? { organization_id } : {} }),
+  requestChange: (data: { plan_id: number; organization_id?: number | null; message?: string }): Promise<any> => api.post('/plans/me/request-change', data),
+  // Admin
+  catalog:       (): Promise<any>                                 => api.get('/plans/catalog'),
+  listAll:       (): Promise<any>                                 => api.get('/plans'),
+  summary:       (): Promise<any>                                 => api.get('/plans/summary'),
+  create:        (data: unknown): Promise<any>                    => api.post('/plans', data),
+  update:        (id: number, data: unknown): Promise<any>        => api.put(`/plans/${id}`, data),
+  makeDefault:   (id: number): Promise<any>                       => api.post(`/plans/${id}/default`),
+  remove:        (id: number): Promise<any>                       => api.delete(`/plans/${id}`),
+  subscribers:   (params: Record<string, unknown>): Promise<any>  => api.get('/plans/subscribers', { params }),
+  assign:        (kind: string, id: number, data: { plan_id: number; note?: string }): Promise<any> => api.put(`/plans/subscribers/${kind}/${id}`, data),
+  history:       (kind: string, id: number): Promise<any>         => api.get(`/plans/subscribers/${kind}/${id}/history`),
+  usage:         (kind: string, id: number): Promise<any>         => api.get(`/plans/subscribers/${kind}/${id}/usage`),
+};

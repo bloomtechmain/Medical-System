@@ -22,6 +22,8 @@ router.post('/register',
     // COMP-02: a version string, not free text — bounded so it cannot be used
     // to write arbitrary content into the users table.
     body('accepted_terms_version').optional({ nullable: true }).isString().isLength({ max: 40 }),
+    // Migration 014: the package chosen at sign-up. Omitted = the free default.
+    body('plan_id').optional({ nullable: true }).isInt({ min: 1 }).toInt(),
   ],
   validate,
   register

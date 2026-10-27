@@ -111,7 +111,9 @@
     "patientInformation": "Patient Information",
     "settings": "Settings",
     "team": "Team",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "package": "Package",
+    "packages": "Packages"
   },
   "navShort": {
     "home": "Home",
@@ -136,7 +138,9 @@
     "more": "More",
     "settings": "Settings",
     "team": "Team",
-    "signOut": "Sign Out"
+    "signOut": "Sign Out",
+    "package": "Package",
+    "packages": "Packages"
   },
   "roleLabels": {
     "adminPanel": "Admin Panel",
@@ -160,8 +164,29 @@
     "mySchedule": "My Schedule",
     "today": "Today",
     "visit": "Visit",
-    "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    "days": [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat",
+      "Sun"
+    ],
+    "months": [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ]
   },
   "header": {
     "greetingPrefix": "Hello,",

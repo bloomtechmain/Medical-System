@@ -1,6 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, RLSActor } from '../config/db';
 import { sendNotification } from '../utils/notify';
+import { planForSubject, checkWithinLimit, PlanSubject } from '../utils/plans';
+import { sendPlanDenial } from '../middleware/planGate';
+
+// Migration 014: the doctor's personal package governs their bookings.
+const doctorSubject = (doctorId: number): PlanSubject => ({ kind: 'user', id: doctorId, audience: 'doctor' });
+
+// A doctor whose package does not include online booking has no bookable
+// slots, even if weekly hours were saved while they were on a package that
+// did. This is the doctor not offering bookings — patients are not limited.
+const acceptsOnlineBooking = async (doctorId: number): Promise<boolean> => {
+  const plan = await planForSubject(doctorSubject(doctorId));
+  return !plan || plan.features.online_booking === true;
+};
 
 // clinical.doctor_weekly_availability / doctor_availability_overrides /
 // doctor_appointments all live behind row-level security — every query
@@ -143,6 +156,7 @@ const getDoctorSlots = async (req: Request, res: Response, next: NextFunction): 
 
     const { rows: dr } = await pool.query("SELECT id FROM users WHERE id=$1 AND role='doctor'", [doctorId]);
     if (!dr.length) { res.status(404).json({ message: 'Doctor not found' }); return; }
+    if (!(await acceptsOnlineBooking(doctorId))) { res.json({ days: [], online_booking: false }); return; }
 
     const availableDays = await computeAvailableSlots(doctorId, organizationId, days);
     res.json({ days: availableDays });
@@ -313,6 +327,10 @@ const createAppointment = async (req: Request, res: Response, next: NextFunction
 
     const { rows: dr } = await pool.query("SELECT id, name FROM users WHERE id=$1 AND role='doctor'", [doctor_id]);
     if (!dr.length) { res.status(404).json({ message: 'Doctor not found' }); return; }
+    if (!(await acceptsOnlineBooking(doctor_id))) {
+      res.status(409).json({ code: 'DOCTOR_NOT_BOOKABLE', message: `Dr. ${dr[0].name} is not taking online bookings at the moment.` });
+      return;
+    }
 
     if (orgId !== null) {
       const { rows: member } = await pool.query(
@@ -404,6 +422,15 @@ const updateStatus = async (req: Request, res: Response, next: NextFunction): Pr
     const allowedNext = ALLOWED_TRANSITIONS[role]?.[appt.status] || [];
     if (!status || !allowedNext.includes(status)) {
       res.status(400).json({ message: `Cannot change status from ${appt.status} to ${status}` }); return;
+    }
+
+    // Migration 014: confirming is what uses up the doctor's monthly
+    // appointment allowance — a patient's request never does, so patients
+    // can always ask.
+    if (role === 'doctor' && status === 'confirmed') {
+      const subject = doctorSubject(id);
+      const denial = await checkWithinLimit(subject, await planForSubject(subject), 'appointments_per_month');
+      if (denial) { sendPlanDenial(res, denial); return; }
     }
 
     const respondedNow = ['confirmed', 'declined'].includes(status);

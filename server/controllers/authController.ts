@@ -10,6 +10,9 @@ import { audit, AuditAction } from '../utils/auditLog';
 import { isEnabled } from '../config/featureFlags';
 import { logger } from '../config/logger';
 import { DbUser } from '../types';
+import { audienceForRole } from '../config/planCatalog';
+import { resolveRegistrationPlan, effectivePlanForUser, toPlan, Plan } from '../utils/plans';
+import { recordRegistrationPlan } from './planController';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
 const REFRESH_TOKEN_DAYS = 7;
@@ -61,11 +64,19 @@ const issueRefreshToken = async (userId: number): Promise<string> => {
 // Returned as a list so the client can offer a choice and a switcher. Kept as
 // `organization` (the first owned org) as well, for the existing callers that
 // read user.organization — removing that is a separate change.
+//
+// Migration 014: each membership carries its organisation's package (or the
+// default one when none is set), so the client can decide which sections of
+// that dashboard to show without a request per screen. The server still
+// enforces the package on every gated request; this is only for display.
 const getMembershipsForUser = async (userId: number) => {
   const { rows } = await pool.query(`
-    SELECT o.id, o.name, o.org_type, o.slug, o.is_active, om.member_role
+    SELECT o.id, o.name, o.org_type, o.slug, o.is_active, om.member_role,
+           to_jsonb(p) AS plan_row
     FROM public.organizations o
     JOIN public.organization_members om ON om.organization_id = o.id
+    LEFT JOIN public.plans d ON d.audience = o.org_type AND d.is_default
+    LEFT JOIN public.plans p ON p.id = COALESCE(o.plan_id, d.id)
     WHERE om.user_id = $1
       -- A suspended organisation must not appear as somewhere to log in to.
       AND o.is_active = TRUE
@@ -75,8 +86,13 @@ const getMembershipsForUser = async (userId: number) => {
       CASE WHEN om.member_role = 'owner' THEN 0 ELSE 1 END,
       o.name
   `, [userId]);
-  return rows;
+  return rows.map(({ plan_row, ...m }) => ({ ...m, plan: plan_row ? toPlan(plan_row) : null }));
 };
+
+// The package for the user's own (role) dashboard. null for patients and
+// admins, who are never on a package.
+const personalPlan = async (user: { id: number; role: string }): Promise<Plan | null> =>
+  (await effectivePlanForUser(user))?.plan ?? null;
 
 const getOrgForUser = async (userId: number) => {
   const memberships = await getMembershipsForUser(userId);
@@ -173,15 +189,36 @@ const createProfile = async (
 const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const client = await pool.connect();
   try {
-    const { name, email, password, role, profile, hospital_organization_ids, accepted_terms_version } = req.body as {
+    const { name, email, password, role, profile, hospital_organization_ids, accepted_terms_version, plan_id } = req.body as {
       name: string; email: string; password: string; role: string; profile?: Record<string, any>;
-      hospital_organization_ids?: number[]; accepted_terms_version?: string;
+      hospital_organization_ids?: number[]; accepted_terms_version?: string; plan_id?: number;
     };
 
     const existing = await client.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length) {
       res.status(409).json({ message: 'Email already in use' });
       return;
+    }
+
+    // Migration 014: a professional picks a package at sign-up (none chosen =
+    // the free default). Patients have no package — everything is free for
+    // them — so plan_id is ignored for a patient rather than rejected.
+    const audience = audienceForRole(role);
+    let plan: Plan | null = null;
+    if (audience) {
+      const chosen = await resolveRegistrationPlan(audience, plan_id);
+      if ('error' in chosen) { res.status(400).json({ message: chosen.error }); return; }
+      plan = chosen.plan;
+      const affiliationLimit = plan?.features.hospital_affiliations;
+      if (role === 'doctor' && typeof affiliationLimit === 'number'
+          && Array.isArray(hospital_organization_ids) && hospital_organization_ids.length > affiliationLimit) {
+        res.status(400).json({
+          code: 'PLAN_LIMIT_REACHED',
+          feature: 'hospital_affiliations',
+          message: `The ${plan?.name} package allows ${affiliationLimit} hospital/clinic affiliation(s). Remove some, or choose a bigger package.`,
+        });
+        return;
+      }
     }
 
     await client.query('BEGIN');
@@ -208,10 +245,10 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
       // they agreed to" is the truth for anyone who registered before the
       // documents existed, and inventing a value would destroy that.
       ({ rows: [user] } = await client.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role'> & { is_active: boolean }>(
-        `INSERT INTO users (name, email, password, role, is_active, accepted_terms_version, accepted_terms_at)
-         VALUES ($1,$2,$3,$4,$5,$6, CASE WHEN $6::varchar IS NULL THEN NULL ELSE NOW() END)
+        `INSERT INTO users (name, email, password, role, is_active, accepted_terms_version, accepted_terms_at, plan_id)
+         VALUES ($1,$2,$3,$4,$5,$6, CASE WHEN $6::varchar IS NULL THEN NULL ELSE NOW() END, $7)
          RETURNING id, name, email, role, is_active`,
-        [name, email, hash, role, !requiresApproval, accepted_terms_version || null]
+        [name, email, hash, role, !requiresApproval, accepted_terms_version || null, plan?.id ?? null]
       ));
     } catch (err) {
       if ((err as { code?: string }).code === '23505') {
@@ -232,6 +269,7 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     );
 
     if (profile) await createProfile(client, role, user.id, profile);
+    if (plan) await recordRegistrationPlan(client, { userId: user.id }, plan.id);
 
     // A doctor can self-register already affiliated with 0+ existing hospitals/
     // clinics (more can be added later from Settings) — just membership rows,
@@ -430,6 +468,7 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
 
     const memberships = await getMembershipsForUser(user.id);
     const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
+    const plan = await personalPlan(user);
     const { password: _, mfa_secret: __, ...safeUser } = user;
     audit(req, {
       action: AuditAction.LOGIN_SUCCESS,
@@ -438,7 +477,7 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
       actorRole: user.role,
       metadata: { mfa: false },
     });
-    res.json({ user: { ...safeUser, organization, memberships }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+    res.json({ user: { ...safeUser, organization, memberships, plan }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
@@ -482,6 +521,7 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
 
     const memberships = await getMembershipsForUser(user.id);
     const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
+    const plan = await personalPlan(user);
     const { password: _, mfa_secret: __, ...safeUser } = user;
     audit(req, {
       action: AuditAction.LOGIN_SUCCESS,
@@ -490,7 +530,7 @@ const mfaLogin = async (req: Request, res: Response, next: NextFunction): Promis
       actorRole: user.role,
       metadata: { mfa: true },
     });
-    res.json({ user: { ...safeUser, organization, memberships }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
+    res.json({ user: { ...safeUser, organization, memberships, plan }, token: generateToken(user), refreshToken: await issueRefreshToken(user.id) });
   } catch (err) {
     next(err);
   }
@@ -578,7 +618,7 @@ const getMe = async (req: Request, res: Response, next: NextFunction): Promise<v
     // dashboard switcher until the next sign-in.
     const memberships = await getMembershipsForUser(req.user.id);
     const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
-    res.json({ ...user, profile, organization, memberships });
+    res.json({ ...user, profile, organization, memberships, plan: await personalPlan(user) });
   } catch (err) {
     next(err);
   }

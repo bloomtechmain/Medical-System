@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -7,6 +7,9 @@ import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 import HospitalSearchAdd from '../components/common/HospitalSearchAdd';
 import { LEGAL_VERSION } from '../legal';
+import { Building2, X } from 'lucide-react';
+import PlanPicker from '../components/plans/PlanPicker';
+import { Plan } from '../types';
 import { ArrowRight, Building2, Check, X } from 'lucide-react';
 import AuthShell from '../components/landing/AuthShell';
 import { roleById } from '../components/landing/roles';
@@ -44,6 +47,11 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [hospitals, setHospitals] = useState<any[]>([]);
+  // Migration 014: the package a doctor signs up for. Patients have none —
+  // everything is free for them — so they skip that step entirely.
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const choosePlan = useCallback((p: Plan) => setPlan(p), []);
+  const steps = selectedRole === 'doctor' ? [1, 2, 3] : [1, 3];
   const { register, handleSubmit, watch, formState: { errors } } = useForm();
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -64,7 +72,8 @@ export default function Register() {
       // COMP-02: send which version of the terms/privacy policy was on screen,
       // so there is a record of what this person actually agreed to rather
       // than just that they clicked a button at some point.
-      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids, accepted_terms_version: LEGAL_VERSION }) as unknown as { user: User; token?: string; refreshToken?: string; pending?: boolean; message?: string };
+      const plan_id = selectedRole === 'doctor' ? plan?.id : undefined;
+      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids, plan_id, accepted_terms_version: LEGAL_VERSION }) as unknown as { user: User; token?: string; refreshToken?: string; pending?: boolean; message?: string };
       if (res.pending || !res.token) {
         toast.success(res.message || 'Account created — pending admin approval.', { duration: 6000 });
         navigate('/login');
@@ -103,7 +112,9 @@ export default function Register() {
           <p className="text-sm font-semibold text-suwela-slate mt-3">
             {step === 1
               ? 'Choose your account type'
-              : selectedRole === 'patient'
+              : step === 2
+                ? 'Choose your package'
+                : selectedRole === 'patient'
                 ? 'Create your account'
                 : `Complete your ${selectedRole} profile`}
           </p>
@@ -168,15 +179,45 @@ export default function Register() {
           </div>
         )}
 
-        {/* Step 2: Registration form */}
-        {step === 2 && (
+        {/* Step 2 (doctors only): package */}
+        {step === 2 && selectedRole === 'doctor' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                ← Back
+              </button>
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Choose your package</h2>
+              <p className="text-gray-500 text-sm mt-1">
+                Start free, or pick a package with more features. Paid packages are activated by an administrator when your registration is approved, and you can change package later.
+              </p>
+            </div>
+            <PlanPicker audience="doctor" value={plan?.id ?? null} onChange={choosePlan} />
+            <button type="button" className="btn-primary w-full py-2.5" disabled={!plan} onClick={() => setStep(3)}>
+              {plan ? `Continue with ${plan.name}` : 'Continue'}
+            </button>
+          </div>
+        )}
+
+        {/* Step 3: Registration form */}
+        {step === 3 && (
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="sw-rise bg-white rounded-[32px] shadow-[0_24px_60px_-34px_rgba(14,44,82,0.5)] p-6 sm:p-9 space-y-6">
               {/* Back button + role badge */}
               <div className="flex items-center justify-between">
-                <button type="button" onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                <button type="button" onClick={() => setStep(selectedRole === 'doctor' ? 2 : 1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
                   ← Back
                 </button>
+                {selectedRole === 'doctor' && plan && (
+                  <button type="button" onClick={() => setStep(2)} className="text-xs px-3 py-1 rounded-full font-medium bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100">
+                    📦 {plan.name} package · change
+                  </button>
+                )}
+                <span className={`text-xs px-3 py-1 rounded-full font-medium ${
+                  ROLES.find(r => r.id === selectedRole)?.badge
+                }`}>
+                  {ROLES.find(r => r.id === selectedRole)?.icon} Registering as {selectedRole}
                 <span className="inline-flex items-center gap-2 text-sm pl-1.5 pr-4 py-1.5 rounded-full font-semibold text-white" style={{ backgroundColor: roleMeta.color }}>
                   <span className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center"><roleMeta.icon className="w-4 h-4" /></span>
                   Registering as {selectedRole}

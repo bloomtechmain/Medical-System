@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import { getAll, getOne, create, update, adjustStock, remove } from '../controllers/medicineController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
+import { requireWithinLimit } from '../middleware/planGate';
 
 const router = Router();
 
@@ -27,7 +28,7 @@ const updateValidators = [...writeValidators, body('is_active').optional().isBoo
 
 router.get('/', getAll);
 router.get('/:id', getOne);
-router.post('/', authorize('admin', 'pharmacist'), createValidators, validate, create);
+router.post('/', authorize('admin', 'pharmacist'), requireWithinLimit('medicines'), createValidators, validate, create);
 router.put('/:id', authorize('admin', 'pharmacist'), updateValidators, validate, update);
 router.patch('/:id/stock', authorize('admin', 'pharmacist'),
   [body('delta').isInt().withMessage('delta must be an integer')], validate, adjustStock);

@@ -20,11 +20,20 @@ const getAll = async (req: Request, res: Response, next: NextFunction): Promise<
     const { role } = req.query as Record<string, string | undefined>;
     const { limit, offset } = parsePaging(req.query as Record<string, string | undefined>);
 
-    let query = 'SELECT id, name, email, role, is_active, created_at FROM users WHERE deleted_at IS NULL';
+    // Migration 014: a doctor's package is shown alongside them. Pharmacist
+    // and laboratory accounts are covered by their organisation's package,
+    // which the Organizations and Packages pages show, so it is not repeated
+    // per staff member here.
+    let query = `SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at,
+                        p.id AS plan_id, p.name AS plan_name, p.code AS plan_code
+                   FROM users u
+                   LEFT JOIN public.plans d ON u.role = 'doctor' AND d.audience = 'doctor' AND d.is_default
+                   LEFT JOIN public.plans p ON u.role = 'doctor' AND p.id = COALESCE(u.plan_id, d.id)
+                  WHERE u.deleted_at IS NULL`;
     const params: unknown[] = [];
-    if (role) { params.push(role); query += ` AND role = $${params.length}`; }
+    if (role) { params.push(role); query += ` AND u.role = $${params.length}`; }
     params.push(limit, offset);
-    query += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    query += ` ORDER BY u.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) { next(err); }
@@ -366,7 +375,12 @@ const listPendingApprovals = async (_req: Request, res: Response, next: NextFunc
               lp.license_number AS lab_license, lp.lab_name,
               o.id   AS organization_id,
               o.name AS organization_name,
-              o.org_type
+              o.org_type,
+              -- Migration 014: the package they chose at sign-up — the
+              -- organisation's for an owner, their own for a doctor.
+              COALESCE(op.name, up.name) AS plan_name,
+              COALESCE(op.price_monthly, up.price_monthly)::float AS plan_price_monthly,
+              COALESCE(op.currency, up.currency) AS plan_currency
          FROM public.users u
          LEFT JOIN public.doctor_profiles     dp ON dp.user_id = u.id
          LEFT JOIN public.pharmacist_profiles pp ON pp.user_id = u.id
@@ -376,6 +390,8 @@ const listPendingApprovals = async (_req: Request, res: Response, next: NextFunc
          LEFT JOIN public.organization_members om
                 ON om.user_id = u.id AND om.member_role = 'owner'
          LEFT JOIN public.organizations o ON o.id = om.organization_id
+         LEFT JOIN public.plans op ON op.id = o.plan_id
+         LEFT JOIN public.plans up ON up.id = u.plan_id
         WHERE u.is_active = FALSE
           AND u.approved_at IS NULL
           AND u.deleted_at IS NULL

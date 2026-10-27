@@ -39,6 +39,10 @@ export const AuditAction = {
   ORG_LEFT: 'org_membership.left',
   ORG_REMOVAL_REQUESTED: 'org_membership.removal_requested',
   ORG_REMOVAL_DECIDED: 'org_membership.removal_decided',
+  PLAN_CREATED: 'plan.created',
+  PLAN_UPDATED: 'plan.updated',
+  PLAN_DELETED: 'plan.deleted',
+  PLAN_ASSIGNED: 'plan.assigned',
 } as const;
 
 export type AuditActionName = (typeof AuditAction)[keyof typeof AuditAction];

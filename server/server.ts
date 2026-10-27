@@ -161,6 +161,8 @@ const registerOrgValidators = [
   // COMP-02: a version string, not free text — bounded so it cannot be used
   // to write arbitrary content into the users table.
   body('accepted_terms_version').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  // Migration 014: the package chosen at sign-up. Omitted = the free default.
+  body('plan_id').optional({ nullable: true }).isInt({ min: 1 }).toInt(),
 ];
 import organizationTeamRoutes from './routes/organizationTeamRoutes';
 import authRoutes            from './routes/authRoutes';
@@ -185,6 +187,7 @@ import dataExportRoutes     from './routes/dataExportRoutes';
 import healthReportRoutes   from './routes/healthReportRoutes';
 import prescriptionAssignmentRoutes from './routes/prescriptionAssignmentRoutes';
 import orgMembershipRequestRoutes from './routes/orgMembershipRequestRoutes';
+import planRoutes            from './routes/planRoutes';
 
 app.use('/api/auth',              authRoutes);
 app.use('/api/users',             userRoutes);
@@ -207,6 +210,7 @@ app.use('/api/data-export',       dataExportRoutes);
 app.use('/api/health-report',     healthReportRoutes);
 app.use('/api/prescription-assignments', prescriptionAssignmentRoutes);
 app.use('/api/org-membership-requests', orgMembershipRequestRoutes);
+app.use('/api/plans',             planRoutes);
 // Public self-registration — mounted before the admin-gated organizations router
 // so it is never touched by the protect/authorize middleware.
 // PRO-06 point 5 / PRO-10: public self-registration had no checks on email
