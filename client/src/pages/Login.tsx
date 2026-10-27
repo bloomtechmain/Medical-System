@@ -33,10 +33,13 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const goToRoleHome = (user: User) => {
-    const routes: Record<string, string> = { admin: '/admin', doctor: '/doctor', pharmacist: '/pharmacist', patient: '/patient', laboratory: '/laboratory' };
-    navigate(routes[user.role] || '/');
-  };
+  // '/' always renders <RoleHome>, now the single place that knows both
+  // which dashboard a role/org-context combination resolves to AND, under
+  // the three-subdomain split, which zone that dashboard actually lives on
+  // (src/utils/zones.ts) — so login no longer needs its own copy of the
+  // role-to-path table, which only ever pointed at a role's default
+  // dashboard and ignored organisation ownership (see App.tsx RoleHome).
+  const goToRoleHome = (_user: User) => navigate('/', { replace: true });
 
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);

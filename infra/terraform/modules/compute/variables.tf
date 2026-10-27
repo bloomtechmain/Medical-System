@@ -96,8 +96,14 @@ variable "jwt_secret_arn" {
 }
 
 variable "client_url" {
-  description = "The frontend's public URL (CloudFront, once modules/edge exists) — required by the server's ARCH-04 production CORS check. No default: must be supplied once that exists."
+  description = "The frontend's public URL (CloudFront, once modules/edge exists) — required by the server's ARCH-04 production CORS check. No default: must be supplied once that exists. Under the three-subdomain split (docs/decisions/0006-three-domain-split.md) this is always the site zone, e.g. https://www.suwela.com — see extra_cors_origins for the other two."
   type        = string
+}
+
+variable "extra_cors_origins" {
+  description = "Comma-separated additional CORS origins — the app./dashboard. zones under the three-subdomain split. Null (default) adds nothing, same CORS behavior as before the split existed."
+  type        = string
+  default     = null
 }
 
 variable "acm_certificate_arn" {

@@ -31,7 +31,7 @@ module "edge" {
   source = "./modules/edge"
 
   environment         = var.environment
-  domain_name         = var.domain_name
+  domain_names        = var.domain_names
   hosted_zone_id      = var.hosted_zone_id
   acm_certificate_arn = var.cloudfront_acm_certificate_arn
 }
@@ -68,11 +68,12 @@ module "compute" {
   jwt_secret_arn        = aws_secretsmanager_secret.jwt.arn
   uploads_bucket_name   = module.edge.uploads_bucket_name
 
-  # Auto-derived from modules/edge — a custom domain if one's configured,
+  # Auto-derived — the site zone's custom domain if one's configured,
   # otherwise CloudFront's own default URL. No manual "fill this in later"
   # step needed (unlike alb_acm_certificate_arn below, which genuinely can't
   # be automated — it has to be requested in the AWS account first).
-  client_url = var.domain_name != null ? "https://${var.domain_name}" : "https://${module.edge.cloudfront_domain_name}"
+  client_url         = var.site_domain_name != null ? "https://${var.site_domain_name}" : "https://${module.edge.cloudfront_domain_name}"
+  extra_cors_origins = var.extra_cors_origins
 
   acm_certificate_arn = var.alb_acm_certificate_arn
 

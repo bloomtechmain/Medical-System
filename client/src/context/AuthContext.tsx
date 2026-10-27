@@ -2,8 +2,21 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 import { User } from '../types';
 import { authApi } from '../services/api';
 import { clearActiveContextKey } from '../constants/dashboards';
+import { consumeAuthHandoff } from '../utils/authHandoff';
 
 const ADMIN_SESSION_KEY = 'admin_session';
+
+// Runs once, at module load — before AuthProvider's first render, so the
+// useState initializers below see a freshly-written localStorage rather than
+// racing a useEffect and flashing "logged out" for one frame. See
+// src/utils/authHandoff.ts for why the session arrives this way at all.
+const handoff = consumeAuthHandoff();
+if (handoff?.token) {
+  localStorage.setItem('token', handoff.token);
+  localStorage.setItem('user', JSON.stringify(handoff.user));
+  if (handoff.refreshToken) localStorage.setItem('refreshToken', handoff.refreshToken);
+  else localStorage.removeItem('refreshToken');
+}
 
 interface AuthContextValue {
   token: string | null;

@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { ReactNode, Suspense, lazy } from 'react';
+import { ReactNode, Suspense, lazy, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 import Layout from './components/layout/Layout';
@@ -7,6 +7,8 @@ import TermsGate from './components/common/TermsGate';
 import { dashboardContexts, resolveActiveContext } from './constants/dashboards';
 import RequireFeature from './components/plans/RequireFeature';
 import BrandLoader from './components/common/BrandLoader';
+import { currentZone, zoneForPath, zoneOrigin } from './utils/zones';
+import { withAuthHandoff } from './utils/authHandoff';
 
 // PERF-10: every page was a static import, so the client shipped as one
 // ~2 MB bundle regardless of role — a patient's browser downloaded the
@@ -68,6 +70,33 @@ const AdminPlans            = lazy(() => import('./pages/AdminPlans'));
 
 const RouteFallback = BrandLoader;
 
+// The three-subdomain split (docs/decisions/0006-three-domain-split.md): a
+// route can belong to a different zone than the one it's currently being
+// rendered under (e.g. /admin loaded on app.suwela.com after a stale
+// bookmark). zoneForPath/currentZone decide whether `path` is reachable here
+// as-is (ordinary same-origin <Navigate>) or needs a real cross-origin
+// redirect, carrying the session with it — see CrossZoneRedirect below.
+const goTo = (path: string) => {
+  const zone = zoneForPath(path);
+  const here = currentZone();
+  if (here === null || here === zone) return <Navigate to={path} replace />;
+  return <CrossZoneRedirect path={path} />;
+};
+
+const CrossZoneRedirect = ({ path }: { path: string }) => {
+  const { token, user } = useAuth();
+  useEffect(() => {
+    const origin = zoneOrigin(zoneForPath(path));
+    if (!origin) return; // zones misconfigured — nothing sane to do, stay put
+    const target = `${origin}${path}`;
+    const url = token && user
+      ? withAuthHandoff(target, { token, user, refreshToken: localStorage.getItem('refreshToken') || undefined })
+      : target;
+    window.location.replace(url);
+  }, [path, token, user]);
+  return <RouteFallback />;
+};
+
 interface PrivateRouteProps {
   children: ReactNode;
   roles?: UserRole[];
@@ -76,7 +105,7 @@ interface PrivateRouteProps {
 const PrivateRoute = ({ children, roles }: PrivateRouteProps) => {
   const { user, token } = useAuth();
   const location = useLocation();
-  if (!token || !user) return <Navigate to="/login" replace />;
+  if (!token || !user) return goTo('/login');
 
   if (roles && !roles.includes(user.role as UserRole)) {
     // Requirement 1: a guard on role alone locks an organisation owner out of
@@ -92,7 +121,7 @@ const PrivateRoute = ({ children, roles }: PrivateRouteProps) => {
     // screen the client will render.
     const base = '/' + (location.pathname.split('/')[1] ?? '');
     const viaOrg = dashboardContexts(user).some(c => c.kind === 'org' && c.path === base);
-    if (!viaOrg) return <Navigate to="/" replace />;
+    if (!viaOrg) return goTo('/');
   }
   return <>{children}</>;
 };
@@ -112,15 +141,15 @@ const RoleHome = () => {
     // No usable dashboard at all — a role the client does not know how to
     // route. Signing out is better than looping on a blank screen.
     logout();
-    return <Navigate to="/login" replace />;
+    return goTo('/login');
   }
 
   // More than one, and no remembered choice: ask instead of guessing. Guessing
   // is exactly the behaviour that hid the personal dashboard.
   const active = resolveActiveContext(user);
-  if (!active) return <Navigate to="/choose-dashboard" replace />;
+  if (!active) return goTo('/choose-dashboard');
 
-  return <Navigate to={active.path} replace />;
+  return goTo(active.path);
 };
 
 export default function App() {

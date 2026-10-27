@@ -74,14 +74,26 @@ variable "compute_desired_count" {
   default = 2
 }
 
-variable "domain_name" {
-  description = "e.g. app.corehealth.lk. No real domain is registered yet — null means CloudFront serves on its own *.cloudfront.net URL, and that's also what CLIENT_URL (and therefore CORS) uses in the meantime. See modules/edge."
+variable "domain_names" {
+  description = "The frontend's custom domains for CloudFront's aliases. Under the three-subdomain split (docs/decisions/0006-three-domain-split.md) this is [www.suwela.com, app.suwela.com, dashboard.suwela.com] — one SPA build served at all three. Empty list (default) means CloudFront serves on its own *.cloudfront.net URL, which is also what client_url falls back to below. See modules/edge."
+  type        = list(string)
+  default     = []
+}
+
+variable "site_domain_name" {
+  description = "Which of domain_names is the 'site' zone — what CLIENT_URL (email links, see server/controllers/authController.ts) and CORS are built from. Always the www. domain, never app./dashboard. Null falls back to CloudFront's own *.cloudfront.net URL, same as domain_names being empty."
+  type        = string
+  default     = null
+}
+
+variable "extra_cors_origins" {
+  description = "Comma-separated CORS origins beyond site_domain_name — the app./dashboard. zones. Passed straight through to modules/compute's EXTRA_CORS_ORIGINS. Null adds nothing."
   type        = string
   default     = null
 }
 
 variable "hosted_zone_id" {
-  description = "Route 53 zone to create the DNS record in. Only used if domain_name is also set."
+  description = "Route 53 zone to create DNS records in, one per domain_names entry. Null for suwela.com — its DNS is Cloudflare, not Route 53; those records are added by hand (docs/environments.md)."
   type        = string
   default     = null
 }

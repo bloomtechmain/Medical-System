@@ -3,12 +3,18 @@
 # time), so this one image can be deployed to any environment just by changing
 # an env var — no rebuild (ARCH-04). Falls back to VITE_API_URL for anyone
 # still setting the old build-time variable name during the transition.
+#
+# SITE_URL/APP_URL/DASHBOARD_URL are the three-subdomain split (docs/
+# decisions/0006-three-domain-split.md) — all optional, and only this one
+# client service needs them set, since the same image is served at all three
+# hostnames. Unset (the default) means no zone redirects: this build behaves
+# exactly as a single-domain deployment, same as before the split.
 set -e
 
 RESOLVED_API_URL="${API_URL:-${VITE_API_URL:-}}"
 
 cat > /app/dist/config.js <<EOF
-window.__APP_CONFIG__ = { API_URL: "${RESOLVED_API_URL}" };
+window.__APP_CONFIG__ = { API_URL: "${RESOLVED_API_URL}", SITE_URL: "${SITE_URL:-}", APP_URL: "${APP_URL:-}", DASHBOARD_URL: "${DASHBOARD_URL:-}" };
 EOF
 
 exec node_modules/.bin/serve dist -s -l "${PORT:-3000}"
