@@ -35,8 +35,12 @@ export default defineConfig({
         // vendor code (react itself, the router) into its own chunk too, so
         // a routine app-code deploy doesn't invalidate the browser cache for
         // code that didn't change.
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+        // Object form (chunk name -> module list) was removed — this
+        // version's bundler (rolldown) requires a function.
+        manualChunks(id: string) {
+          if (['react', 'react-dom', 'react-router-dom'].some(pkg => id.includes(`/node_modules/${pkg}/`))) {
+            return 'vendor-react';
+          }
         },
       },
     },
