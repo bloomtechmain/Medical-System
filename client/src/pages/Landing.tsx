@@ -401,7 +401,6 @@ export default function Landing() {
         </div>
       </footer>
 
-      {showGetStarted && <GetStartedModal onClose={() => setShowGetStarted(false)} />}
     </div>
   );
 }

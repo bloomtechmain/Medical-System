@@ -14,6 +14,11 @@ import BrandLoader from './components/common/BrandLoader';
 // it would never use. React.lazy splits each page into its own chunk,
 // fetched only when that route is actually visited.
 const Landing               = lazy(() => import('./pages/Landing'));
+const Explore               = lazy(() => import('./pages/site/Explore'));
+const News                  = lazy(() => import('./pages/site/News'));
+const ShareStory            = lazy(() => import('./pages/site/ShareStory'));
+const About                 = lazy(() => import('./pages/site/About'));
+const Help                  = lazy(() => import('./pages/site/Help'));
 const Login                 = lazy(() => import('./pages/Login'));
 const Register               = lazy(() => import('./pages/Register'));
 const OrgRegister           = lazy(() => import('./pages/OrgRegister'));
@@ -129,6 +134,14 @@ export default function App() {
     <Routes>
       <Route path="/"           element={token && user?.role ? <RoleHome /> : <Landing />} />
       <Route path="/welcome"    element={<Landing />} />
+
+      {/* Public website pages. Not redirected when signed in, so the nav works
+          for everyone. */}
+      <Route path="/explore"     element={<Explore />} />
+      <Route path="/news"        element={<News />} />
+      <Route path="/share-story" element={<ShareStory />} />
+      <Route path="/about"       element={<About />} />
+      <Route path="/help"        element={<Help />} />
       <Route path="/login"      element={token && user?.role ? <RoleHome /> : <Login />} />
       <Route path="/register"   element={token && user?.role ? <RoleHome /> : <Register />} />
       <Route path="/org-register" element={token && user?.role ? <RoleHome /> : <OrgRegister />} />
