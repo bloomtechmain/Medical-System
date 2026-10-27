@@ -47,6 +47,14 @@ name: Deploy
 #                         S3_FRONTEND_BUCKET        = output frontend_bucket_name
 #                         CLOUDFRONT_DISTRIBUTION_ID = output cloudfront_distribution_id
 #                         API_BASE_URL              = https://api.suwela.com once DNS + the ALB cert are live, the raw alb_dns_name output until then
+#      Additionally, REPO-level (not per-environment) var
+#      `ECR_REPOSITORY_URL_<ENV>` for every environment past the first —
+#      the `build` job below has no `environment:` of its own, so it can
+#      only read repo-level vars, yet still needs to push to every
+#      environment's ECR repo in one step. Whichever environment's role
+#      has `ref:refs/heads/main` OIDC trust (the one actually used by
+#      `build`) also needs `extra_ecr_repository_arns` in its tfvars set
+#      to every other environment's repo ARN — see github_actions.tf.
 #                         SITE_URL / APP_URL / DASHBOARD_URL = https://www.suwela.com / https://app.suwela.com / https://dashboard.suwela.com (production only — leave unset on staging, which still serves as one undivided origin)
 #      (No AWS_ROLE_ARN per environment, no long-lived access keys: the
 #      `build` job and both deploy jobs assume this one role via OIDC per
@@ -139,9 +147,19 @@ jobs:
         with:
           context: ./server
           push: true
+          # Pushed to every environment's ECR repo in this one step (CICD-04:
+          # build once, promote the exact same image everywhere) — this job
+          # has no `environment:`, so it authenticates as whichever
+          # environment's role has `ref:refs/heads/main` trust (currently
+          # staging's — see infra/terraform/github_actions.tf), and that
+          # role additionally has ECR push rights on every OTHER
+          # environment's repo too (extra_ecr_repository_arns in its
+          # tfvars), specifically so this list can grow past one repo.
           tags: |
             ${{ vars.ECR_REPOSITORY_URL }}:${{ steps.meta.outputs.tag }}
             ${{ vars.ECR_REPOSITORY_URL }}:latest
+            ${{ vars.ECR_REPOSITORY_URL_PRODUCTION }}:${{ steps.meta.outputs.tag }}
+            ${{ vars.ECR_REPOSITORY_URL_PRODUCTION }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # Stamps the release into the image so logs and Sentry events can be

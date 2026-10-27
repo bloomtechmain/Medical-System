@@ -120,3 +120,9 @@ variable "github_repository" {
   type        = string
   default     = "bloomtechmain/Medical-System"
 }
+
+variable "extra_ecr_repository_arns" {
+  description = "ECR repo ARNs belonging to OTHER environments that this environment's deploy role should also be able to push to — see github_actions.tf's EcrPushPull statement. Cross-workspace state isn't wired up here (staging and production are separate Terraform workspaces with no shared outputs), so this is a manually-copied ARN, not a module reference. Empty by default; set it once a second environment's ECR repo actually exists."
+  type        = list(string)
+  default     = []
+}
