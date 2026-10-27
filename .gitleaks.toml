@@ -1,0 +1,14 @@
+title = "CoreHealth gitleaks config"
+
+# SEC-07's gitleaks job scans full history, not just the current diff, so a
+# secret that was committed then removed still gets caught. Test files are
+# legitimately full of fake fixture credentials (a fake email/password used
+# to exercise a login form in a unit test, never a real account) — those
+# aren't secrets and flagging them on every run just trains people to ignore
+# the job's output, which is the actual risk. Real secrets (server/.env,
+# API keys, Cloudflare/AWS tokens) never live under a test path.
+[allowlist]
+paths = [
+  '''.*\.test\.tsx?$''',
+  '''__tests__/.*''',
+]

@@ -1,17 +1,20 @@
-# Lets GitHub Actions deploy to staging without a stored AWS access key —
-# the runner exchanges a short-lived OIDC token for credentials via this
-# role instead. See .github/workflows/deploy.yml's header for the secrets/
-# variables this role's ARN (the output below) needs to be copied into.
+# Lets GitHub Actions deploy without a stored AWS access key — the runner
+# exchanges a short-lived OIDC token for credentials via this role instead.
+# See .github/workflows/deploy.yml's header for the secrets/variables this
+# role's ARN (the output below) needs to be copied into.
 #
 # A standalone root-level resource, same reasoning as security_group_rules.tf:
 # this needs outputs from compute, data, edge AND iam, and none of those
 # modules should have to depend on each other just to hand them to it.
 #
-# Only one AWS environment exists (staging) — production still deploys via
-# Railway (docs/decisions/0002-railway-then-aws.md) — so this is one role,
-# not a role per environment, and the OIDC provider is created unconditionally
-# rather than guarded by a workspace check. Revisit both of those the day a
-# second AWS environment actually exists.
+# One role per environment/workspace (${var.environment}-github-actions-
+# deploy) — but the OIDC provider itself is a single, account-wide resource
+# (one URL, not one per environment), so it's created unconditionally and
+# then imported into every workspace after the first apply creates it for
+# real. `terraform import aws_iam_openid_connect_provider.github
+# arn:aws:iam::<account>:oidc-provider/token.actions.githubusercontent.com`
+# — see docs/environments.md if this trips a 409 EntityAlreadyExists on a
+# workspace that isn't the first one applied.
 
 data "aws_caller_identity" "current" {}
 
@@ -41,12 +44,19 @@ resource "aws_iam_role" "github_actions_deploy" {
         }
         StringLike = {
           # Two shapes because two jobs need this role: "build" (no
-          # `environment:` block, so its sub claim is ref-based) and
-          # "deploy-staging" (declares `environment: staging`, so GitHub
-          # swaps the sub claim to the environment-based form instead).
+          # `environment:` block, so its sub claim is ref-based) and the
+          # "deploy-${var.environment}" job (declares `environment:
+          # ${var.environment}`, so GitHub swaps the sub claim to the
+          # environment-based form instead). This used to hardcode
+          # "environment:staging" literally, back when only staging existed
+          # — applying this file under the production workspace created a
+          # role named production-github-actions-deploy that actually
+          # trusted environment:staging, not environment:production. Fixed
+          # by parameterizing; re-apply every existing workspace after this
+          # change to pick it up.
           "token.actions.githubusercontent.com:sub" = [
             "repo:${var.github_repository}:ref:refs/heads/main",
-            "repo:${var.github_repository}:environment:staging",
+            "repo:${var.github_repository}:environment:${var.environment}",
           ]
         }
       }
@@ -74,7 +84,13 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
     ]
-    resources = [module.compute.ecr_repository_arn]
+    # Plus any sibling environment's ECR repo (var.extra_ecr_repository_arns)
+    # — the shared `build` job in deploy.yml pushes one image to every
+    # environment's repo in a single step (CICD-04: build once), using
+    # whichever environment's role has `ref:refs/heads/main` trust. That
+    # role's own repo is covered above; this is what lets it reach the
+    # others too.
+    resources = concat([module.compute.ecr_repository_arn], var.extra_ecr_repository_arns)
   }
 
   statement {

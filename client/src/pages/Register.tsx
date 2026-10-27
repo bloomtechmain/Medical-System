@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 import HospitalSearchAdd from '../components/common/HospitalSearchAdd';
 import { LEGAL_VERSION } from '../legal';
-import { Building2, X } from 'lucide-react';
 import PlanPicker from '../components/plans/PlanPicker';
 import { Plan } from '../types';
 import { ArrowRight, Building2, Check, X } from 'lucide-react';
@@ -214,10 +213,6 @@ export default function Register() {
                     📦 {plan.name} package · change
                   </button>
                 )}
-                <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                  ROLES.find(r => r.id === selectedRole)?.badge
-                }`}>
-                  {ROLES.find(r => r.id === selectedRole)?.icon} Registering as {selectedRole}
                 <span className="inline-flex items-center gap-2 text-sm pl-1.5 pr-4 py-1.5 rounded-full font-semibold text-white" style={{ backgroundColor: roleMeta.color }}>
                   <span className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center"><roleMeta.icon className="w-4 h-4" /></span>
                   Registering as {selectedRole}

@@ -28,3 +28,8 @@ feature_require_email_verification = false
 # Browsers will show an untrusted-cert warning. Swap for a real ACM-issued
 # cert once a domain exists — see docs/decisions/0002-railway-then-aws.md.
 alb_acm_certificate_arn = "arn:aws:acm:ap-south-1:336246706489:certificate/761e7421-f0e2-4c75-8cd4-c296d9c90950"
+
+# deploy.yml's shared `build` job runs under staging's role (it's the one
+# with ref:refs/heads/main trust) and now needs to push the same image to
+# production's ECR repo too, not just this one — see github_actions.tf.
+extra_ecr_repository_arns = ["arn:aws:ecr:ap-south-1:336246706489:repository/production-corehealth-api"]

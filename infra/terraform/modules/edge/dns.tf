@@ -1,11 +1,14 @@
-# Optional — no real domain is registered yet (see variables.tf). Creates
-# nothing until domain_name + hosted_zone_id are both supplied.
+# Optional — creates nothing unless hosted_zone_id is supplied (see
+# variables.tf). suwela.com's DNS is Cloudflare, not Route 53, so this stays
+# inert for it; the three CNAMEs are added by hand in Cloudflare instead
+# (docs/environments.md, "Domains (suwela.com)"). Kept for any future domain
+# that does live in Route 53 — one ALIAS record per domain_names entry.
 
 resource "aws_route53_record" "frontend" {
-  count = var.domain_name != null && var.hosted_zone_id != null ? 1 : 0
+  for_each = var.hosted_zone_id != null ? toset(var.domain_names) : toset([])
 
   zone_id = var.hosted_zone_id
-  name    = var.domain_name
+  name    = each.value
   type    = "A"
 
   alias {

@@ -39,7 +39,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   default_root_object = "index.html"
   price_class         = var.price_class
-  aliases             = var.domain_name != null ? [var.domain_name] : []
+  aliases             = var.domain_names
 
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name

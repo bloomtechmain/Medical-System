@@ -12,51 +12,59 @@ name: Deploy
 # ran (BKP-09).
 #
 # ──────────────────────────────────────────────────────────────────────────
-# Staging deploys to AWS (ECS + RDS + S3/CloudFront, infra/terraform). The
-# server image's own container CMD runs migrations on every start
-# (server/Dockerfile) — a broken migration fails that task's healthcheck, the
-# rolling ECS deployment never stabilizes, and `aws ecs wait services-stable`
-# below fails the job, while the OLD tasks keep serving traffic throughout.
-# There is no separate "run migrations from CI" step on this path: the
-# private RDS instance has no route from a GitHub-hosted runner anyway.
-#
-# Production is UNCHANGED and still deploys to Railway — see
-# docs/decisions/0002-railway-then-aws.md. This is deliberate: production AWS
-# infra has never been applied, only staging has.
+# Both staging AND production deploy to AWS (ECS + RDS + S3/CloudFront,
+# infra/terraform) — Railway is no longer a deploy target at all. This
+# changed with the suwela.com domain cutover (docs/decisions/0006-three-
+# domain-split.md), which pulled the trigger docs/decisions/0002-railway-
+# then-aws.md had been waiting on. Each environment's server image CMD runs
+# migrations on every container start (server/Dockerfile) — a broken
+# migration fails that task's healthcheck, the rolling ECS deployment never
+# stabilizes, and `aws ecs wait services-stable` below fails the job, while
+# the OLD tasks keep serving traffic throughout. Neither environment runs a
+# separate "migrate from CI" step: both RDS instances are private, with no
+# route from a GitHub-hosted runner.
 #
 # THIS WORKFLOW DOES NOT RUN UNTIL IT IS CONFIGURED. Every job is gated on a
 # secret or variable being present, so merging it changes nothing until
 # someone sets these up. That is deliberate: the alternative is a workflow
 # that fails on every push.
 #
-# To switch on staging → AWS:
-#   1. Create the GitHub environments `staging` and `production`
-#      (Settings → Environments). Add required reviewers to `production` —
-#      that is CICD-10, and it is a settings change, not a code change.
-#   2. `terraform apply` infra/terraform (workspace `staging`) — this adds
+# To switch on an environment → AWS (repeat per environment: `staging` and
+# `production` are separate GitHub Environments with their own variables):
+#   1. Create the GitHub environment (Settings → Environments) if it
+#      doesn't exist. Add required reviewers to `production` — that is
+#      CICD-10, and it is a settings change, not a code change.
+#   2. `terraform apply` infra/terraform (matching workspace) — this adds
 #      the GitHub OIDC provider + deploy role (github_actions.tf) alongside
-#      everything already running there.
+#      everything else for that environment.
 #   3. `terraform output` and copy the values in:
 #        Repo secret:    AWS_ROLE_ARN              = output github_actions_deploy_role_arn
 #        Repo variables: AWS_REGION                = ap-south-1 (or whatever aws_region was)
 #                         ECR_REPOSITORY_URL        = output ecr_repository_url
-#                         ECS_CLUSTER               = staging-corehealth
+#                         ECS_CLUSTER               = <environment>-corehealth
 #                         ECS_SERVICE               = output ecs_service_name
 #                         RDS_INSTANCE_IDENTIFIER   = output db_instance_identifier
 #                         S3_FRONTEND_BUCKET        = output frontend_bucket_name
 #                         CLOUDFRONT_DISTRIBUTION_ID = output cloudfront_distribution_id
-#                         API_BASE_URL              = https://<alb_dns_name> for now, the real domain once one exists
+#                         API_BASE_URL              = https://api.suwela.com once DNS + the ALB cert are live, the raw alb_dns_name output until then
+#      Additionally, REPO-level (not per-environment) var
+#      `ECR_REPOSITORY_URL_<ENV>` for every environment past the first —
+#      the `build` job below has no `environment:` of its own, so it can
+#      only read repo-level vars, yet still needs to push to every
+#      environment's ECR repo in one step. Whichever environment's role
+#      has `ref:refs/heads/main` OIDC trust (the one actually used by
+#      `build`) also needs `extra_ecr_repository_arns` in its tfvars set
+#      to every other environment's repo ARN — see github_actions.tf.
+#                         SITE_URL / APP_URL / DASHBOARD_URL = https://www.suwela.com / https://app.suwela.com / https://dashboard.suwela.com (production only — leave unset on staging, which still serves as one undivided origin)
 #      (No AWS_ROLE_ARN per environment, no long-lived access keys: the
-#      `build` job and `deploy-staging` job both assume this one role via
-#      OIDC — see github_actions.tf for why one role is enough here.)
+#      `build` job and both deploy jobs assume this one role via OIDC per
+#      environment — see github_actions.tf for why one role is enough here.)
 #   4. Set per-environment secrets for the smoke test (reused as-is):
-#        SMOKE_BASE_URL          the ALB URL (or future API domain)
-#        SMOKE_CLIENT_URL        the CloudFront URL (or future app domain)
+#        SMOKE_BASE_URL          the ALB URL (or api.suwela.com)
+#        SMOKE_CLIENT_URL        the CloudFront URL (or the site-zone domain)
 #        SMOKE_TEST_EMAIL/PASSWORD  a dedicated low-privilege test account
 #        SLACK_WEBHOOK_URL       optional, for CICD-13
 #   5. Set repository variable DEPLOY_ENABLED = "true".
-#   6. In Railway, leave the `production` service's auto-deploy as it is —
-#      production is not part of this change.
 # ──────────────────────────────────────────────────────────────────────────
 
 on:
@@ -139,9 +147,19 @@ jobs:
         with:
           context: ./server
           push: true
+          # Pushed to every environment's ECR repo in this one step (CICD-04:
+          # build once, promote the exact same image everywhere) — this job
+          # has no `environment:`, so it authenticates as whichever
+          # environment's role has `ref:refs/heads/main` trust (currently
+          # staging's — see infra/terraform/github_actions.tf), and that
+          # role additionally has ECR push rights on every OTHER
+          # environment's repo too (extra_ecr_repository_arns in its
+          # tfvars), specifically so this list can grow past one repo.
           tags: |
             ${{ vars.ECR_REPOSITORY_URL }}:${{ steps.meta.outputs.tag }}
             ${{ vars.ECR_REPOSITORY_URL }}:latest
+            ${{ vars.ECR_REPOSITORY_URL_PRODUCTION }}:${{ steps.meta.outputs.tag }}
+            ${{ vars.ECR_REPOSITORY_URL_PRODUCTION }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # Stamps the release into the image so logs and Sentry events can be
@@ -274,9 +292,13 @@ jobs:
   # CICD-10: the `production` GitHub environment carries required reviewers,
   # so this job waits for a human before it starts.
   #
-  # UNCHANGED — still Railway. See docs/decisions/0002-railway-then-aws.md:
-  # production moves to AWS as a separate, later decision, not part of
-  # wiring up staging's auto-deploy.
+  # AWS, same as staging (docs/decisions/0002-railway-then-aws.md's trigger —
+  # the three-subdomain domain cutover, docs/decisions/0006 — was pulled;
+  # Railway is no longer deployed to at all). Mirrors deploy-staging exactly:
+  # same reasoning for container-boot migrations applies here too, now that
+  # production's RDS is equally private and equally unreachable from a
+  # GitHub-hosted runner — there is no longer a Railway-shaped reason for
+  # production to migrate differently from staging.
   deploy-production:
     name: Deploy to production
     needs: [build, deploy-staging]
@@ -286,30 +308,69 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Snapshot the database before migrating
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Snapshot the database before deploying
         env:
-          DATABASE_MIGRATOR_URL: ${{ secrets.DATABASE_MIGRATOR_URL }}
+          RDS_INSTANCE_IDENTIFIER: ${{ vars.RDS_INSTANCE_IDENTIFIER }}
         run: ./scripts/deploy/snapshot-database.sh production
 
-      - name: Run migrations
-        working-directory: ./server
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_MIGRATOR_URL }}
+      - name: Register a new ECS task definition with the freshly-built image
+        id: taskdef
         run: |
-          npm ci
-          npm run db:migrate
+          aws ecs describe-task-definition \
+            --task-definition "${{ vars.ECS_SERVICE }}" \
+            --query 'taskDefinition' > taskdef.json
 
-      - name: Deploy to Railway (production)
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          jq --arg IMAGE "${{ vars.ECR_REPOSITORY_URL }}:${{ needs.build.outputs.image_tag }}" \
+             '.containerDefinitions[0].image = $IMAGE
+              | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+             taskdef.json > new-taskdef.json
+
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-taskdef.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "arn=${NEW_ARN}" >> "$GITHUB_OUTPUT"
+
+      - name: Update the service and wait for it to stabilize
         run: |
-          npm i -g @railway/cli
-          railway redeploy --service server --yes
-          railway redeploy --service client --yes
+          aws ecs update-service \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --service "${{ vars.ECS_SERVICE }}" \
+            --task-definition "${{ steps.taskdef.outputs.arn }}" \
+            >/dev/null
+          aws ecs wait services-stable \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --services "${{ vars.ECS_SERVICE }}"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: client-dist
+          path: client-dist
+
+      - name: Point the build at this environment's API and publish it
+        env:
+          API_URL: ${{ vars.API_BASE_URL }}
+          # The three-subdomain split (docs/decisions/0006): one build,
+          # three zone origins baked into dist/config.js at deploy time, same
+          # mechanism as API_URL (ARCH-04) — see write-client-config.sh.
+          SITE_URL: ${{ vars.SITE_URL }}
+          APP_URL: ${{ vars.APP_URL }}
+          DASHBOARD_URL: ${{ vars.DASHBOARD_URL }}
+        run: |
+          ./scripts/deploy/write-client-config.sh client-dist
+          aws s3 sync client-dist/ "s3://${{ vars.S3_FRONTEND_BUCKET }}/" --delete
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*" >/dev/null
 
       - name: Smoke test
         env:
           SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+          SMOKE_CLIENT_URL: ${{ secrets.SMOKE_CLIENT_URL }}
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
           SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
         run: ./scripts/deploy/smoke-test.sh

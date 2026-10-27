@@ -87,6 +87,12 @@ resource "aws_ecs_task_definition" "api" {
         ],
         var.uploads_bucket_name != null ? [
           { name = "AWS_S3_BUCKET", value = var.uploads_bucket_name }
+        ] : [],
+        # Three-subdomain split (docs/decisions/0006-three-domain-split.md):
+        # CLIENT_URL above stays the site zone (email links); app./dashboard.
+        # need CORS too, which is all this additive var is for.
+        var.extra_cors_origins != null ? [
+          { name = "EXTRA_CORS_ORIGINS", value = var.extra_cors_origins }
         ] : []
       )
 

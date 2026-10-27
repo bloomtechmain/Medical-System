@@ -13,19 +13,19 @@ and where the secrets live. Keep this current — it is the page someone reads a
 | | Development | Staging | Production |
 |---|---|---|---|
 | Purpose | Local work | Pre-production verification | Live service |
-| Runs on | Your machine (`npm run dev`) or `docker-compose up` | *Not created yet* — see below | Railway today; AWS ECS is the target (`infra/terraform/`) |
-| Database | Local PostgreSQL, or the compose `db` service | Own database, never shared with production | Managed PostgreSQL, private network only |
-| Data | Seed data (`corehealth_seed_data.sql`) | Anonymised or synthetic only — **never a copy of production**, it holds real patient records | Real patient data |
-| Who can deploy | n/a | Anyone, via CI on merge | Requires review (CICD-10) |
+| Runs on | Your machine (`npm run dev`) or `docker-compose up` | AWS — ECS + RDS + S3/CloudFront, applied 2026-10-19 (`infra/terraform/`, `staging.tfvars`) | AWS, as of the suwela.com cutover ([0006](decisions/0006-three-domain-split.md)) — same shape, `production.tfvars` |
+| Database | Local PostgreSQL, or the compose `db` service | Own RDS instance, never shared with production | Managed PostgreSQL (RDS), private network only |
+| Data | Seed data (`corehealth_seed_data.sql`) | Anonymised or synthetic only — **never a copy of production** | Test/demo data only as of 2026-10-27 — pre-launch, no real patients yet. Update this row the day that stops being true; everything above it (deploy review, who-can-read-the-DB) starts mattering for real at that point, not before. |
+| Who can deploy | n/a | Anyone, via CI on merge, once `DEPLOY_ENABLED=true` is set (currently unset — see `deploy.yml`'s header; staging so far was applied by hand, not through this pipeline) | Requires review (CICD-10) |
 | Who can read the database | You | The team | Named individuals only, via the platform console; see DB-05 |
-| Client URL | `http://localhost:5173` | TBC | Set as `CLIENT_URL` on the API service |
-| API URL | `http://localhost:5000` | TBC | Set as `API_URL` on the client service |
+| Client URL | `http://localhost:5173` | CloudFront's own `*.cloudfront.net` domain (no custom domain on staging) | `https://www.suwela.com` |
+| API URL | `http://localhost:5000` | The ALB's own `*.elb.amazonaws.com` domain | `https://api.suwela.com` |
 
-**Staging does not exist yet.** This is CICD-06, still open. Until it does,
-`main` deploys straight to production after CI, which means CI is the only gate.
-Creating it is a platform task (a second Railway environment, or a second ECS
-service + database from the Terraform in `infra/terraform/` with
-`staging.tfvars`), not a code change.
+**CICD-06 (staging didn't exist) is resolved** — staging has run on AWS since
+2026-10-19. It was applied directly, outside `deploy.yml` (`DEPLOY_ENABLED` is
+still unset), so `main` still deploys straight to production once that flag
+flips; flipping it is what actually closes the loop this row used to
+describe as open.
 
 ## Where secrets live
 
@@ -58,7 +58,8 @@ failing later in a confusing way (ARCH-04, `server/server.ts`).
 | `NODE_ENV` | `development` \| `production` \| `test`. Must be set explicitly — an unset value used to mean stack traces leaked to clients (SEC-21). |
 | `JWT_SECRET` | Signs access and pre-auth tokens. |
 | `DATABASE_URL` | Connection string for `corehealth_app` — the non-superuser, non-`BYPASSRLS` role (DB-02). **Not** a superuser: row-level security is the patient-data protection, and a superuser bypasses it entirely. |
-| `CLIENT_URL` | Required in production only. The client's public origin, used for CORS and for links in emails. |
+| `CLIENT_URL` | Required in production only. The client's public origin, used for CORS and for links in emails — under the three-subdomain split ([0006](decisions/0006-three-domain-split.md)) this is always the site zone, `https://www.suwela.com`, never `app.` or `dashboard.`. |
+| `EXTRA_CORS_ORIGINS` | Optional, comma-separated. Additional origins allowed to call the API — `https://app.suwela.com,https://dashboard.suwela.com` — without changing what `CLIENT_URL` means for email links. |
 
 ### Required where the feature is used
 
@@ -160,21 +161,101 @@ build-time and are compiled into the bundle, so **never put a secret in a
 |---|---|---|
 | `API_URL` | Container start | Written into `dist/config.js` by `docker-entrypoint.sh`. This is what lets one image run in any environment (ARCH-04). Set it to the API service's public URL. |
 | `VITE_API_URL` | Build | Fallback for `npm run dev`, where no entrypoint writes `config.js`. Still read during the transition; prefer `API_URL`. |
+| `SITE_URL` / `APP_URL` / `DASHBOARD_URL` | Container start | The three-subdomain split ([0006](decisions/0006-three-domain-split.md)): `https://www.suwela.com`, `https://app.suwela.com`, `https://dashboard.suwela.com`. All three or none — leave unset for a single-domain deployment (dev, a preview URL), which disables every zone redirect in `src/utils/zones.ts`. |
 | `VITE_SENTRY_DSN` | Build | Client error tracking (MON-05). Inert without it. |
 | `VITE_GIT_COMMIT_SHA` | Build | Release tag for client Sentry events. |
 
+## Domains (suwela.com)
+
+[0006](decisions/0006-three-domain-split.md) covers the design. This is the
+checklist to point `suwela.com` (Cloudflare) at AWS production — ECS/ALB for
+the API, S3/CloudFront for the client (`infra/terraform/`), no Railway
+involved. `AWS_PROFILE=corehealth-prod` is the project's AWS account
+(`336246706489`) — always verify with `aws sts get-caller-identity` before
+running Terraform here; the CLI's `default` profile is a different,
+unrelated account.
+
+1. **Request ACM certificates** (done — 2026-10-27, pending DNS validation):
+   - CloudFront cert, **us-east-1** (required regardless of `aws_region` —
+     a CloudFront-specific rule), covering `www.suwela.com` +
+     SANs `app.suwela.com`, `dashboard.suwela.com`:
+     `arn:aws:acm:us-east-1:336246706489:certificate/f27c1385-b906-4dff-b0e3-e874e243e6a8`
+   - ALB/API cert, **ap-south-1**, covering `api.suwela.com`:
+     `arn:aws:acm:ap-south-1:336246706489:certificate/1962d059-7aa9-428f-ae9f-e4525afbadfd`
+
+2. **Add the ACM validation CNAMEs in Cloudflare** (DNS-only / grey cloud —
+   these are validation records, not traffic). Whoever has Cloudflare
+   dashboard access adds these directly; no `wrangler login` needed for just
+   four records:
+
+   | Name | Type | Value |
+   |---|---|---|
+   | `_833e81f6d577b1a8ed03381eee6098da.www` | CNAME | `_f01c975c93c53a29da5a9704fab0a186.wzccmgtwzk.acm-validations.aws.` |
+   | `_20f493c2f3bee831f2ab2f808bd3b076.app` | CNAME | `_0d42aaea8927841ddcaf8af2206efa8b.wzccmgtwzk.acm-validations.aws.` |
+   | `_3ebeb8d17ac8d08f7f7677b3ccfdb060.dashboard` | CNAME | `_3937d534397e8913d2e9f377f6f005fa.wzccmgtwzk.acm-validations.aws.` |
+   | `_6cb21207e4dd8834e2d31b8680bcefa4.api` | CNAME | `_8f374b870ff410b5e8eeec2b159018e2.wzccmgtwzk.acm-validations.aws.` |
+
+   ACM issues both certs automatically within minutes to ~30 min of these
+   resolving. Poll with:
+   `aws acm describe-certificate --region <region> --certificate-arn <arn> --query Certificate.Status`
+   — `ISSUED` means done.
+
+3. **Fill in the real cert ARNs** in `infra/terraform/production.tfvars`
+   (currently placeholders — `alb_acm_certificate_arn` and
+   `cloudfront_acm_certificate_arn`) once both show `ISSUED`, then
+   `terraform plan`/`apply` the `production` workspace. This is a from-
+   scratch apply — no production AWS infra exists yet (verified directly:
+   no ECS cluster, RDS instance, S3 bucket or CloudFront distribution named
+   `production-corehealth-*` exists in the account as of 2026-10-27).
+   Staging already exists and is unaffected.
+
+4. **Add the final traffic CNAMEs in Cloudflare**, all proxied (orange
+   cloud — Cloudflare's TLS/DDoS/caching in front; the origin only needs to
+   accept HTTPS from Cloudflare, which CloudFront and the ALB both do):
+
+   | Type | Name | Target | Proxy |
+   |---|---|---|---|
+   | CNAME | `www` | `terraform output cloudfront_domain_name` | Proxied |
+   | CNAME | `app` | same CloudFront domain — one distribution, three aliases | Proxied |
+   | CNAME | `dashboard` | same CloudFront domain again | Proxied |
+   | CNAME | `api` | `terraform output alb_dns_name` | Proxied |
+   | Redirect Rule (not DNS) | `suwela.com/*` (apex) | → `https://www.suwela.com/$1`, 301 | — |
+
+   The apex redirect is a Cloudflare **Redirect Rule** (Rules → Redirect
+   Rules), not a DNS record — simpler than CNAME-flattening the zone root
+   onto CloudFront, and `zones.ts` never needs to know the bare apex exists.
+
+5. **Set env vars from the Terraform outputs** — on the `production` ECS
+   task (via `infra/terraform/production.tfvars`'s `site_domain_name` /
+   `extra_cors_origins`, already set to the suwela.com values, so this is
+   automatic on apply) and on the GitHub Actions `production` environment
+   (`.github/workflows/deploy.yml`'s header lists exactly which repo
+   variables, including `SITE_URL`/`APP_URL`/`DASHBOARD_URL`, now that
+   production deploys to AWS like staging does).
+
+6. **Verify**, in order: both certs `ISSUED`; `dig www.suwela.com` /
+   `app.suwela.com` / `dashboard.suwela.com` / `api.suwela.com` resolve;
+   each loads over HTTPS with a valid (not self-signed) cert; logging in at
+   `www.suwela.com/login` as a non-admin role lands on `app.suwela.com` at
+   that role's dashboard with the URL fragment gone; logging in as `admin`
+   lands on `dashboard.suwela.com/admin`; a direct, unauthenticated visit to
+   `app.suwela.com/doctor` or `dashboard.suwela.com` bounces to
+   `www.suwela.com/login`.
+
 ## Platform configuration not in code
 
-AUTO-01: the services, database, domains and variables are created by hand in
-the Railway dashboard. `server/railway.toml` and `client/railway.toml` hold
-everything Railway reads from the repository — builder, health check path and
-restart policy — and nothing else can live there.
+**Railway is retired as of the suwela.com cutover (2026-10-27)** — both
+staging and production now run on AWS (previous section). `server/
+railway.toml` and `client/railway.toml` are left in the repo as a reference
+for what Railway's dashboard had configured (builder, health check path,
+restart policy) in case a rollback is ever needed, not because anything
+still deploys there. The Railway services themselves have not been deleted —
+that's a separate, deliberate decommissioning step for whoever holds the
+Railway account, not something to do silently as part of a domain change.
 
-Each service has its **Root Directory** set in the dashboard (`/server` and
-`/client`), which is what makes each read its own `railway.toml` and restricts
-its build context. There is deliberately no root-level `railway.toml` or
-`nixpacks.toml`: neither service ever read them, and their presence suggested
-otherwise (AUTO-03).
+AUTO-01 (historical): the services, database, domains and variables were
+created by hand in the Railway dashboard; nothing about that process could
+live in code, which was the original finding this section documented.
 
 For the AWS target, the equivalent configuration *is* in code —
 `infra/terraform/`, with `staging.tfvars` and `production.tfvars`.

@@ -12,7 +12,7 @@
 // in the env-var value, which breaks WebSocket URLs (space → %20). Always trim.
 declare global {
   interface Window {
-    __APP_CONFIG__?: { API_URL?: string };
+    __APP_CONFIG__?: { API_URL?: string; SITE_URL?: string; APP_URL?: string; DASHBOARD_URL?: string };
   }
 }
 
@@ -20,3 +20,16 @@ const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.API_UR
 const rawUrl = runtimeUrl || import.meta.env.VITE_API_URL || '';
 
 export const SERVER_ORIGIN = rawUrl.trim().replace(/\/$/, '');
+
+// The three-subdomain split (docs/decisions/0006-three-domain-split.md):
+// www/site, app and dashboard each have their own origin. All three are
+// optional and default to unset, which is what keeps `npm run dev`, tests,
+// and any single-domain deployment working unchanged — see src/utils/zones.ts.
+const trimOrigin = (v?: string): string | undefined => {
+  const t = v?.trim().replace(/\/$/, '');
+  return t || undefined;
+};
+
+export const SITE_URL = typeof window !== 'undefined' ? trimOrigin(window.__APP_CONFIG__?.SITE_URL) : undefined;
+export const APP_URL = typeof window !== 'undefined' ? trimOrigin(window.__APP_CONFIG__?.APP_URL) : undefined;
+export const DASHBOARD_URL = typeof window !== 'undefined' ? trimOrigin(window.__APP_CONFIG__?.DASHBOARD_URL) : undefined;

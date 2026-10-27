@@ -40,3 +40,15 @@ scripts/loadtest/last-result.json
 # healthReportPdf.test.ts called save() for real and left one of these in
 # client/ — they are patient data by nature and must never be committed.
 CoreHealth_Report_*.pdf
+
+# Terraform local state (infra/terraform/versions.tf: local state until a
+# remote S3+DynamoDB backend exists). State contains plaintext secrets
+# (secrets.tf's JWT_SECRET, RDS master password) — never committed, same
+# reasoning as server/.env.
+infra/terraform/**/.terraform/
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.*
+infra/terraform/**/*.tfplan
+infra/terraform/**/*.plan
+infra/terraform/**/crash.log
+infra/terraform/**/*.tfvars.json
