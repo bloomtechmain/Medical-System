@@ -7,7 +7,7 @@
     "start": "node dist/server.js",
     "dev": "tsx watch server.ts",
     "build": "tsc",
-    "lint": "eslint . --ext .ts --ignore-path .eslintignore",
+    "lint": "eslint .",
     "test": "jest",
     "db:migrate": "node-pg-migrate up --ignore-pattern \"BASELINE.*\"",
     "db:migrate:down": "node-pg-migrate down --ignore-pattern \"BASELINE.*\"",
@@ -53,7 +53,7 @@
     "multer": "^2.5.0",
     "node-pg-migrate": "^9.0.0",
     "nodemailer": "^10.2.1",
-    "otplib": "^13.5.0",
+    "otplib": "^12.0.1",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^6.4.299",
     "pg": "^8.12.0",
@@ -82,7 +82,7 @@
     "nodemon": "^3.1.4",
     "ts-jest": "^29.4.15",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "~6.0.3"
   },
   "allowScripts": {
     "canvas@3.2.3": true,

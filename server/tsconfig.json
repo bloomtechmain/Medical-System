@@ -11,7 +11,8 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "typeRoots": ["./node_modules/@types", "./types"]
+    "typeRoots": ["./node_modules/@types", "./types"],
+    "types": ["jest", "node"]
   },
   "include": ["./**/*.ts"],
   "exclude": ["node_modules", "dist", "uploads", "**/__tests__/**", "test-utils"]
