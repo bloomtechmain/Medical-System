@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
+import { SiteNav, SiteFooter } from '../components/site/SiteLayout';
 
 const STATS = [
   { value: '10,000+', label: 'Patients Served' },
@@ -73,49 +74,9 @@ const ROLES = [
   { icon: '🔬', label: 'Laboratory',  desc: 'Receive lab requests and upload patient reports',          color: 'text-cyan-600 bg-cyan-100' },
 ];
 
-function GetStartedModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-          <div>
-            <p className="text-lg font-bold text-gray-900">How will you join Core Health?</p>
-            <p className="text-sm text-gray-500 mt-0.5">Choose the option that fits you.</p>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-200 shrink-0">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
-          <Link to="/org-register" onClick={onClose}
-            className="group text-left p-6 rounded-2xl border-2 border-teal-400 bg-teal-50 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">🏢</div>
-            <p className="font-bold text-gray-900 text-lg mb-1.5">Register an Organization</p>
-            <p className="text-sm text-gray-500 leading-relaxed">Hospital, clinic, pharmacy, or laboratory — bring your whole team onto Core Health.</p>
-          </Link>
-          <Link to="/register" onClick={onClose}
-            className="group text-left p-6 rounded-2xl border-2 border-primary-400 bg-primary-50 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">🧑‍⚕️</div>
-            <p className="font-bold text-gray-900 text-lg mb-1.5">Join as Patient or Doctor</p>
-            <p className="text-sm text-gray-500 leading-relaxed">Create a personal account to manage your health records or your own practice.</p>
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Landing() {
-  const [scrolled, setScrolled] = useState(false);
-  const [showGetStarted, setShowGetStarted] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
   const [, setStatsVisible] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -129,38 +90,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-white text-gray-900 overflow-x-hidden">
 
-      {/* ── Navbar ───────────────────────────────────────────────── */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-sm shadow-sm border-b border-gray-100' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-700 rounded-lg flex items-center justify-center shadow-sm">
-              <svg className="w-4.5 h-4.5 w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <div>
-              <span className={`font-bold text-lg leading-none ${scrolled ? 'text-gray-900' : 'text-white'}`}>Core Health</span>
-              <p className={`text-xs leading-none mt-0.5 ${scrolled ? 'text-gray-400' : 'text-teal-200'}`}>by BloomTech</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              to="/login"
-              className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
-                scrolled ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              Sign In
-            </Link>
-            <button
-              onClick={() => setShowGetStarted(true)}
-              className="text-sm font-semibold px-4 py-2 rounded-lg bg-white text-teal-700 hover:bg-teal-50 transition-colors shadow-sm"
-            >
-              Get Started
-            </button>
-          </div>
-        </div>
-      </nav>
+      <SiteNav />
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex items-center bg-gradient-to-br from-teal-900 via-teal-800 to-emerald-900 overflow-hidden">
@@ -565,32 +495,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Footer ───────────────────────────────────────────────── */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 bg-gradient-to-br from-teal-500 to-teal-700 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-              <div>
-                <span className="font-bold text-white">Core Health</span>
-                <span className="text-gray-500 text-sm ml-1.5">by BloomTech</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-6 text-sm">
-              <Link to="/login" className="hover:text-white transition-colors">Sign In</Link>
-              <Link to="/register" className="hover:text-white transition-colors">Register</Link>
-              <Link to="/org-register" className="hover:text-white transition-colors">Organizations</Link>
-            </div>
-            <p className="text-xs text-gray-600">© 2024 Core Health by BloomTech. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
 
-      {showGetStarted && <GetStartedModal onClose={() => setShowGetStarted(false)} />}
     </div>
   );
 }
