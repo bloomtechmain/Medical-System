@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { TFunction } from 'i18next';
@@ -133,6 +133,7 @@ function ProfileFields({ fields, register }: { fields: FieldDef[]; register: any
 export default function Users() {
   const { t } = useTranslation('admin');
   const { t: tc } = useTranslation('common');
+  const { t: tp } = useTranslation('plans');
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { impersonate } = useAuth();
@@ -331,6 +332,16 @@ export default function Users() {
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS[u.role] || 'bg-gray-100 text-gray-600'}`}>
                         {ROLE_LABELS[u.role] ?? u.role}
                       </span>
+                      {/* Migration 014: the doctor's package; patients are always free */}
+                      {u.plan_name && (
+                        <Link
+                          to={`/admin/plans?tab=subscribers&audience=doctor&plan_id=${u.plan_id}`}
+                          className="block text-[11px] text-primary-700 hover:underline mt-1"
+                        >
+                          {u.plan_name}
+                        </Link>
+                      )}
+                      {u.role === 'patient' && <span className="block text-[11px] text-gray-400 mt-1">{tp('free')}</span>}
                     </td>
                     <td className="px-5 py-3">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>

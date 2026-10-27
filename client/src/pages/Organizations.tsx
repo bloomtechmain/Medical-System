@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
@@ -9,7 +10,7 @@ import { Organization, OrganizationMember } from '../types';
 import { formatDate } from '../utils/helpers';
 import {
   Building2, Hospital, FlaskConical, Pill, Stethoscope,
-  ChevronDown, ChevronUp, Plus, Trash2, UserPlus, Power,
+  ChevronDown, ChevronUp, Plus, Trash2, UserPlus, Power, Package,
   PowerOff, X, Users, Hash, CheckCircle, Clock,
 } from 'lucide-react';
 
@@ -293,6 +294,15 @@ function OrgRow({ org }: { org: Organization }) {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-gray-900 text-sm">{org.name}</span>
               <OrgTypeBadge type={org.org_type} />
+              {/* Migration 014: the organisation's package */}
+              {org.plan_name && (
+                <Link
+                  to={`/admin/plans?tab=subscribers&audience=${org.org_type}&plan_id=${org.plan_id}`}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-primary-700 bg-primary-50 border border-primary-100 px-2 py-0.5 rounded-full hover:bg-primary-100"
+                >
+                  <Package size={9} /> {org.plan_name}
+                </Link>
+              )}
               {isPending && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
                   <Clock size={9} /> {t('organizations.pendingApprovalBadge')}

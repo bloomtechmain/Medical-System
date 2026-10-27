@@ -2,18 +2,24 @@ import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, revokeRefreshTokens } from '../config/db';
 import { createProfile } from './authController';
+import { recordRegistrationPlan } from './planController';
+import { resolveRegistrationPlan } from '../utils/plans';
+import { isPlanAudience } from '../config/planCatalog';
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { rows } = await pool.query(`
       SELECT o.id, o.slug, o.name, o.org_type, o.schema_name, o.is_active, o.approved_at, o.created_at,
+             p.id AS plan_id, p.name AS plan_name, p.code AS plan_code, (o.plan_id IS NULL) AS plan_is_default,
              u.name  AS owner_name,
              u.email AS owner_email,
              COUNT(DISTINCT m.user_id)::int AS member_count
       FROM public.organizations o
       LEFT JOIN public.users u ON u.id = o.owner_user_id
       LEFT JOIN public.organization_members m ON m.organization_id = o.id
-      GROUP BY o.id, u.name, u.email
+      LEFT JOIN public.plans d ON d.audience = o.org_type AND d.is_default
+      LEFT JOIN public.plans p ON p.id = COALESCE(o.plan_id, d.id)
+      GROUP BY o.id, u.name, u.email, p.id
       ORDER BY o.created_at DESC, o.id DESC
     `);
     res.json(rows);
@@ -201,7 +207,7 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
     const {
       org_name, slug, org_type, owner_user_id,
       owner_name, owner_email, owner_password, profile, specializations,
-      accepted_terms_version,
+      accepted_terms_version, plan_id,
     } = req.body as {
       org_name: string; slug: string; org_type: string;
       owner_user_id?: number;
@@ -209,10 +215,18 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
       profile?: Record<string, any>;
       specializations?: string[];
       accepted_terms_version?: string;
+      plan_id?: number;
     };
 
     const role = ORG_OWNER_ROLE[org_type];
     if (!role) { res.status(400).json({ message: 'Invalid organization type' }); return; }
+
+    // Migration 014: the package this organisation signs up for. None chosen =
+    // the free default. Validated before anything is written.
+    if (!isPlanAudience(org_type)) { res.status(400).json({ message: 'Invalid organization type' }); return; }
+    const chosenPlan = await resolveRegistrationPlan(org_type, plan_id);
+    if ('error' in chosenPlan) { res.status(400).json({ message: chosenPlan.error }); return; }
+    const plan = chosenPlan.plan;
 
     const existingSlug = await client.query('SELECT id FROM public.organizations WHERE slug = $1', [slug]);
     if (existingSlug.rows.length) { res.status(409).json({ message: 'That organization slug is already taken' }); return; }
@@ -285,9 +299,9 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
     let org: { id: number };
     try {
       ({ rows: [org] } = await client.query(
-        `INSERT INTO public.organizations (slug, name, org_type, owner_user_id, is_active)
-         VALUES ($1,$2,$3,$4, FALSE) RETURNING id`,
-        [slug, org_name, org_type, owner.id]
+        `INSERT INTO public.organizations (slug, name, org_type, owner_user_id, is_active, plan_id)
+         VALUES ($1,$2,$3,$4, FALSE, $5) RETURNING id`,
+        [slug, org_name, org_type, owner.id, plan?.id ?? null]
       ));
     } catch (err) {
       if ((err as { code?: string }).code === '23505') {
@@ -302,6 +316,7 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
       `INSERT INTO public.organization_members (organization_id, user_id, member_role) VALUES ($1,$2,'owner')`,
       [org.id, owner.id]
     );
+    if (plan) await recordRegistrationPlan(client, { organizationId: org.id }, plan.id);
 
     const cleanSpecs = (specializations || []).map(s => s.trim()).filter(Boolean);
     if (cleanSpecs.length) {

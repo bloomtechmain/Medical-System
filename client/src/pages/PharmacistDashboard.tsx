@@ -10,6 +10,7 @@ import { inventoryApi, saleApi, authApi, orderApi, medicineApi, prescriptionAssi
 import { useAuth } from '../context/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatCurrency, formatDate, formatDateTime, stockStatus } from '../utils/helpers';
+import { useDashboardPlan } from '../hooks/useDashboardPlan';
 
 const daysUntil = (dateStr: string | null | undefined): number | null => {
   if (!dateStr) return null;
@@ -48,9 +49,12 @@ export default function PharmacistDashboard() {
   const { data: summary } = useQuery({ queryKey: ['inventory-summary'], queryFn: () => inventoryApi.summary() });
   const { data: sales = [] } = useQuery({ queryKey: ['sales'], queryFn: saleApi.getAll });
   const { data: lowStock = [] } = useQuery({ queryKey: ['low-stock'], queryFn: () => inventoryApi.lowStock() });
-  const { data: expiring = [] } = useQuery({ queryKey: ['expiring', 30], queryFn: () => inventoryApi.expiring(30) });
+  // Migration 014: these two are package features; on a package without them
+  // the server refuses the request, so do not make it.
+  const { has } = useDashboardPlan('pharmacist');
+  const { data: expiring = [] } = useQuery({ queryKey: ['expiring', 30], queryFn: () => inventoryApi.expiring(30), enabled: has('inventory_reports') });
   const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: orderApi.getAll });
-  const { data: analytics } = useQuery({ queryKey: ['sales-analytics'], queryFn: saleApi.analytics });
+  const { data: analytics } = useQuery({ queryKey: ['sales-analytics'], queryFn: saleApi.analytics, enabled: has('sales_analytics') });
   const { data: prescriptions = [] } = useQuery({ queryKey: ['pharmacist-assignments'], queryFn: prescriptionAssignmentApi.getAll });
 
   const [medSearch, setMedSearch] = useState('');

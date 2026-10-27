@@ -2,11 +2,12 @@ import { Router } from 'express';
 import { create, getAll, updateStatus, cancel } from '../controllers/prescriptionAssignmentController';
 import { getAll as getMessages, create as createMessage } from '../controllers/prescriptionAssignmentMessagesController';
 import { protect, authorize } from '../middleware/auth';
+import { requireFeature } from '../middleware/planGate';
 
 const router = Router();
 
 router.get('/',              protect, authorize('doctor', 'patient', 'pharmacist'), getAll);
-router.post('/',             protect, authorize('doctor', 'patient'),               create);
+router.post('/',             protect, authorize('doctor', 'patient'), requireFeature('e_prescriptions'),               create);
 router.patch('/:id/status',  protect, authorize('pharmacist'),                      updateStatus);
 router.patch('/:id/cancel',  protect, authorize('doctor', 'patient'),               cancel);
 

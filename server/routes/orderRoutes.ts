@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import { getAll, getOne, create, receive } from '../controllers/orderController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
+import { requireFeature } from '../middleware/planGate';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ const createValidators = [
 
 router.get('/', getAll);
 router.get('/:id', getOne);
-router.post('/', authorize('admin', 'pharmacist'), createValidators, validate, create);
-router.patch('/:id/receive', authorize('admin', 'pharmacist'), receive);
+router.post('/', authorize('admin', 'pharmacist'), requireFeature('purchase_orders'), createValidators, validate, create);
+router.patch('/:id/receive', authorize('admin', 'pharmacist'), requireFeature('purchase_orders'), receive);
 
 export default router;

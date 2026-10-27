@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { ShieldCheck, X, Check, Stethoscope, Pill, FlaskConical, Building2 } from 'lucide-react';
 import { userApi } from '../../services/api';
 import { formatDate } from '../../utils/helpers';
+import { formatPrice } from '../../constants/plans';
 
 // SEC-17 #2 made professional sign-ups inactive until an admin reviews them,
 // but nothing ever listed them: a newly registered doctor looked exactly like
@@ -30,6 +31,9 @@ interface PendingUser {
   organization_id?: number | null;
   organization_name?: string | null;
   org_type?: string | null;
+  plan_name?: string | null;
+  plan_price_monthly?: number | null;
+  plan_currency?: string | null;
 }
 
 const ROLE_META: Record<string, { Icon: typeof Stethoscope; label: string; tint: string }> = {
@@ -56,6 +60,11 @@ const credentials = (u: PendingUser): { label: string; value: string }[] => {
   }
   if (u.organization_name) {
     out.push({ label: 'Registering as owner of', value: `${u.organization_name} (${u.org_type})` });
+  }
+  // Migration 014: the package they chose. A paid one is the admin's cue to
+  // confirm payment before approving.
+  if (u.plan_name) {
+    out.push({ label: 'Package', value: `${u.plan_name} (${formatPrice(u.plan_price_monthly ?? 0, u.plan_currency ?? 'LKR')}${u.plan_price_monthly ? ' / month' : ''})` });
   }
   return out;
 };
