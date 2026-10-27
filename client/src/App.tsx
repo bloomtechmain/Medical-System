@@ -6,6 +6,7 @@ import Layout from './components/layout/Layout';
 import TermsGate from './components/common/TermsGate';
 import { dashboardContexts, resolveActiveContext } from './constants/dashboards';
 import RequireFeature from './components/plans/RequireFeature';
+import BrandLoader from './components/common/BrandLoader';
 
 // PERF-10: every page was a static import, so the client shipped as one
 // ~2 MB bundle regardless of role — a patient's browser downloaded the
@@ -60,9 +61,7 @@ const Organizations         = lazy(() => import('./pages/Organizations'));
 const MyPackage             = lazy(() => import('./pages/MyPackage'));
 const AdminPlans            = lazy(() => import('./pages/AdminPlans'));
 
-const RouteFallback = () => (
-  <div className="flex items-center justify-center h-screen text-gray-400">Loading…</div>
-);
+const RouteFallback = BrandLoader;
 
 interface PrivateRouteProps {
   children: ReactNode;

@@ -10,32 +10,27 @@ import { LEGAL_VERSION } from '../legal';
 import { Building2, X } from 'lucide-react';
 import PlanPicker from '../components/plans/PlanPicker';
 import { Plan } from '../types';
+import { ArrowRight, Building2, Check, X } from 'lucide-react';
+import AuthShell from '../components/landing/AuthShell';
+import { roleById } from '../components/landing/roles';
+import { Leaf, Cross } from '../components/landing/Shapes';
 
 interface RoleOption {
   id: string;
   label: string;
-  icon: string;
   desc: string;
-  color: string;
-  badge: string;
 }
 
 const ROLES: RoleOption[] = [
   {
     id: 'patient',
     label: 'Patient',
-    icon: '🏥',
     desc: 'Register to manage your health records, find doctors, and view prescriptions.',
-    color: 'border-blue-500 bg-blue-50',
-    badge: 'bg-blue-100 text-blue-700',
   },
   {
     id: 'doctor',
     label: 'Doctor',
-    icon: '🩺',
     desc: 'Join as a medical professional to manage patients and write prescriptions.',
-    color: 'border-primary-500 bg-primary-50',
-    badge: 'bg-primary-100 text-primary-700',
   },
 ];
 
@@ -95,31 +90,26 @@ export default function Register() {
     }
   };
 
+  const roleMeta = roleById(selectedRole === 'doctor' ? 'doctor' : 'patient');
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-primary-50 flex items-center justify-center p-4">
-      <div className={`w-full ${step === 2 ? 'max-w-5xl' : 'max-w-2xl'}`}>
+    <AuthShell
+      title={<>One record, <em className="text-suwela-mint">every visit.</em></>}
+      text="Create your Suwela account and your consultations, prescriptions and lab results start collecting in one place.">
+      <div className="w-full max-w-2xl">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-3">
-            <div className="w-9 h-9 bg-primary-600 rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <span className="text-xl font-bold text-gray-900">Core Health</span>
-          </div>
-          <p className="text-xs text-gray-400 -mt-1">by BloomTech</p>
-          <div className="mt-4 flex items-center justify-center gap-3">
-            {steps.map((s, i) => (
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="flex items-center gap-2">
+            {[1, 2].map((s) => (
               <div key={s} className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                  step >= s ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-500'
-                }`}>{i + 1}</div>
-                {i < steps.length - 1 && <div className={`w-12 h-0.5 ${step > s ? 'bg-primary-600' : 'bg-gray-200'}`} />}
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                  step >= s ? 'text-white' : 'bg-white text-suwela-slate shadow-sm'
+                }`} style={step >= s ? { backgroundColor: '#13A58F' } : undefined}>{step > s ? <Check className="w-4 h-4" strokeWidth={3} /> : s}</div>
+                {s < 2 && <div className="w-16 h-1 rounded-full" style={{ backgroundColor: step > s ? '#13A58F' : '#E2E7E3' }} />}
               </div>
             ))}
           </div>
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm font-semibold text-suwela-slate mt-3">
             {step === 1
               ? 'Choose your account type'
               : step === 2
@@ -132,34 +122,59 @@ export default function Register() {
 
         {/* Step 1: Role selection */}
         {step === 1 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">How will you use Core Health?</h2>
-            <p className="text-gray-500 text-sm mb-6">Select the option that best describes you.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {ROLES.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => { setSelectedRole(r.id); setStep(r.id === 'doctor' ? 2 : 3); }}
-                  className={`group relative text-left p-6 rounded-2xl border-2 bg-white transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${r.color}`}
-                >
-                  <svg className="absolute top-5 right-5 w-5 h-5 text-gray-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                  <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">
-                    {r.icon}
-                  </div>
-                  <p className="font-bold text-gray-900 text-lg mb-1.5">{r.label}</p>
-                  <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium mb-2.5 ${r.badge}`}>
-                    Register as {r.label}
-                  </span>
-                  <p className="text-sm text-gray-500 leading-relaxed">{r.desc}</p>
-                </button>
-              ))}
+          <div className="sw-rise">
+            <h1 className="font-display text-4xl sm:text-5xl text-suwela-navy text-center leading-tight">How will you use Suwela?</h1>
+            <p className="text-suwela-slate text-center mt-3 mb-8">Select the option that best describes you.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {ROLES.map((r) => {
+                const m = roleById(r.id === 'doctor' ? 'doctor' : 'patient');
+                const Shape = r.id === 'doctor' ? Cross : Leaf;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => { setSelectedRole(r.id); setStep(2); }}
+                    className="group relative overflow-hidden text-left p-7 rounded-[32px] bg-white transition-all duration-300 hover:-translate-y-1.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-200 shadow-[0_24px_50px_-30px_rgba(14,44,82,0.45)]"
+                  >
+                    <Shape from={m.tint} to={m.color} className="absolute -right-10 -top-10 w-40 h-40 opacity-15 transition-transform duration-700 group-hover:rotate-45 group-hover:scale-125" />
+                    <span className="relative flex w-20 h-20 rounded-[26px] items-center justify-center text-white mb-5 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105"
+                          style={{ backgroundColor: m.color, backgroundImage: `linear-gradient(135deg, ${m.tint}, ${m.color})`, boxShadow: `0 16px 30px -14px ${m.color}` }}>
+                      <m.icon className="w-10 h-10" strokeWidth={1.8} />
+                    </span>
+                    <p className="relative font-display text-3xl text-suwela-navy">{r.label}</p>
+                    <p className="relative text-suwela-slate leading-relaxed mt-2">{r.desc}</p>
+                    <span className="relative mt-6 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition-all group-hover:gap-3"
+                          style={{ backgroundColor: m.color }}>
+                      Register as {r.label} <ArrowRight className="w-4 h-4" />
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            <p className="text-center text-sm text-gray-500 mt-6">
+
+            <Link to="/org-register"
+                  className="group mt-5 flex items-center gap-4 rounded-[28px] p-4 pr-6 text-white transition-transform hover:-translate-y-0.5"
+                  style={{ backgroundColor: '#0E2C52', backgroundImage: 'linear-gradient(120deg, #0E2C52, #123E6E)' }}>
+              <span className="flex -space-x-2 shrink-0">
+                {(['pharmacist', 'laboratory', 'org'] as const).map(id => {
+                  const o = roleById(id);
+                  return (
+                    <span key={id} className="w-11 h-11 rounded-full flex items-center justify-center ring-[3px] ring-[#0E2C52]" style={{ backgroundColor: o.color }}>
+                      <o.icon className="w-5 h-5" />
+                    </span>
+                  );
+                })}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block font-semibold">Running a pharmacy, lab, hospital or clinic?</span>
+                <span className="block text-sm text-white/65">Register your organisation instead.</span>
+              </span>
+              <ArrowRight className="w-5 h-5 shrink-0 transition-transform group-hover:translate-x-1" />
+            </Link>
+
+            <p className="text-center text-suwela-slate mt-8">
               Already have an account?{' '}
-              <Link to="/login" className="text-primary-600 font-medium hover:text-primary-700">Sign in</Link>
+              <Link to="/login" className="font-semibold text-suwela-green hover:text-suwela-forest">Sign in</Link>
             </p>
           </div>
         )}
@@ -188,7 +203,7 @@ export default function Register() {
         {/* Step 3: Registration form */}
         {step === 3 && (
           <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
+            <div className="sw-rise bg-white rounded-[32px] shadow-[0_24px_60px_-34px_rgba(14,44,82,0.5)] p-6 sm:p-9 space-y-6">
               {/* Back button + role badge */}
               <div className="flex items-center justify-between">
                 <button type="button" onClick={() => setStep(selectedRole === 'doctor' ? 2 : 1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
@@ -203,6 +218,9 @@ export default function Register() {
                   ROLES.find(r => r.id === selectedRole)?.badge
                 }`}>
                   {ROLES.find(r => r.id === selectedRole)?.icon} Registering as {selectedRole}
+                <span className="inline-flex items-center gap-2 text-sm pl-1.5 pr-4 py-1.5 rounded-full font-semibold text-white" style={{ backgroundColor: roleMeta.color }}>
+                  <span className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center"><roleMeta.icon className="w-4 h-4" /></span>
+                  Registering as {selectedRole}
                 </span>
               </div>
 
@@ -304,7 +322,7 @@ export default function Register() {
                       <HospitalSearchAdd
                         onAdd={(org) => setHospitals(hs => hs.some(x => x.id === org.id) ? hs : [...hs, org])}
                         excludeIds={hospitals.map(h => h.id)}
-                        placeholder="Search for a hospital or clinic already on Core Health..."
+                        placeholder="Search for a hospital or clinic already on Suwela..."
                       />
                     </div>
                     <div>
@@ -320,7 +338,8 @@ export default function Register() {
                 </div>
               )}
 
-              <button type="submit" className="btn-primary w-full py-2.5" disabled={loading}>
+              <button type="submit" className="btn-primary w-full py-3 rounded-full text-base" disabled={loading}
+                      style={{ backgroundImage: 'linear-gradient(90deg, #1598E9, #13A58F)' }}>
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
                     <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -337,7 +356,7 @@ export default function Register() {
                   The version is submitted with the form and stored on the
                   user row (migration 008). */}
               <p className="text-center text-xs text-gray-400">
-                By creating an account, you agree to Core Health's{' '}
+                By creating an account, you agree to Suwela's{' '}
                 <Link to="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-700">
                   Terms of Service
                 </Link>{' '}
@@ -351,6 +370,6 @@ export default function Register() {
           </form>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }
