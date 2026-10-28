@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
 import { FormEvent, useMemo, useState } from 'react';
 import { SitePage, PageHero, SectionHeading } from '../../components/site/SiteLayout';
+import { contactApi } from '../../services/api';
+
+const sendError = (err: any): string => err?.response?.data?.message || 'Could not send right now. Please try again, or email help@suwale.com.';
 
 type Topic = 'Getting started' | 'Patients' | 'Doctors' | 'Organizations' | 'Account & security' | 'Packages';
 
@@ -223,6 +226,8 @@ export default function Help() {
   const [showAll, setShowAll] = useState(false);
   const [msg, setMsg] = useState({ name: '', email: '', subject: '', message: '' });
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -235,10 +240,18 @@ export default function Help() {
   // With no topic or search, only a preview of the list is shown.
   const filtering = topic !== null || query.trim() !== '';
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    // TODO: send to a support endpoint once the API has one.
-    setSent(true);
+    setSending(true);
+    setError('');
+    try {
+      await contactApi.support(msg);
+      setSent(true);
+    } catch (err) {
+      setError(sendError(err));
+    } finally {
+      setSending(false);
+    }
   };
 
   const input = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10';
@@ -389,16 +402,13 @@ export default function Help() {
             <p className="mt-4 text-teal-100 leading-relaxed">Our support team is here for patients, providers and organizations. We usually reply within one working day.</p>
             <div className="mt-8 space-y-4">
               {[
-                ['✉️', 'Email', 'support@corehealth.lk'],
-                ['📞', 'Phone', '+94 11 000 0000'],
-                ['🕘', 'Hours', 'Mon – Fri, 8:30 AM – 5:30 PM'],
-                ['📍', 'Office', 'BloomTech, Colombo, Sri Lanka'],
+                ['✉️', 'Email', 'help@suwale.com'],
               ].map(([icon, label, value]) => (
                 <div key={label} className="flex items-center gap-4 rounded-2xl bg-white/10 border border-white/10 backdrop-blur-sm p-4">
                   <span className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-xl">{icon}</span>
                   <div>
                     <p className="text-xs text-teal-200">{label}</p>
-                    <p className="font-semibold">{value}</p>
+                    <a href={`mailto:${value}`} className="font-semibold hover:underline">{value}</a>
                   </div>
                 </div>
               ))}
@@ -428,8 +438,9 @@ export default function Help() {
                 </select>
                 <textarea required rows={5} placeholder="Tell us what's going on. Please don't include medical details." value={msg.message}
                   onChange={e => setMsg(m => ({ ...m, message: e.target.value }))} className={`${input} resize-none`} />
-                <button className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold py-3.5 shadow-lg shadow-teal-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                  Send message
+                {error && <p className="text-sm text-red-600">{error}</p>}
+                <button disabled={sending} className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold py-3.5 shadow-lg shadow-teal-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:hover:translate-y-0">
+                  {sending ? 'Sending…' : 'Send message'}
                 </button>
               </form>
             )}

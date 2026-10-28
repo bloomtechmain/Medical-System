@@ -188,6 +188,7 @@ import healthReportRoutes   from './routes/healthReportRoutes';
 import prescriptionAssignmentRoutes from './routes/prescriptionAssignmentRoutes';
 import orgMembershipRequestRoutes from './routes/orgMembershipRequestRoutes';
 import planRoutes            from './routes/planRoutes';
+import contactRoutes         from './routes/contactRoutes';
 
 app.use('/api/auth',              authRoutes);
 app.use('/api/users',             userRoutes);
@@ -211,6 +212,7 @@ app.use('/api/health-report',     healthReportRoutes);
 app.use('/api/prescription-assignments', prescriptionAssignmentRoutes);
 app.use('/api/org-membership-requests', orgMembershipRequestRoutes);
 app.use('/api/plans',             planRoutes);
+app.use('/api/contact',           contactRoutes);
 // Public self-registration — mounted before the admin-gated organizations router
 // so it is never touched by the protect/authorize middleware.
 // PRO-06 point 5 / PRO-10: public self-registration had no checks on email

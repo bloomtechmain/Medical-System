@@ -19,10 +19,10 @@ const MILESTONES = [
 ];
 
 const STATS = [
-  { value: '10,000+', label: 'Patients served' },
-  { value: '500+', label: 'Healthcare providers' },
-  { value: '200+', label: 'Organizations' },
-  { value: '99.9%', label: 'Uptime' },
+  { value: '4', label: 'Care roles connected' },
+  { value: '2', label: 'Languages — English & සිංහල' },
+  { value: 'Free', label: 'For every patient' },
+  { value: '24/7', label: 'Access to your records' },
 ];
 
 const TEAMS = [
