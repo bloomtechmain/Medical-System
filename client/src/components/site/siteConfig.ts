@@ -8,5 +8,6 @@ export const NAV_LINKS = [
   { to: '/news',        label: 'News' },
   { to: '/share-story', label: 'Share My Story' },
   { to: '/about',       label: 'About' },
+  { to: '/compliance',  label: 'Compliance' },
   { to: '/help',        label: 'Help' },
 ];

@@ -173,6 +173,7 @@ export function SiteFooter() {
     ]},
     { title: 'Support', links: [
       { to: '/help', label: 'Help centre' },
+      { to: '/compliance', label: 'Compliance' },
       { to: '/terms', label: 'Terms of service' },
       { to: '/privacy', label: 'Privacy policy' },
     ]},
@@ -210,7 +211,11 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-white/45">
-          <p>© {new Date().getFullYear()} Suwela Medical Hub. Built by BloomTech.</p>
+          <p className="text-center sm:text-left">
+            © {new Date().getFullYear()} Suwela Medical Hub. Built by BloomTech.
+            <span className="mx-2">·</span>
+            <Link to="/compliance#regulations" className="hover:text-white">FTC Health Breach Notification Rule</Link>
+          </p>
           <p>Made in Sri Lanka 🇱🇰</p>
         </div>
       </div>
