@@ -1,35 +1,37 @@
 import { Link } from 'react-router-dom';
 import { FormEvent, useMemo, useState } from 'react';
+import {
+  ArrowRight, Check, ChevronDown, FileText, Hospital, KeyRound, Mail, MailCheck, Package, Plus, Rocket, Search,
+  SearchX, ShieldCheck, Stethoscope, UserRound, X, type LucideIcon,
+} from 'lucide-react';
 import { SitePage, PageHero, SectionHeading } from '../../components/site/SiteLayout';
+import { SUPPORT_EMAIL } from '../../components/site/siteConfig';
+import { IconChip } from '../../components/site/Cards';
+import { TONES, type Tone } from '../../components/site/tones';
+import { Tilt } from '../../components/landing/Features';
+import { Leaf, Cross } from '../../components/landing/Shapes';
 import { contactApi } from '../../services/api';
 
-const sendError = (err: any): string => err?.response?.data?.message || 'Could not send right now. Please try again, or email help@suwale.com.';
+const sendError = (err: any): string => err?.response?.data?.message || `Could not send right now. Please try again, or email ${SUPPORT_EMAIL}.`;
+
+const GRADIENT_BTN = { backgroundColor: '#13A58F', backgroundImage: 'linear-gradient(90deg, #1598E9, #13A58F)' };
 
 type Topic = 'Getting started' | 'Patients' | 'Doctors' | 'Organizations' | 'Account & security' | 'Packages';
 
-const TOPICS: { id: Topic; icon: string; desc: string }[] = [
-  { id: 'Getting started',    icon: '🚀', desc: 'Creating an account and first steps' },
-  { id: 'Patients',           icon: '👤', desc: 'Bookings, records and lab reports' },
-  { id: 'Doctors',            icon: '🩺', desc: 'Consultations, prescriptions, labs' },
-  { id: 'Organizations',      icon: '🏥', desc: 'Hospitals, clinics, pharmacies, labs' },
-  { id: 'Account & security', icon: '🔒', desc: 'Passwords, privacy and your data' },
-  { id: 'Packages',           icon: '📦', desc: 'Free and paid packages' },
+const TOPICS: { id: Topic; icon: LucideIcon; tone: Tone; desc: string }[] = [
+  { id: 'Getting started',    icon: Rocket,      tone: 'deep',   desc: 'Creating an account and first steps' },
+  { id: 'Patients',           icon: UserRound,   tone: 'green',  desc: 'Bookings, records and lab reports' },
+  { id: 'Doctors',            icon: Stethoscope, tone: 'blue',   desc: 'Consultations, prescriptions, labs' },
+  { id: 'Organizations',      icon: Hospital,    tone: 'orange', desc: 'Hospitals, clinics, pharmacies, labs' },
+  { id: 'Account & security', icon: ShieldCheck, tone: 'purple', desc: 'Passwords, privacy and your data' },
+  { id: 'Packages',           icon: Package,     tone: 'green',  desc: 'Free and paid packages' },
 ];
-
-// Full class names per topic so Tailwind keeps them in the build.
-const TOPIC_TONE: Record<Topic, { bar: string; soft: string; border: string; glow: string; icon: string; chip: string; button: string; check: string }> = {
-  'Getting started':    { bar: 'bg-teal-500',    soft: 'from-teal-50',    border: 'border-teal-200',    glow: 'bg-teal-300',    icon: 'bg-teal-50',    chip: 'bg-teal-50 text-teal-700',       button: 'bg-teal-600',    check: 'text-teal-500' },
-  'Patients':           { bar: 'bg-blue-500',    soft: 'from-blue-50',    border: 'border-blue-200',    glow: 'bg-blue-300',    icon: 'bg-blue-50',    chip: 'bg-blue-50 text-blue-700',       button: 'bg-blue-600',    check: 'text-blue-500' },
-  'Doctors':            { bar: 'bg-emerald-500', soft: 'from-emerald-50', border: 'border-emerald-200', glow: 'bg-emerald-300', icon: 'bg-emerald-50', chip: 'bg-emerald-50 text-emerald-700', button: 'bg-emerald-600', check: 'text-emerald-500' },
-  'Organizations':      { bar: 'bg-purple-500',  soft: 'from-purple-50',  border: 'border-purple-200',  glow: 'bg-purple-300',  icon: 'bg-purple-50',  chip: 'bg-purple-50 text-purple-700',   button: 'bg-purple-600',  check: 'text-purple-500' },
-  'Account & security': { bar: 'bg-amber-500',   soft: 'from-amber-50',   border: 'border-amber-200',   glow: 'bg-amber-300',   icon: 'bg-amber-50',   chip: 'bg-amber-50 text-amber-700',     button: 'bg-amber-500',   check: 'text-amber-500' },
-  'Packages':           { bar: 'bg-rose-500',    soft: 'from-rose-50',    border: 'border-rose-200',    glow: 'bg-rose-300',    icon: 'bg-rose-50',    chip: 'bg-rose-50 text-rose-700',       button: 'bg-rose-500',    check: 'text-rose-500' },
-};
+const topicOf = (id: Topic) => TOPICS.find(t => t.id === id)!;
 
 // Every answer below was checked against the app's screens and API. Menu
 // names in quotes match the sidebar labels in locales/en/common.json.
 const FAQS: { topic: Topic; q: string; a: string[] }[] = [
-  { topic: 'Getting started', q: 'Who can use Core Health?', a: [
+  { topic: 'Getting started', q: 'Who can use Suwela?', a: [
     'Patients and doctors create their own personal account.',
     'Hospitals, clinics, pharmacies and laboratories register as an organization.',
     'The organization owner then creates accounts for their staff.',
@@ -46,12 +48,12 @@ const FAQS: { topic: Topic; q: string; a: string[] }[] = [
     'You can resend up to 5 times an hour.',
     'Registered an organization? The email is only sent after our team approves it.',
   ]},
-  { topic: 'Getting started', q: 'Can I use Core Health in Sinhala?', a: [
-    'Yes — Core Health is available in English and Sinhala.',
+  { topic: 'Getting started', q: 'Can I use Suwela in Sinhala?', a: [
+    'Yes — Suwela is available in English and Sinhala.',
     'Use the language switcher in the top bar of the app to change at any time.',
   ]},
   { topic: 'Getting started', q: 'I belong to more than one dashboard. Which one opens?', a: [
-    'If you have more than one dashboard, Core Health asks which one to open when you sign in.',
+    'If you have more than one dashboard, Suwela asks which one to open when you sign in.',
     'It remembers your choice for next time.',
     'Use the dashboard switcher in the top bar to change at any time.',
   ]},
@@ -84,7 +86,7 @@ const FAQS: { topic: Topic; q: string; a: string[] }[] = [
   { topic: 'Patients', q: 'How do I upload my own medical reports?', a: [
     'Open "My Reports" in the sidebar and upload the file.',
     'PDF and image files (JPEG, PNG, WebP, TIFF, BMP) are accepted, up to 20 MB each.',
-    'Core Health reads vitals from the report automatically where it can.',
+    'Suwela reads vitals from the report automatically where it can.',
   ]},
   { topic: 'Patients', q: 'How do I send my prescription to a pharmacy?', a: [
     'Open the consultation in "Consultations".',
@@ -98,7 +100,7 @@ const FAQS: { topic: Topic; q: string; a: string[] }[] = [
     'You get a PDF with your vitals, consultations, lab tests and uploaded documents.',
   ]},
   { topic: 'Patients', q: 'Do patients pay anything?', a: [
-    'No — every patient feature on Core Health is free.',
+    'No — every patient feature on Suwela is free.',
   ]},
 
   { topic: 'Doctors', q: 'How do I write a prescription?', a: [
@@ -217,7 +219,14 @@ const FAQS: { topic: Topic; q: string; a: string[] }[] = [
   ]},
 ];
 
+
 const PREVIEW_COUNT = 6;
+
+const QUICK_LINKS: { to: string; icon: LucideIcon; tone: Tone; title: string; desc: string }[] = [
+  { to: '/forgot-password', icon: KeyRound,    tone: 'orange', title: 'Reset your password', desc: 'Get a secure link by email.' },
+  { to: '/privacy',         icon: ShieldCheck, tone: 'green',  title: 'Privacy policy',      desc: 'How we handle your health data.' },
+  { to: '/terms',           icon: FileText,    tone: 'blue',   title: 'Terms of use',        desc: 'The rules for using Suwela.' },
+];
 
 export default function Help() {
   const [query, setQuery] = useState('');
@@ -254,7 +263,7 @@ export default function Help() {
     }
   };
 
-  const input = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10';
+  const input = 'w-full rounded-2xl border border-suwela-line bg-suwela-paper px-4 py-3 text-sm text-suwela-ink placeholder-suwela-slate/60 outline-none transition focus:bg-white focus:border-suwela-green focus:ring-4 focus:ring-suwela-mint/20';
 
   return (
     <SitePage>
@@ -265,34 +274,40 @@ export default function Help() {
         subtitle="Search our answers, browse by topic, or talk to our support team."
       >
         <div className="max-w-xl mx-auto relative">
-          <svg className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-          </svg>
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-suwela-slate" />
           <input
             value={query}
             onChange={e => { setQuery(e.target.value); document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
             placeholder="Search e.g. “lab results”, “password”, “booking”"
-            className="w-full rounded-2xl pl-14 pr-5 py-4 bg-white text-gray-900 placeholder-gray-400 shadow-2xl outline-none focus:ring-4 focus:ring-teal-300/40"
+            className="w-full rounded-full pl-14 pr-5 py-4 bg-white text-suwela-ink placeholder-suwela-slate/60 shadow-[0_16px_40px_-18px_rgba(14,44,82,0.45)] outline-none focus:ring-4 focus:ring-suwela-mint/40"
           />
         </div>
       </PageHero>
 
       {/* ── Topics ───────────────────────────────────────────────── */}
-      <section className="pt-16">
+      <section className="pt-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 lg:grid-cols-3 gap-4">
           {TOPICS.map(t => {
             const active = topic === t.id;
+            const c = TONES[t.tone];
             return (
-              <button key={t.id}
-                onClick={() => { setTopic(active ? null : t.id); setOpenQ(null); }}
-                className={`text-left rounded-2xl border-2 p-5 transition-all duration-200 hover:-translate-y-0.5 ${active ? 'border-teal-500 bg-teal-50 shadow-lg' : 'border-gray-100 hover:border-teal-200 hover:shadow-md'}`}>
-                <div className="flex items-center gap-4">
-                  <span className="w-12 h-12 shrink-0 rounded-xl bg-white shadow-sm border border-gray-100 flex items-center justify-center text-2xl">{t.icon}</span>
-                  <div>
-                    <p className="font-semibold text-gray-900">{t.id}</p>
-                    <p className="text-xs text-gray-500 mt-0.5 hidden sm:block">{t.desc}</p>
+              <button key={t.id} onClick={() => { setTopic(active ? null : t.id); setOpenQ(null); }} className="block text-left">
+                <Tilt className={`rounded-[28px] p-5 transition-shadow ${active ? 'shadow-[0_24px_44px_-24px_rgba(14,44,82,0.5)]' : 'ring-1 ring-suwela-line hover:shadow-[0_20px_40px_-26px_rgba(14,44,82,0.45)]'}`}
+                      style={active
+                        ? { backgroundColor: c.to, backgroundImage: `linear-gradient(150deg, ${c.from}, ${c.to})` }
+                        : { backgroundColor: '#fff', backgroundImage: `linear-gradient(180deg, ${c.wash} 0%, #ffffff 70%)` }}>
+                  <c.Shape from={active ? '#ffffff' : c.from} to={active ? '#ffffff' : c.to}
+                           className={`absolute -right-6 -top-6 w-24 h-24 transition-transform duration-700 group-hover:rotate-45 group-hover:scale-125 ${active ? 'opacity-20' : 'opacity-15'}`} />
+                  <div className="relative flex items-center gap-4">
+                    {active
+                      ? <span className="w-12 h-12 shrink-0 rounded-2xl bg-white shadow-md flex items-center justify-center" style={{ color: c.to }}><t.icon className="w-6 h-6" /></span>
+                      : <IconChip icon={t.icon} tone={t.tone} size="sm" className="!w-12 !h-12" />}
+                    <div>
+                      <p className={`font-semibold ${active ? 'text-white' : 'text-suwela-ink'}`}>{t.id}</p>
+                      <p className={`text-xs mt-0.5 hidden sm:block ${active ? 'text-white/80' : 'text-suwela-slate'}`}>{t.desc}</p>
+                    </div>
                   </div>
-                </div>
+                </Tilt>
               </button>
             );
           })}
@@ -300,54 +315,59 @@ export default function Help() {
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────────────── */}
-      <section id="faq" className="py-16 scroll-mt-20">
+      <section id="faq" className="py-16 scroll-mt-24">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-end justify-between gap-3 mb-8">
             <div>
-              <span className="text-sm font-semibold text-teal-600 uppercase tracking-wider">FAQ</span>
-              <h2 className="text-3xl font-bold text-gray-900 mt-1">{topic ?? 'Frequently asked questions'}</h2>
+              <span className="font-tech text-[11px] uppercase tracking-[0.25em] text-suwela-green">FAQ</span>
+              <h2 className="font-display text-4xl text-suwela-navy mt-1">{topic ?? 'Frequently asked questions'}</h2>
             </div>
             {(topic || query) && (
-              <button onClick={() => { setTopic(null); setQuery(''); }} className="text-sm font-semibold text-teal-700 hover:text-teal-800">Clear filters ✕</button>
+              <button onClick={() => { setTopic(null); setQuery(''); }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-suwela-paper px-4 py-2 text-sm font-semibold text-suwela-navy hover:bg-suwela-line transition-colors">
+                Clear filters <X className="w-4 h-4" />
+              </button>
             )}
           </div>
 
           {results.length === 0 ? (
-            <div className="text-center rounded-3xl border-2 border-dashed border-gray-200 py-14 px-6">
-              <p className="text-4xl">🤔</p>
-              <p className="mt-3 font-semibold text-gray-900">No answers match “{query}”</p>
-              <p className="mt-1 text-sm text-gray-500">Try different words, or <a href="#contact" className="text-teal-700 font-semibold hover:underline">ask our team</a>.</p>
+            <div className="text-center rounded-[32px] border-2 border-dashed border-suwela-line py-14 px-6">
+              <span className="mx-auto w-16 h-16 rounded-[20px] bg-suwela-paper flex items-center justify-center text-suwela-slate"><SearchX className="w-8 h-8" /></span>
+              <p className="mt-4 font-display text-2xl text-suwela-navy">No answers match “{query}”</p>
+              <p className="mt-1 text-sm text-suwela-slate">Try different words, or <a href="#contact" className="font-semibold text-suwela-green hover:underline">ask our team</a>.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {(filtering || showAll ? results : results.slice(0, PREVIEW_COUNT)).map(f => {
                 const open = openQ === f.q;
-                const tone = TOPIC_TONE[f.topic];
-                const icon = TOPICS.find(t => t.id === f.topic)?.icon;
+                const t = topicOf(f.topic);
+                const c = TONES[t.tone];
                 return (
-                  <div key={f.q} className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ${
-                    open ? `${tone.border} bg-gradient-to-br ${tone.soft} via-white to-white shadow-lg` : 'border-gray-100 bg-white hover:-translate-y-0.5 hover:shadow-lg hover:border-gray-200'
-                  }`}>
-                    {/* Topic-coloured accent bar and corner glow */}
-                    <span className={`absolute left-0 inset-y-0 w-1.5 ${tone.bar} transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
-                    <span className={`pointer-events-none absolute -top-12 -right-12 w-36 h-36 rounded-full blur-2xl transition-opacity duration-500 ${tone.glow} ${open ? 'opacity-60' : 'opacity-0 group-hover:opacity-40'}`} />
+                  <div key={f.q}
+                       className={`group relative overflow-hidden rounded-[28px] bg-white transition-all duration-300 ${open ? 'shadow-[0_24px_50px_-30px_rgba(14,44,82,0.5)]' : 'ring-1 ring-suwela-line hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-28px_rgba(14,44,82,0.45)]'}`}
+                       style={open ? { backgroundImage: `linear-gradient(180deg, ${c.wash} 0%, #ffffff 70%)` } : undefined}>
+                    <c.Shape from={c.from} to={c.to}
+                             className={`pointer-events-none absolute -right-8 -top-8 w-28 h-28 transition-all duration-700 ${open ? 'opacity-20 rotate-45' : 'opacity-0 group-hover:opacity-10'}`} />
 
-                    <button onClick={() => setOpenQ(open ? null : f.q)} aria-expanded={open} className="relative w-full flex items-center gap-4 text-left pl-6 pr-5 py-5">
-                      <span className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center text-xl shadow-sm transition-transform duration-300 group-hover:scale-110 ${tone.icon}`}>{icon}</span>
+                    <button onClick={() => setOpenQ(open ? null : f.q)} aria-expanded={open} className="relative w-full flex items-center gap-4 text-left px-5 py-5">
+                      <IconChip icon={t.icon} tone={t.tone} size="sm" className="transition-transform duration-300 group-hover:-rotate-6" />
                       <span className="flex-1 min-w-0">
-                        {!topic && <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full mb-1.5 ${tone.chip}`}>{f.topic}</span>}
-                        <span className="block font-semibold text-gray-900">{f.q}</span>
+                        {!topic && <span className="inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full mb-1.5" style={{ backgroundColor: c.wash, color: c.to }}>{f.topic}</span>}
+                        <span className="block font-semibold text-suwela-ink">{f.q}</span>
                       </span>
-                      <span className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center transition-all duration-300 ${open ? `${tone.button} text-white rotate-45 shadow-md` : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'}`}>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m7-7H5" /></svg>
+                      <span className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center transition-all duration-300 ${open ? 'text-white rotate-45 shadow-md' : 'bg-suwela-paper text-suwela-slate group-hover:text-suwela-navy'}`}
+                            style={open ? { backgroundColor: c.to } : undefined}>
+                        <Plus className="w-4 h-4" strokeWidth={2.5} />
                       </span>
                     </button>
                     <div className={`relative grid transition-all duration-300 ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
-                        <ul className="ml-6 sm:ml-[5.25rem] mr-6 mb-6 space-y-2.5 rounded-xl bg-white/80 border border-gray-100 p-4">
+                        <ul className="mx-5 sm:ml-[4.75rem] mb-6 space-y-2.5 rounded-2xl bg-white/90 ring-1 ring-suwela-line p-4">
                           {f.a.map(point => (
-                            <li key={point} className="flex gap-3 text-sm text-gray-600 leading-relaxed">
-                              <svg className={`w-4 h-4 mt-0.5 shrink-0 ${tone.check}`} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                            <li key={point} className="flex gap-3 text-sm text-suwela-slate leading-relaxed">
+                              <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: `${c.to}1F`, color: c.to }}>
+                                <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                              </span>
                               {point}
                             </li>
                           ))}
@@ -361,10 +381,10 @@ export default function Help() {
                 <div className="pt-4 text-center">
                   <button
                     onClick={() => { setShowAll(s => !s); if (showAll) document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' }); }}
-                    className="inline-flex items-center gap-2 rounded-xl border-2 border-teal-600 text-teal-700 font-semibold px-6 py-3 hover:bg-teal-50 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-full bg-suwela-navy text-white font-semibold px-7 py-3.5 hover:brightness-125 transition shadow-[0_16px_30px_-14px_rgba(14,44,82,0.8)]"
                   >
                     {showAll ? 'Show fewer questions' : `Show all ${results.length} questions`}
-                    <svg className={`w-4 h-4 transition-transform ${showAll ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showAll ? 'rotate-180' : ''}`} strokeWidth={2.5} />
                   </button>
                 </div>
               )}
@@ -376,74 +396,88 @@ export default function Help() {
       {/* ── Quick links ──────────────────────────────────────────── */}
       <section className="pb-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-3 gap-5">
-          {[
-            { to: '/forgot-password', icon: '🔑', title: 'Reset your password', desc: 'Get a secure link by email.' },
-            { to: '/privacy', icon: '🛡️', title: 'Privacy policy', desc: 'How we handle your health data.' },
-            { to: '/terms', icon: '📜', title: 'Terms of use', desc: 'The rules for using Core Health.' },
-          ].map(l => (
-            <Link key={l.to} to={l.to} className="group flex items-center gap-4 rounded-2xl bg-gray-50 p-5 hover:bg-white hover:shadow-lg transition-all">
-              <span className="text-2xl">{l.icon}</span>
-              <span className="flex-1">
-                <span className="block font-semibold text-gray-900 group-hover:text-teal-700">{l.title}</span>
-                <span className="block text-xs text-gray-500">{l.desc}</span>
-              </span>
-              <svg className="w-4 h-4 text-gray-400 group-hover:translate-x-1 group-hover:text-teal-600 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            </Link>
-          ))}
+          {QUICK_LINKS.map(l => {
+            const c = TONES[l.tone];
+            return (
+              <Link key={l.to} to={l.to} className="block">
+                <Tilt className="flex items-center gap-4 rounded-[28px] p-5 ring-1 ring-suwela-line hover:shadow-[0_20px_40px_-26px_rgba(14,44,82,0.45)]"
+                      style={{ backgroundColor: '#fff', backgroundImage: `linear-gradient(180deg, ${c.wash} 0%, #ffffff 70%)` }}>
+                  <IconChip icon={l.icon} tone={l.tone} size="sm" />
+                  <span className="flex-1">
+                    <span className="block font-semibold text-suwela-ink">{l.title}</span>
+                    <span className="block text-xs text-suwela-slate">{l.desc}</span>
+                  </span>
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" style={{ color: c.to }} />
+                </Tilt>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
       {/* ── Contact ──────────────────────────────────────────────── */}
-      <section id="contact" className="py-20 bg-gradient-to-br from-teal-900 via-teal-800 to-emerald-900 scroll-mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-5 gap-12">
-          <div className="lg:col-span-2 text-white">
-            <span className="text-sm font-semibold text-teal-300 uppercase tracking-wider">Contact us</span>
-            <h2 className="text-3xl sm:text-4xl font-bold mt-2">Still need help?</h2>
-            <p className="mt-4 text-teal-100 leading-relaxed">Our support team is here for patients, providers and organizations. We usually reply within one working day.</p>
-            <div className="mt-8 space-y-4">
-              {[
-                ['✉️', 'Email', 'help@suwale.com'],
-              ].map(([icon, label, value]) => (
-                <div key={label} className="flex items-center gap-4 rounded-2xl bg-white/10 border border-white/10 backdrop-blur-sm p-4">
-                  <span className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-xl">{icon}</span>
-                  <div>
-                    <p className="text-xs text-teal-200">{label}</p>
-                    <a href={`mailto:${value}`} className="font-semibold hover:underline">{value}</a>
-                  </div>
-                </div>
-              ))}
+      <section id="contact" className="px-4 sm:px-6 lg:px-8 pb-20 scroll-mt-24">
+        <div className="relative overflow-hidden max-w-7xl mx-auto rounded-[44px] px-6 py-14 sm:px-12"
+             style={{ backgroundColor: '#0E2C52', backgroundImage: 'linear-gradient(135deg, #0E2C52, #123E6E 50%, #0B5E6E)' }}>
+          <Leaf from="#43CE9F" to="#13A58F" className="absolute -left-12 -bottom-12 w-64 h-64 opacity-25 sw-float" />
+          <Cross from="#5CC6FF" to="#1598E9" className="absolute right-10 -top-10 w-40 h-40 opacity-20" />
+          <div className="relative grid lg:grid-cols-5 gap-12">
+            <div className="lg:col-span-2 text-white">
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-sm font-semibold text-suwela-mint">
+                <Mail className="w-4 h-4" /> Contact us
+              </span>
+              <h2 className="font-display text-4xl sm:text-5xl leading-[1.08] mt-5">Still need help?</h2>
+              <p className="mt-5 text-lg text-white/75 leading-relaxed">Our support team is here for patients, providers and organizations. We usually reply within one working day.</p>
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="group mt-8 flex items-center gap-4 rounded-3xl bg-white/[0.08] p-4 hover:bg-white/15 transition-colors">
+                <IconChip icon={Mail} tone="green" size="sm" />
+                <span className="flex-1">
+                  <span className="block text-xs text-white/60">Email</span>
+                  <span className="block font-semibold">{SUPPORT_EMAIL}</span>
+                </span>
+                <ArrowRight className="w-4 h-4 text-suwela-mint transition-transform group-hover:translate-x-1" />
+              </a>
             </div>
-          </div>
 
-          <div className="lg:col-span-3 rounded-3xl bg-white p-7 sm:p-10 shadow-2xl">
-            {sent ? (
-              <div className="text-center py-12 fade-up">
-                <div className="mx-auto w-20 h-20 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-4xl shadow-lg">📨</div>
-                <h3 className="mt-6 text-2xl font-bold text-gray-900">Message sent</h3>
-                <p className="mt-3 text-gray-500">Thanks {msg.name.split(' ')[0]} — we'll reply to {msg.email} soon.</p>
-                <button onClick={() => { setSent(false); setMsg({ name: '', email: '', subject: '', message: '' }); }} className="mt-8 text-sm font-semibold text-teal-700">Send another message →</button>
-              </div>
-            ) : (
-              <form onSubmit={submit} className="space-y-5">
-                <SectionHeading eyebrow="Send a message" title="We'll get back to you" center={false} />
-                <div className="grid sm:grid-cols-2 gap-5 -mt-6">
-                  <input required placeholder="Your name" value={msg.name} onChange={e => setMsg(m => ({ ...m, name: e.target.value }))} className={input} />
-                  <input required type="email" placeholder="Email address" value={msg.email} onChange={e => setMsg(m => ({ ...m, email: e.target.value }))} className={input} />
+            <div className="lg:col-span-3 rounded-[36px] bg-white p-7 sm:p-10 shadow-2xl">
+              {sent ? (
+                <div className="text-center py-12 fade-up">
+                  <div className="relative w-24 h-24 mx-auto">
+                    <span className="absolute inset-0 rounded-full bg-suwela-mint/30 sw-ring" />
+                    <span className="relative w-24 h-24 rounded-full flex items-center justify-center text-white shadow-xl" style={{ backgroundImage: 'linear-gradient(135deg, #5EDDB0, #13A58F)' }}>
+                      <MailCheck className="w-11 h-11" />
+                    </span>
+                  </div>
+                  <h3 className="mt-6 font-display text-3xl text-suwela-navy">Message sent</h3>
+                  <p className="mt-3 text-suwela-slate">Thanks {msg.name.split(' ')[0]} — we'll reply to {msg.email} soon.</p>
+                  <button onClick={() => { setSent(false); setMsg({ name: '', email: '', subject: '', message: '' }); }}
+                          className="group mt-8 inline-flex items-center gap-1.5 text-sm font-semibold text-suwela-green">
+                    Send another message <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  </button>
                 </div>
-                <select required value={msg.subject} onChange={e => setMsg(m => ({ ...m, subject: e.target.value }))} className={input}>
-                  <option value="" disabled>What do you need help with?</option>
-                  {TOPICS.map(t => <option key={t.id}>{t.id}</option>)}
-                  <option>Partnership or sales</option>
-                  <option>Something else</option>
-                </select>
-                <textarea required rows={5} placeholder="Tell us what's going on. Please don't include medical details." value={msg.message}
-                  onChange={e => setMsg(m => ({ ...m, message: e.target.value }))} className={`${input} resize-none`} />
-                {error && <p className="text-sm text-red-600">{error}</p>}
-                <button disabled={sending} className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold py-3.5 shadow-lg shadow-teal-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:hover:translate-y-0">
-                  {sending ? 'Sending…' : 'Send message'}
-                </button>
-              </form>
-            )}
+              ) : (
+                <form onSubmit={submit} className="space-y-5">
+                  <SectionHeading eyebrow="Send a message" title="We'll get back to you" center={false} />
+                  <div className="grid sm:grid-cols-2 gap-5 -mt-6">
+                    <input required placeholder="Your name" value={msg.name} onChange={e => setMsg(m => ({ ...m, name: e.target.value }))} className={input} />
+                    <input required type="email" placeholder="Email address" value={msg.email} onChange={e => setMsg(m => ({ ...m, email: e.target.value }))} className={input} />
+                  </div>
+                  <select required value={msg.subject} onChange={e => setMsg(m => ({ ...m, subject: e.target.value }))} className={input}>
+                    <option value="" disabled>What do you need help with?</option>
+                    {TOPICS.map(t => <option key={t.id}>{t.id}</option>)}
+                    <option>Partnership or sales</option>
+                    <option>Something else</option>
+                  </select>
+                  <textarea required rows={5} placeholder="Tell us what's going on. Please don't include medical details." value={msg.message}
+                            onChange={e => setMsg(m => ({ ...m, message: e.target.value }))} className={`${input} resize-none`} />
+                  {error && <p className="text-sm text-red-600">{error}</p>}
+                  <button disabled={sending}
+                          className="w-full rounded-full text-white text-lg font-semibold py-4 shadow-[0_16px_30px_-12px_rgba(19,165,143,0.8)] hover:-translate-y-0.5 transition-transform disabled:opacity-60 disabled:hover:translate-y-0"
+                          style={GRADIENT_BTN}>
+                    {sending ? 'Sending…' : 'Send message'}
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       </section>

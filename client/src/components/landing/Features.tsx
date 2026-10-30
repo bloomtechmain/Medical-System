@@ -6,7 +6,7 @@ import {
 import { Leaf, Cross, Capsule, Ring, Swoosh } from './Shapes';
 
 // Tile that leans toward the pointer.
-function Tilt({ children, className = '', style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
+export function Tilt({ children, className = '', style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
   const move = (e: React.PointerEvent) => {
     const el = ref.current;

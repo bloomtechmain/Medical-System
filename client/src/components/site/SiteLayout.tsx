@@ -1,61 +1,75 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ArrowUpRight, Building2, LogIn, Mail, Menu, Sparkles, UserPlus, X } from 'lucide-react';
+import BrandMark from '../landing/BrandMark';
+import { ShapeField, Floating, Leaf, Cross, Capsule, Ring } from '../landing/Shapes';
+import { ROLES } from '../landing/roles';
+import { NAV_LINKS, SUPPORT_EMAIL } from './siteConfig';
 
-// Shared chrome for the public marketing pages (landing, explore, news, story,
-// about, help). Every page opens on a dark teal hero, so the navbar starts
-// transparent and turns solid once the visitor scrolls past it.
+// Shared chrome for the public Suwela pages (landing, explore, news, story,
+// about, help). Every page opens on the same light sky-to-mint hero as the
+// landing page, so the navbar keeps dark text and only gains a white backing
+// once the visitor scrolls.
 
-export const NAV_LINKS = [
-  { to: '/explore',     label: 'Explore' },
-  { to: '/news',        label: 'News' },
-  { to: '/share-story', label: 'Share My Story' },
-  { to: '/about',       label: 'About' },
-  { to: '/help',        label: 'Help' },
-];
+const GRADIENT_BTN = { backgroundColor: '#13A58F', backgroundImage: 'linear-gradient(90deg, #1598E9, #13A58F)' };
 
-export function Logo({ light = true, size = 'md' }: { light?: boolean; size?: 'md' | 'sm' }) {
+export function Logo({ light = false, size = 'md' }: { light?: boolean; size?: 'md' | 'sm' }) {
   return (
-    <Link to="/welcome" className="flex items-center gap-2.5 shrink-0">
-      <div className={`${size === 'md' ? 'w-9 h-9' : 'w-7 h-7'} bg-gradient-to-br from-teal-400 to-teal-700 rounded-lg flex items-center justify-center shadow-sm`}>
-        <svg className={`${size === 'md' ? 'w-5 h-5' : 'w-4 h-4'} text-white`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-      </div>
-      <div>
-        <span className={`font-bold text-lg leading-none block ${light ? 'text-white' : 'text-gray-900'}`}>Core Health</span>
-        <span className={`text-xs leading-none ${light ? 'text-teal-200' : 'text-gray-400'}`}>by BloomTech</span>
-      </div>
+    <Link to="/welcome" aria-label="Suwela home" className="shrink-0">
+      <BrandMark tone={light ? 'light' : 'ink'} size={size} />
     </Link>
   );
 }
 
 export function GetStartedModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const options = [
+    { to: '/register', title: 'As a person', text: 'Patients and doctors create a personal account.', ids: ['patient', 'doctor'], color: '#13A58F' },
+    { to: '/org-register', title: 'As an organisation', text: 'Hospitals, clinics, pharmacies and laboratories. Reviewed before going live.', ids: ['org', 'pharmacist', 'laboratory'], color: '#6A4DB6' },
+  ];
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+    <div className="fixed inset-0 z-[100] bg-suwela-navy/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="gs-title"
+           className="sw-pop relative bg-white w-full sm:max-w-2xl rounded-t-[36px] sm:rounded-[36px] overflow-hidden"
+           onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+        <Leaf from="#43CE9F" to="#13A58F" className="absolute -right-8 -top-8 w-40 h-40 opacity-20" />
+        <div className="relative flex items-start justify-between px-7 pt-7">
           <div>
-            <p className="text-lg font-bold text-gray-900">How will you join Core Health?</p>
-            <p className="text-sm text-gray-500 mt-0.5">Choose the option that fits you.</p>
+            <img src="/brand/suwela-emblem.png" alt="" className="w-12 h-12 object-contain" />
+            <p id="gs-title" className="font-display text-3xl text-suwela-navy mt-3">How are you joining?</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-200 shrink-0">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          <button onClick={onClose} aria-label="Close" className="w-11 h-11 rounded-full bg-suwela-paper flex items-center justify-center text-suwela-slate hover:text-suwela-navy">
+            <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
-          <Link to="/org-register" onClick={onClose}
-            className="group text-left p-6 rounded-2xl border-2 border-teal-400 bg-teal-50 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">🏢</div>
-            <p className="font-bold text-gray-900 text-lg mb-1.5">Register an Organization</p>
-            <p className="text-sm text-gray-500 leading-relaxed">Hospital, clinic, pharmacy, or laboratory — bring your whole team onto Core Health.</p>
-          </Link>
-          <Link to="/register" onClick={onClose}
-            className="group text-left p-6 rounded-2xl border-2 border-primary-400 bg-primary-50 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-3xl mb-4 shadow-sm group-hover:scale-110 transition-transform duration-200">🧑‍⚕️</div>
-            <p className="font-bold text-gray-900 text-lg mb-1.5">Join as Patient or Doctor</p>
-            <p className="text-sm text-gray-500 leading-relaxed">Create a personal account to manage your health records or your own practice.</p>
-          </Link>
+        <div className="relative grid sm:grid-cols-2 gap-4 p-7">
+          {options.map(o => (
+            <Link key={o.to} to={o.to} onClick={onClose}
+                  className="group relative rounded-[28px] bg-suwela-paper p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl">
+              <span className="flex -space-x-3">
+                {ROLES.filter(r => o.ids.includes(r.id)).map(r => (
+                  <span key={r.id} className="w-14 h-14 rounded-2xl ring-4 ring-white flex items-center justify-center text-white transition-transform group-hover:-rotate-6"
+                        style={{ background: `linear-gradient(135deg, ${r.tint}, ${r.color})` }}>
+                    <r.icon className="w-7 h-7" />
+                  </span>
+                ))}
+              </span>
+              <p className="font-bold text-lg text-suwela-ink mt-5">{o.title}</p>
+              <p className="text-sm text-suwela-slate mt-1 leading-relaxed">{o.text}</p>
+              <ArrowUpRight className="absolute top-6 right-6 w-6 h-6 transition-all group-hover:translate-x-1 group-hover:-translate-y-1" style={{ color: o.color }} />
+            </Link>
+          ))}
         </div>
+        <p className="relative px-7 pb-7 text-suwela-slate">
+          Already have an account?{' '}
+          <Link to="/login" onClick={onClose} className="font-semibold text-suwela-navy underline underline-offset-4 decoration-suwela-mint decoration-2">Sign in</Link>
+        </p>
       </div>
     </div>
   );
@@ -68,7 +82,7 @@ export function SiteNav() {
   const { pathname, hash } = useLocation();
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    const onScroll = () => setScrolled(window.scrollY > 12);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -85,80 +99,52 @@ export function SiteNav() {
     window.scrollTo(0, 0);
   }, [pathname, hash]);
 
-  const solid = scrolled || menuOpen;
-
   return (
     <>
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${solid ? 'bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-100' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
-          <Logo light={!solid} />
+      <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled || menuOpen ? 'bg-white/90 backdrop-blur-md shadow-[0_6px_30px_-18px_rgba(14,44,82,0.4)]' : 'bg-transparent'}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[76px] flex items-center justify-between gap-6">
+          <Logo />
 
-          <div className="hidden lg:flex items-center gap-1">
+          <div className="hidden lg:flex items-center gap-1 rounded-full bg-white/70 px-2 py-1.5 shadow-sm">
             {NAV_LINKS.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) => `relative text-sm font-medium px-3.5 py-2 rounded-lg transition-colors ${
-                  isActive
-                    ? solid ? 'text-teal-700 bg-teal-50' : 'text-white bg-white/15'
-                    : solid ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
-              >
+              <NavLink key={to} to={to}
+                       className={({ isActive }) => `rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                         isActive ? 'bg-suwela-navy text-white' : 'text-suwela-slate hover:text-suwela-navy hover:bg-suwela-paper'
+                       }`}>
                 {label}
               </NavLink>
             ))}
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
-              to="/login"
-              className={`hidden sm:inline-block text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
-                solid ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              Sign In
+            <Link to="/login" className="hidden sm:inline-flex items-center gap-2 text-sm font-semibold text-suwela-navy px-4 py-2.5 rounded-full hover:bg-white">
+              <LogIn className="w-4 h-4" /> Sign in
             </Link>
-            <button
-              onClick={() => setShowGetStarted(true)}
-              className={`hidden sm:inline-block text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm ${
-                solid ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-white text-teal-700 hover:bg-teal-50'
-              }`}
-            >
-              Get Started
+            <button onClick={() => setShowGetStarted(true)}
+                    className="text-sm font-semibold px-5 py-3 rounded-full text-white shadow-[0_10px_24px_-10px_rgba(19,165,143,0.8)] hover:-translate-y-0.5 transition-transform"
+                    style={GRADIENT_BTN}>
+              Get started
             </button>
-            <button
-              onClick={() => setMenuOpen(o => !o)}
-              aria-label="Toggle menu"
-              aria-expanded={menuOpen}
-              className={`lg:hidden w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${solid ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'}`}
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                {menuOpen
-                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />}
-              </svg>
+            <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu" aria-expanded={menuOpen}
+                    className="lg:hidden w-11 h-11 rounded-full flex items-center justify-center text-suwela-navy bg-white shadow-sm">
+              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile menu */}
-        <div className={`lg:hidden overflow-hidden transition-all duration-300 ${menuOpen ? 'max-h-[480px] border-t border-gray-100' : 'max-h-0'}`}>
-          <div className="px-4 py-4 space-y-1 bg-white">
+        {menuOpen && (
+          <div className="lg:hidden px-4 pb-4 space-y-1">
             {NAV_LINKS.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) => `block px-4 py-3 rounded-xl text-sm font-medium ${isActive ? 'bg-teal-50 text-teal-700' : 'text-gray-700 hover:bg-gray-50'}`}
-              >
+              <NavLink key={to} to={to}
+                       className={({ isActive }) => `block rounded-2xl px-4 py-3 font-medium ${isActive ? 'bg-suwela-navy text-white' : 'text-suwela-ink hover:bg-suwela-paper'}`}>
                 {label}
               </NavLink>
             ))}
-            <div className="grid grid-cols-2 gap-3 pt-3">
-              <Link to="/login" className="text-center text-sm font-semibold px-4 py-3 rounded-xl border border-gray-200 text-gray-700">Sign In</Link>
-              <button onClick={() => { setMenuOpen(false); setShowGetStarted(true); }} className="text-sm font-semibold px-4 py-3 rounded-xl bg-teal-600 text-white">Get Started</button>
-            </div>
+            <Link to="/login" className="flex items-center gap-2 rounded-2xl px-4 py-3 font-semibold text-suwela-navy hover:bg-suwela-paper sm:hidden">
+              <LogIn className="w-4 h-4" /> Sign in
+            </Link>
           </div>
-        </div>
+        )}
       </nav>
 
       {showGetStarted && <GetStartedModal onClose={() => setShowGetStarted(false)} />}
@@ -170,8 +156,8 @@ export function SiteFooter() {
   const columns = [
     { title: 'Platform', links: [
       { to: '/explore', label: 'Explore features' },
-      { to: '/explore#organizations', label: 'For organizations' },
-      { to: '/explore#roles', label: 'For individuals' },
+      { to: '/explore#organizations', label: 'For organisations' },
+      { to: '/explore#pricing', label: 'Packages' },
       { to: '/news', label: 'News & updates' },
     ]},
     { title: 'Company', links: [
@@ -179,42 +165,52 @@ export function SiteFooter() {
       { to: '/share-story', label: 'Share your story' },
       { to: '/help#contact', label: 'Contact' },
     ]},
+    { title: 'Accounts', links: [
+      { to: '/login', label: 'Sign in' },
+      { to: '/register', label: 'Patient or doctor sign-up' },
+      { to: '/org-register', label: 'Register an organisation' },
+      { to: '/forgot-password', label: 'Forgot password' },
+    ]},
     { title: 'Support', links: [
       { to: '/help', label: 'Help centre' },
-      { to: '/forgot-password', label: 'Reset password' },
-      { to: '/terms', label: 'Terms of use' },
+      { to: '/terms', label: 'Terms of service' },
       { to: '/privacy', label: 'Privacy policy' },
     ]},
   ];
 
   return (
-    <footer className="bg-gray-950 text-gray-400">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-10">
-        <div className="grid gap-12 lg:grid-cols-5">
-          <div className="lg:col-span-2">
-            <Logo light />
-            <p className="mt-5 text-sm leading-relaxed max-w-sm">
-              One secure platform connecting patients, doctors, pharmacies, laboratories, clinics and hospitals across Sri Lanka.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {['Row-level security', 'Patient-owned data', 'English · සිංහල'].map(t => (
-                <span key={t} className="text-xs px-3 py-1 rounded-full border border-gray-800 bg-gray-900 text-gray-300">{t}</span>
-              ))}
-            </div>
+    <footer className="text-white/65" style={{ backgroundColor: '#0E2C52' }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
+        <div className="sm:col-span-2 lg:col-span-1">
+          <BrandMark tone="light" />
+          <p className="mt-5 max-w-xs leading-relaxed">
+            One connected record for patients, doctors, pharmacies, laboratories, hospitals and clinics.
+          </p>
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20 transition-colors">
+            <Mail className="w-4 h-4 text-suwela-mint" /> {SUPPORT_EMAIL}
+          </a>
+          <div className="mt-5 flex gap-2">
+            {ROLES.filter(r => r.id !== 'admin').map(r => (
+              <span key={r.id} className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: `linear-gradient(135deg, ${r.tint}, ${r.color})` }}>
+                <r.icon className="w-5 h-5" />
+              </span>
+            ))}
           </div>
-          {columns.map(col => (
-            <div key={col.title}>
-              <p className="text-white font-semibold text-sm mb-4">{col.title}</p>
-              <ul className="space-y-2.5 text-sm">
-                {col.links.map(l => (
-                  <li key={l.label}><Link to={l.to} className="hover:text-teal-300 transition-colors">{l.label}</Link></li>
-                ))}
-              </ul>
-            </div>
-          ))}
         </div>
-        <div className="mt-14 pt-6 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
-          <p>© {new Date().getFullYear()} Core Health by BloomTech. All rights reserved.</p>
+        {columns.map(col => (
+          <div key={col.title}>
+            <p className="text-sm font-bold text-white mb-4">{col.title}</p>
+            <ul className="space-y-2.5">
+              {col.links.map(l => (
+                <li key={l.label}><Link to={l.to} className="hover:text-white">{l.label}</Link></li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-white/45">
+          <p>© {new Date().getFullYear()} Suwela Medical Hub. Built by BloomTech.</p>
           <p>Made in Sri Lanka 🇱🇰</p>
         </div>
       </div>
@@ -222,7 +218,8 @@ export function SiteFooter() {
   );
 }
 
-// Dark teal page header used by every inner page, matching the landing hero.
+// Page header used by every inner page — the landing hero's sky-to-mint field
+// and floating emblem shapes, with a serif display headline.
 export function PageHero({ eyebrow, title, highlight, subtitle, children }: {
   eyebrow: string;
   title: string;
@@ -231,48 +228,35 @@ export function PageHero({ eyebrow, title, highlight, subtitle, children }: {
   children?: ReactNode;
 }) {
   return (
-    <section className="relative bg-gradient-to-br from-teal-900 via-teal-800 to-emerald-900 overflow-hidden">
-      <div className="absolute inset-0 opacity-10">
-        <svg width="100%" height="100%">
-          <defs>
-            <pattern id="hero-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hero-grid)" />
-        </svg>
-      </div>
-      <div className="absolute -top-10 right-0 w-96 h-96 bg-teal-400/20 rounded-full blur-3xl" />
-      <div className="absolute bottom-0 left-10 w-80 h-80 bg-emerald-400/20 rounded-full blur-3xl" />
+    <ShapeField className="relative overflow-hidden bg-gradient-to-b from-[#E6F5FF] via-[#F1FBF6] to-white pt-[76px]">
+      <Floating depth={-30} dur={8} className="left-[3%] top-[22%] hidden sm:block"><Leaf from="#5EDDB0" to="#13A58F" className="w-16 h-16" /></Floating>
+      <Floating depth={40} dur={9} delay={1} rot={12} className="right-[8%] top-[24%] hidden md:block"><Cross from="#5CC6FF" to="#1598E9" className="w-14 h-14" /></Floating>
+      <Floating depth={-20} dur={7} delay={.5} className="left-[10%] bottom-[16%] hidden lg:block"><Capsule from="#A68BF0" to="#6A4DB6" className="w-16 h-16" /></Floating>
+      <Floating depth={25} dur={10} delay={2} className="right-[4%] bottom-[18%] hidden md:block"><Ring from="#FFB36B" to="#EF7B2D" className="w-14 h-14" /></Floating>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-36 pb-28 text-center">
-        <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-1.5 mb-6">
-          <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-          <span className="text-sm text-white/90 font-medium">{eyebrow}</span>
-        </div>
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight max-w-4xl mx-auto">
+      <div className="sw-rise relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-10 text-center">
+        <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-suwela-green shadow-sm">
+          <Sparkles className="w-4 h-4" /> {eyebrow}
+        </span>
+        <h1 className="font-display text-5xl sm:text-6xl leading-[1.05] text-suwela-navy mt-6 max-w-4xl mx-auto">
           {title}{' '}
-          {highlight && <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-emerald-300">{highlight}</span>}
+          {highlight && <em className="text-transparent bg-clip-text bg-gradient-to-r from-suwela-blue to-suwela-green">{highlight}</em>}
         </h1>
-        <p className="mt-6 text-lg text-teal-100 max-w-2xl mx-auto leading-relaxed">{subtitle}</p>
+        <p className="mt-6 text-lg text-suwela-slate max-w-2xl mx-auto leading-relaxed">{subtitle}</p>
         {children && <div className="mt-10">{children}</div>}
       </div>
-
-      <div className="absolute bottom-0 left-0 right-0">
-        <svg viewBox="0 0 1440 60" fill="none" preserveAspectRatio="none" className="w-full h-10 sm:h-14">
-          <path d="M0 60L60 50C120 40 240 20 360 15C480 10 600 20 720 25C840 30 960 30 1080 25C1200 20 1320 10 1380 5L1440 0V60H0Z" fill="white" />
-        </svg>
-      </div>
-    </section>
+    </ShapeField>
   );
 }
 
 export function SectionHeading({ eyebrow, title, subtitle, center = true }: { eyebrow: string; title: string; subtitle?: string; center?: boolean }) {
   return (
-    <div className={`mb-12 ${center ? 'text-center' : ''}`}>
-      <span className="text-sm font-semibold text-teal-600 uppercase tracking-wider">{eyebrow}</span>
-      <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mt-2">{title}</h2>
-      {subtitle && <p className={`text-gray-500 mt-3 leading-relaxed ${center ? 'max-w-2xl mx-auto' : 'max-w-xl'}`}>{subtitle}</p>}
+    <div className={`mb-12 ${center ? 'text-center mx-auto max-w-3xl' : ''}`}>
+      <span className="inline-flex items-center gap-2 rounded-full bg-suwela-paper px-4 py-1.5 text-sm font-semibold text-suwela-green shadow-sm">
+        <Sparkles className="w-4 h-4" /> {eyebrow}
+      </span>
+      <h2 className="font-display text-4xl sm:text-5xl leading-[1.08] text-suwela-navy mt-5">{title}</h2>
+      {subtitle && <p className={`text-lg text-suwela-slate mt-4 leading-relaxed ${center ? '' : 'max-w-xl'}`}>{subtitle}</p>}
     </div>
   );
 }
@@ -306,24 +290,25 @@ export function Reveal({ children, delay = 0, className = '' }: { children: Reac
 
 export function CtaBand({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <section className="py-20 bg-white">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-700 via-teal-800 to-emerald-900 px-8 py-14 sm:px-14 text-center shadow-2xl">
-          <div className="absolute -top-16 -right-16 w-64 h-64 bg-white/5 rounded-full" />
-          <div className="absolute -bottom-20 -left-10 w-72 h-72 bg-emerald-400/10 rounded-full blur-2xl" />
+    <section className="py-16 lg:py-20 bg-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <ShapeField className="relative overflow-hidden rounded-[44px] text-white px-8 py-14 sm:px-14 text-center"
+                    style={{ backgroundColor: '#0E2C52', backgroundImage: 'linear-gradient(135deg, #0E2C52, #123E6E 50%, #0B5E6E)' }}>
+          <Floating depth={-25} dur={9} className="-right-10 -top-16"><Leaf from="#43CE9F" to="#13A58F" className="w-72 h-72 opacity-30" /></Floating>
+          <Floating depth={-15} dur={8} delay={.4} className="left-8 bottom-6 hidden sm:block"><Capsule from="#A68BF0" to="#6A4DB6" className="w-16 h-16 opacity-60" /></Floating>
           <div className="relative">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white">{title}</h2>
-            <p className="text-teal-100 mt-4 text-lg max-w-2xl mx-auto">{subtitle}</p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/org-register" className="inline-flex items-center justify-center gap-2 bg-white text-teal-800 font-semibold px-7 py-3.5 rounded-xl hover:bg-teal-50 transition-all shadow-lg hover:-translate-y-0.5">
-                Register Your Organization
+            <h2 className="font-display text-4xl sm:text-5xl leading-[1.08]">{title}</h2>
+            <p className="text-white/75 mt-5 text-lg max-w-2xl mx-auto">{subtitle}</p>
+            <div className="mt-9 flex flex-col sm:flex-row gap-3 justify-center">
+              <Link to="/org-register" className="inline-flex items-center justify-center gap-2 rounded-full bg-white text-suwela-navy text-lg font-semibold px-7 py-4 hover:-translate-y-0.5 transition-transform shadow-xl">
+                <Building2 className="w-5 h-5" /> Register your organisation
               </Link>
-              <Link to="/register" className="inline-flex items-center justify-center gap-2 border-2 border-white/40 text-white font-semibold px-7 py-3.5 rounded-xl hover:bg-white/10 transition-colors">
-                Create a Personal Account
+              <Link to="/register" className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 text-lg font-semibold px-7 py-4 hover:bg-white/20 transition-colors">
+                <UserPlus className="w-5 h-5" /> Create a personal account
               </Link>
             </div>
           </div>
-        </div>
+        </ShapeField>
       </div>
     </section>
   );
@@ -331,7 +316,7 @@ export function CtaBand({ title, subtitle }: { title: string; subtitle: string }
 
 export function SitePage({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-white text-gray-900 overflow-x-hidden">
+    <div className="min-h-screen bg-white text-suwela-ink overflow-x-hidden">
       <SiteNav />
       {children}
       <SiteFooter />
