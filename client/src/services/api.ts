@@ -280,6 +280,13 @@ export const orgMembershipRequestApi = {
   cancel:  (id: number): Promise<any>                               => api.delete(`/org-membership-requests/${id}`),
 };
 
+// Public website forms — each one is emailed to the support inbox.
+export const contactApi = {
+  support:   (data: { name: string; email: string; subject: string; message: string }): Promise<any> => api.post('/contact/support', data),
+  story:     (data: Record<string, unknown>): Promise<any>                                         => api.post('/contact/story', data),
+  subscribe: (email: string): Promise<any>                                                         => api.post('/contact/subscribe', { email }),
+};
+
 export const userApi = {
   getAll:              (params?: unknown): Promise<any>          => api.get('/users', { params }),
   searchPatients:      (q: string): Promise<any>                 => api.get('/users/patients', { params: { q } }),

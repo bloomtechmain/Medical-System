@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SitePage, PageHero, Reveal } from '../../components/site/SiteLayout';
+import { contactApi } from '../../services/api';
 
 type Category = 'Product' | 'Security' | 'Community' | 'Company';
 
@@ -140,6 +141,22 @@ export default function News() {
   const [open, setOpen] = useState<Article | null>(null);
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+
+  const subscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+    setError('');
+    try {
+      await contactApi.subscribe(email);
+      setSubscribed(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Could not subscribe right now. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
 
   const [featured, ...rest] = ARTICLES;
   const list = category === 'All' ? rest : ARTICLES.filter(a => a.category === category);
@@ -236,10 +253,11 @@ export default function News() {
                   <p className="text-sm text-teal-100 mt-1">We'll send the next update to {email}.</p>
                 </div>
               ) : (
-                <form onSubmit={e => { e.preventDefault(); setSubscribed(true); }} className="flex flex-col sm:flex-row gap-3">
+                <form onSubmit={subscribe} className="flex flex-col sm:flex-row gap-3 flex-wrap">
                   <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
                     className="flex-1 rounded-xl px-4 py-3.5 bg-white/95 text-gray-900 placeholder-gray-400 outline-none focus:ring-4 focus:ring-teal-300/40" />
-                  <button className="rounded-xl px-6 py-3.5 bg-white text-teal-800 font-semibold hover:bg-teal-50 transition-colors">Subscribe</button>
+                  <button disabled={sending} className="rounded-xl px-6 py-3.5 bg-white text-teal-800 font-semibold hover:bg-teal-50 transition-colors disabled:opacity-60">{sending ? 'Subscribing…' : 'Subscribe'}</button>
+                  {error && <p className="basis-full text-sm text-rose-200">{error}</p>}
                 </form>
               )}
             </div>

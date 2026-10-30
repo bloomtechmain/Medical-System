@@ -55,6 +55,18 @@ const publicFormLimiter = rateLimit({
   handler: jsonLimitResponse('Too many submissions from this address. Please try again later.'),
 });
 
+// Public website forms (help contact, share a story, newsletter). Each
+// submission sends an email, so cap it per address. Separate from
+// publicFormLimiter so a visitor who wrote to support isn't then locked out
+// of registering their organization.
+const contactFormLimiter = rateLimit({
+  windowMs: envInt('RATE_LIMIT_CONTACT_FORM_WINDOW_MS', 60 * 60_000),
+  limit: envInt('RATE_LIMIT_CONTACT_FORM_MAX', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonLimitResponse('Too many messages from this address. Please try again later.'),
+});
+
 // PRO-02: medicine/people search endpoints (including the two that need no
 // login) had no rate limit, on top of having no query-length minimum.
 const searchLimiter = rateLimit({
@@ -80,4 +92,4 @@ const uploadLimiter = rateLimit({
   handler: jsonLimitResponse('Too many uploads. Please wait a moment and try again.'),
 });
 
-export { generalApiLimiter, authLimiter, publicFormLimiter, searchLimiter, uploadLimiter };
+export { generalApiLimiter, authLimiter, publicFormLimiter, contactFormLimiter, searchLimiter, uploadLimiter };

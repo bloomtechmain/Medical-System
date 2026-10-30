@@ -1,5 +1,8 @@
 import { FormEvent, useState } from 'react';
 import { SitePage, PageHero, SectionHeading, Reveal } from '../../components/site/SiteLayout';
+import { contactApi } from '../../services/api';
+
+const sendError = (err: any): string => err?.response?.data?.message || 'Could not send right now. Please try again, or email help@suwale.com.';
 
 // Placeholder stories for the layout. Replace with real, consented stories
 // once submissions are collected and approved.
@@ -27,14 +30,24 @@ export default function ShareStory() {
   const [consent, setConsent] = useState(false);
   const [anonymous, setAnonymous] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    // TODO: POST to a stories endpoint once the API has one.
-    setSent(true);
+    setSending(true);
+    setError('');
+    try {
+      await contactApi.story({ ...form, rating, anonymous, consent });
+      setSent(true);
+    } catch (err) {
+      setError(sendError(err));
+    } finally {
+      setSending(false);
+    }
   };
 
   const input = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10';
@@ -169,8 +182,9 @@ export default function ShareStory() {
                     </label>
                   </div>
 
-                  <button className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold py-3.5 shadow-lg shadow-teal-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                    Submit my story
+                  {error && <p className="text-sm text-red-600">{error}</p>}
+                  <button disabled={sending} className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold py-3.5 shadow-lg shadow-teal-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:hover:translate-y-0">
+                    {sending ? 'Sending…' : 'Submit my story'}
                   </button>
                 </form>
               )}

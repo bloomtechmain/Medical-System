@@ -66,7 +66,7 @@ const assertMailPath = (): void => {
 
 assertMailPath();
 
-const sendMail = async (to: string, subject: string, html: string): Promise<void> => {
+const sendMail = async (to: string, subject: string, html: string, opts: { replyTo?: string } = {}): Promise<void> => {
   if (!transporter) {
     console.log(`[mailer] (no SMTP configured) would send to ${to}: ${subject}\n${html}`);
     return;
@@ -76,6 +76,7 @@ const sendMail = async (to: string, subject: string, html: string): Promise<void
     to,
     subject,
     html,
+    replyTo: opts.replyTo,
   });
 };
 
