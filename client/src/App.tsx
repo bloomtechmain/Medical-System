@@ -21,6 +21,7 @@ const News                  = lazy(() => import('./pages/site/News'));
 const ShareStory            = lazy(() => import('./pages/site/ShareStory'));
 const About                 = lazy(() => import('./pages/site/About'));
 const Help                  = lazy(() => import('./pages/site/Help'));
+const Compliance            = lazy(() => import('./pages/site/Compliance'));
 const Login                 = lazy(() => import('./pages/Login'));
 const Register               = lazy(() => import('./pages/Register'));
 const OrgRegister           = lazy(() => import('./pages/OrgRegister'));
@@ -171,6 +172,7 @@ export default function App() {
       <Route path="/share-story" element={<ShareStory />} />
       <Route path="/about"       element={<About />} />
       <Route path="/help"        element={<Help />} />
+      <Route path="/compliance"  element={<Compliance />} />
       <Route path="/login"      element={token && user?.role ? <RoleHome /> : <Login />} />
       <Route path="/register"   element={token && user?.role ? <RoleHome /> : <Register />} />
       <Route path="/org-register" element={token && user?.role ? <RoleHome /> : <OrgRegister />} />
