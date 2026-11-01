@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { authApi, userApi } from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import { SPECIALIZATIONS } from '../constants/specializations';
 import ChangePasswordPanel from '../components/common/ChangePasswordPanel';
 
 export default function DoctorSettings() {
@@ -73,7 +74,10 @@ export default function DoctorSettings() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">{t('settings.fields.specialization')}</label>
-              <input className="input" placeholder={t('settings.placeholders.specialization')} {...register('specialization')} />
+              <input list="suwela-specializations" className="input" placeholder={t('settings.placeholders.specialization')} {...register('specialization')} />
+              <datalist id="suwela-specializations">
+                {SPECIALIZATIONS.map(sp => <option key={sp} value={sp} />)}
+              </datalist>
             </div>
             <div>
               <label className="label">{t('settings.fields.licenseNumber')}</label>

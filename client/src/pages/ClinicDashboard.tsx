@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { Stethoscope, FlaskConical, ShieldCheck, ArrowUpRight, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { authApi, consultationApi, labApi, accessRequestApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../utils/helpers';
+import { formatDate, firstNameOf } from '../utils/helpers';
+import OrgRequestsAlert from '../components/dashboard/OrgRequestsAlert';
+import DashboardWelcome, { WelcomeStats, welcomeAction } from '../components/dashboard/DashboardWelcome';
 
 export default function ClinicDashboard() {
   const { t } = useTranslation('doctorCore');
@@ -18,7 +20,7 @@ export default function ClinicDashboard() {
   const { data: labRequests   = [] } = useQuery({ queryKey: ['lab-requests'],      queryFn: labApi.getAll });
   const { data: accessReqs    = [] } = useQuery({ queryKey: ['access-requests'],   queryFn: accessRequestApi.getAll });
 
-  const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Doctor';
+  const firstName = firstNameOf(me?.name || user?.name, 'Doctor');
   const profile   = me?.profile as any;
 
   const activeConsultations = (consultations as any[]).filter(c => c.status === 'active').length;
@@ -41,80 +43,44 @@ export default function ClinicDashboard() {
     <div className="space-y-6">
 
       {/* Welcome banner */}
-      <div className="relative w-full lg:w-3/4 bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 rounded-2xl p-6 overflow-hidden text-white">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-20 translate-x-20" />
-        <div className="absolute bottom-0 left-32 w-48 h-48 bg-white/5 rounded-full translate-y-16" />
-        <div className="relative flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold bg-white/15 border border-white/20 px-2.5 py-0.5 rounded-full">
-                🩺 {t('clinicDashboard.badge')}
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold mt-2">
-              {org?.name || t('clinicDashboard.defaultName')}
-            </h1>
-            <p className="text-teal-100 text-sm mt-1">
-              {t('dashboard.welcomeBack', { name: firstName })} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </p>
-            {profile?.specialization && (
-              <p className="text-teal-300 text-xs mt-1">{profile.specialization}</p>
-            )}
-          </div>
-        </div>
+      <DashboardWelcome
+        role="org"
+        eyebrow={t('clinicDashboard.badge')}
+        title={org?.name || t('clinicDashboard.defaultName')}
+        subtitle={
+          <>
+            {t('dashboard.welcomeBack', { name: firstName })} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            {profile?.specialization && <span className="block text-white/50 text-sm mt-1">{profile.specialization}</span>}
+          </>
+        }
+        actions={
+          <>
+            <Link to="/clinic/consultations" className={welcomeAction}>
+              <Stethoscope size={15} strokeWidth={2} /> {t('dashboard.actions.newConsultation')}
+            </Link>
+            <Link to="/clinic/lab-requests" className={welcomeAction}>
+              <FlaskConical size={15} strokeWidth={2} /> {t('dashboard.actions.labRequests')}
+            </Link>
+            <Link to="/clinic/requests" className={welcomeAction}>
+              <ShieldCheck size={15} strokeWidth={2} /> {t('clinicDashboard.actions.requests')}
+              {pendingRequests > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pendingRequests}</span>
+              )}
+            </Link>
+          </>
+        }
+      >
+        <WelcomeStats
+          items={[
+            { label: t('clinicDashboard.stats.activeConsultations'), value: activeConsultations },
+            { label: t('clinicDashboard.stats.completedToday'),      value: completedToday },
+            { label: t('dashboard.stats.pendingLabTests'),           value: pendingLabs },
+            { label: t('dashboard.stats.accessRequests'),            value: pendingRequests },
+          ]}
+        />
+      </DashboardWelcome>
 
-        {/* Quick actions */}
-        <div className="relative mt-5 flex flex-wrap gap-2">
-          <Link
-            to="/clinic/consultations"
-            className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
-          >
-            <Stethoscope size={13} /> {t('dashboard.actions.newConsultation')}
-          </Link>
-          <Link
-            to="/clinic/lab-requests"
-            className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
-          >
-            <FlaskConical size={13} /> {t('dashboard.actions.labRequests')}
-          </Link>
-          <Link
-            to="/clinic/requests"
-            className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
-          >
-            <ShieldCheck size={13} /> {t('clinicDashboard.actions.requests')}
-            {pendingRequests > 0 && (
-              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRequests}</span>
-            )}
-          </Link>
-        </div>
-
-        {/* Stats list */}
-        <div className="relative mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
-          {(() => {
-            const fields = [
-              { label: t('clinicDashboard.stats.activeConsultations'), value: activeConsultations, icon: Stethoscope },
-              { label: t('clinicDashboard.stats.completedToday'),      value: completedToday,      icon: CheckCircle2 },
-              { label: t('dashboard.stats.pendingLabTests'),    value: pendingLabs,         icon: FlaskConical },
-              { label: t('dashboard.stats.accessRequests'),      value: pendingRequests,     icon: ShieldCheck  },
-            ];
-            const rows = [];
-            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
-            return rows.map((row, i) => (
-              <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10 max-w-2xl">
-                {row.map(({ label, value, icon: Icon }) => (
-                  <div key={label} className="flex items-center gap-3 px-6 py-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                      <Icon size={16} className="text-white" />
-                    </div>
-                    <span className="flex-1 text-sm text-teal-100 truncate">{label}</span>
-                    <span className="text-base font-bold text-white shrink-0">{value}</span>
-                  </div>
-                ))}
-              </div>
-            ));
-          })()}
-        </div>
-      </div>
+      <OrgRequestsAlert orgId={org?.id} basePath="/clinic" />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 

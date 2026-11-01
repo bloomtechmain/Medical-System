@@ -16,6 +16,19 @@ export const isExpiringSoon = (dateStr: string | null | undefined, days = 30): b
 export const isExpired = (dateStr: string | null | undefined): boolean =>
   dateStr ? new Date(dateStr) < new Date() : false;
 
+// Every dashboard greeted people with `name.split(' ')[0]`, which is the
+// honorific — not the name — whenever one is stored. A doctor saved as
+// "Dr. Janaka Perera" got "Dr.", and the doctor/clinic/hospital greetings then
+// prefix that with "Dr." again, so the masthead read "Dr. Dr.". Skip any
+// leading title and take the first real word.
+const HONORIFICS = /^(dr|prof|mr|mrs|ms|miss|rev|ven|hon)\.?$/i;
+
+export const firstNameOf = (fullName: string | null | undefined, fallback: string): string => {
+  const parts = (fullName ?? '').trim().split(/\s+/).filter(Boolean);
+  const first = parts.find(p => !HONORIFICS.test(p));
+  return first || fallback;
+};
+
 export const stockStatus = (qty: number, reorder: number): { label: string; color: string } => {
   if (qty === 0) return { label: 'Out of Stock', color: 'text-red-700 bg-red-100' };
   if (qty <= reorder) return { label: 'Low Stock', color: 'text-yellow-700 bg-yellow-100' };

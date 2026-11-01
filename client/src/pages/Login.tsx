@@ -6,6 +6,7 @@ import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 import AuthShell from '../components/landing/AuthShell';
+import RegistrationProgress, { Certification } from '../components/registration/RegistrationProgress';
 
 interface LoginFormData {
   email: string;
@@ -27,7 +28,7 @@ export default function Login() {
   // different screens: one is a wait with nothing to do, the other is a dead
   // end that needs support. Neither should offer the resend button — the
   // account cannot verify until it is approved.
-  const [blocked, setBlocked] = useState<{ kind: 'approval' | 'deactivated'; message: string } | null>(null);
+  const [blocked, setBlocked] = useState<{ kind: 'approval' | 'deactivated'; message: string; certifications?: Certification[] } | null>(null);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const { login } = useAuth();
@@ -62,7 +63,7 @@ export default function Login() {
         return;
       }
       if (err?.awaitingApproval) {
-        setBlocked({ kind: 'approval', message: err.message });
+        setBlocked({ kind: 'approval', message: err.message, certifications: err.registrationProgress?.certifications ?? [] });
         return;
       }
       if (err?.accountDeactivated) {
@@ -146,11 +147,9 @@ export default function Login() {
                   /* Deliberately no resend button: the confirmation link is
                      sent when an admin approves, so there is nothing to
                      resend yet and offering it would imply otherwise. */
-                  <p className="text-xs text-gray-500 mt-4 leading-relaxed">
-                    An administrator reviews professional registrations by hand, because a
-                    licence number cannot be checked automatically. You will be emailed a
-                    confirmation link as soon as it is approved.
-                  </p>
+                  <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+                    <RegistrationProgress certifications={blocked.certifications ?? []} />
+                  </div>
                 )}
 
                 <button

@@ -306,7 +306,7 @@ export const userApi = {
   // registration was indistinguishable from a deactivated account and sat
   // unapproved indefinitely.
   pendingApprovals:    (): Promise<any>                          => api.get('/users/pending-approvals'),
-  approve:             (id: number): Promise<any>                => api.post(`/users/${id}/approve`),
+  approve:             (id: number, override?: boolean): Promise<any> => api.post(`/users/${id}/approve`, override ? { override: true } : {}),
   decline:             (id: number, reason?: string): Promise<any> => api.post(`/users/${id}/decline`, { reason }),
   remove:              (id: number): Promise<any>                => api.delete(`/users/${id}`),
   getStats:            (): Promise<any>                          => api.get('/users/stats'),

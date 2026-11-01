@@ -6,36 +6,12 @@ import { useNavigate } from 'react-router-dom';
 import { notificationApi } from '../../services/api';
 import { Notification } from '../../types';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Bell, User, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Activity, XCircle, MessageCircle } from 'lucide-react';
+import { Search, Bell, User } from 'lucide-react';
 import LanguageSwitcher from '../common/LanguageSwitcher';
+import { firstNameOf } from '../../utils/helpers';
 import DashboardSwitcher from '../common/DashboardSwitcher';
 
-// ── Notification type icons ───────────────────────────────────────────────────
-const TYPE_ICON: Record<string, React.ReactNode> = {
-  new_consultation:       <Stethoscope size={14} />,
-  consultation_assigned:  <Pill size={14} />,
-  prescription_dispensed: <CheckCircle2 size={14} />,
-  lab_request_assigned:   <FlaskConical size={14} />,
-  lab_report_ready:       <ClipboardList size={14} />,
-  lab_request_rejected:   <XCircle size={14} />,
-  lab_request_message:    <MessageCircle size={14} />,
-  vitals_updated:         <Activity size={14} />,
-};
-
-const NOTIF_ROUTE: Record<string, (role?: string) => string> = {
-  new_consultation:       (role) => role === 'patient'  ? '/patient/medical'      : '/doctor/consultations',
-  consultation_assigned:  ()     => '/pharmacist/consultations',
-  prescription_dispensed: (role) => role === 'doctor'   ? '/doctor/consultations' : '/patient/medical',
-  lab_request_assigned:   ()     => '/laboratory/reports',
-  lab_report_ready:       (role) => role === 'doctor'   ? '/doctor/lab-requests'  : '/patient/lab-reports',
-  lab_request_rejected:   (role) => role === 'doctor'   ? '/doctor/lab-requests'  : '/patient/lab-tests',
-  lab_request_message:    (role) => role === 'laboratory' ? '/laboratory/reports' : role === 'doctor' ? '/doctor/lab-requests' : '/patient/lab-tests',
-  vitals_updated:         ()     => '/patient',
-  access_request:         ()     => '/patient/requests',
-  access_accepted:        ()     => '/doctor/requests',
-  access_declined:        ()     => '/doctor/requests',
-};
-
+import { notificationRoute, notificationIcon } from '../../utils/notificationRoutes';
 function timeAgo(ts: string): string {
   const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
   if (diff < 60)    return `${diff}s ago`;
@@ -92,11 +68,11 @@ export default function Header() {
 
   const handleNotifClick = (n: any) => {
     if (!n.is_read) markOneMutation.mutate(n.id);
-    const fn = NOTIF_ROUTE[n.type];
-    if (fn) { setOpen(false); navigate(fn(user?.role)); }
+    const to = notificationRoute(n.type, user);
+    if (to) { setOpen(false); navigate(to); }
   };
 
-  const firstName = user?.name?.split(' ')[0] || 'there';
+  const firstName = firstNameOf(user?.name, 'there');
 
   return (
     <header className="hidden md:flex h-16 bg-white border-b border-gray-100 items-center justify-between px-7 shrink-0">
@@ -186,7 +162,7 @@ export default function Header() {
                     <p className="text-sm text-gray-400">{t('header.noNotifications')}</p>
                   </div>
                 ) : notifications.map((n) => {
-                  const hasRoute = !!NOTIF_ROUTE[n.type];
+                  const hasRoute = !!notificationRoute(n.type, user);
                   return (
                     <div
                       key={n.id}
@@ -199,7 +175,7 @@ export default function Header() {
                         <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                           !n.is_read ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500'
                         }`}>
-                          {TYPE_ICON[n.type] || <Bell size={14} />}
+                          {(() => { const NotifIcon = notificationIcon(n.type); return <NotifIcon size={14} />; })()}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`text-xs font-semibold truncate ${!n.is_read ? 'text-primary-800' : 'text-gray-800'}`}>

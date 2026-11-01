@@ -41,6 +41,37 @@ const isOwnerOf = async (orgId: number, userId: number): Promise<boolean> => {
   return rows.length > 0;
 };
 
+// Migration 015: once every hospital/clinic a newly registered doctor named
+// has answered, the registration is ready for the platform admin — tell
+// them, so it doesn't sit unnoticed in the approvals queue.
+const notifyAdminsIfReadyForReview = async (doctorId: number): Promise<void> => {
+  try {
+    const { rows: [state] } = await pool.query(
+      `SELECT u.name,
+              (u.is_active = FALSE AND u.approved_at IS NULL AND u.deleted_at IS NULL) AS awaiting,
+              COUNT(r.*) FILTER (WHERE r.status = 'pending')  AS pending,
+              COUNT(r.*) FILTER (WHERE r.status = 'accepted') AS certified
+         FROM public.users u
+         LEFT JOIN public.organization_membership_requests r
+                ON r.doctor_id = u.id AND r.is_registration = TRUE
+        WHERE u.id = $1
+        GROUP BY u.id`,
+      [doctorId]
+    );
+    if (!state?.awaiting || Number(state.pending) > 0) return;
+    const { rows: admins } = await pool.query(
+      "SELECT id FROM public.users WHERE role='admin' AND is_active=TRUE AND deleted_at IS NULL"
+    );
+    for (const a of admins) {
+      await sendNotification(a.id, 'registration_ready_for_review', 'Doctor ready for approval',
+        `Every hospital/clinic Dr. ${state.name} listed has responded (${state.certified} certified). The registration is ready for your review.`,
+        { doctor_id: doctorId });
+    }
+  } catch (err) {
+    logger.error({ err, doctorId }, 'Could not notify admins that a registration is ready for review');
+  }
+};
+
 // Doctor-initiated: "I want to start channeling at this hospital/clinic",
 // optionally with the weekly hours they intend to offer there. Nothing in
 // organization_members changes until the owner accepts.
@@ -190,7 +221,12 @@ const listForOrg = async (req: Request, res: Response, next: NextFunction): Prom
 
     const { rows } = await pool.query(`
       SELECT r.*, u.name AS doctor_name, u.email AS doctor_email,
-             dp.specialization AS doctor_specialization, dp.license_number AS doctor_license_number
+             dp.specialization AS doctor_specialization, dp.license_number AS doctor_license_number,
+             dp.phone AS doctor_phone, dp.years_experience AS doctor_years_experience,
+             dp.medical_school AS doctor_medical_school,
+             -- Migration 015: lets the owner see that a registration they are
+             -- certifying is still waiting on the platform admin afterwards.
+             (u.approved_at IS NULL AND u.is_active = FALSE) AS doctor_awaiting_admin
       FROM public.organization_membership_requests r
       JOIN public.users u ON u.id = r.doctor_id
       LEFT JOIN public.doctor_profiles dp ON dp.user_id = r.doctor_id
@@ -289,7 +325,17 @@ const respond = async (req: Request, res: Response, next: NextFunction): Promise
     });
 
     const name = await orgName(request.organization_id);
-    if (request.kind === 'join') {
+    if (request.kind === 'join' && request.is_registration) {
+      await sendNotification(request.doctor_id,
+        decision === 'accept' ? 'org_registration_certified' : 'org_registration_rejected',
+        decision === 'accept' ? 'Affiliation certified' : 'Affiliation not confirmed',
+        decision === 'accept'
+          ? `${name} confirmed that you work there. Your registration moves on to the Suwela admin for final approval.`
+          : `${name} could not confirm that you work there, so it will not be listed on your profile. The Suwela admin will still review your registration.`,
+        { request_id: request.id, organization_id: request.organization_id }
+      );
+      await notifyAdminsIfReadyForReview(request.doctor_id);
+    } else if (request.kind === 'join') {
       await sendNotification(request.doctor_id,
         decision === 'accept' ? 'org_join_accepted' : 'org_join_declined',
         decision === 'accept' ? 'Channeling Request Accepted' : 'Channeling Request Declined',

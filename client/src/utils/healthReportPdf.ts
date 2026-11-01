@@ -118,7 +118,7 @@ export function buildHealthReportPdf(data: HealthReportData, t: TFunction): jsPD
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(20);
-    doc.text('Core Health', margin, 16);
+    doc.text('Suwela', margin, 16);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text('by BloomTech', margin, 22);
@@ -464,7 +464,7 @@ export function buildHealthReportPdf(data: HealthReportData, t: TFunction): jsPD
     doc.setFontSize(52);
     doc.saveGraphicsState();
     doc.setGState(new (doc as any).GState({ opacity: 0.07 }));
-    doc.text('CORE HEALTH', pageW / 2, pageH / 2, { align: 'center', angle: 45 });
+    doc.text('SUWELA', pageW / 2, pageH / 2, { align: 'center', angle: 45 });
     doc.restoreGraphicsState();
 
     doc.setFillColor(13, 148, 136);
@@ -473,7 +473,7 @@ export function buildHealthReportPdf(data: HealthReportData, t: TFunction): jsPD
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.text(
-      `Core Health by BloomTech  ·  ${t('pdf.footerConfidential')}  ·  ${t('pdf.footerAuthorized')}`,
+      `Suwela by BloomTech  ·  ${t('pdf.footerConfidential')}  ·  ${t('pdf.footerAuthorized')}`,
       pageW / 2, pageH - 8.5, { align: 'center' }
     );
     doc.setFontSize(6.5);
@@ -489,7 +489,7 @@ export function buildHealthReportPdf(data: HealthReportData, t: TFunction): jsPD
 export function healthReportFilename(data: HealthReportData): string {
   const name = (data.patient.name || 'Patient').trim().replace(/\s+/g, '_');
   const date = new Date(data.generated_at).toISOString().slice(0, 10);
-  return `CoreHealth_Report_${name}_${date}.pdf`;
+  return `Suwela_Report_${name}_${date}.pdf`;
 }
 
 export function downloadHealthReport(data: HealthReportData, t: TFunction): void {

@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { Stethoscope, FlaskConical, ShieldCheck, Users, ArrowUpRight, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { authApi, consultationApi, labApi, accessRequestApi, orgApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../utils/helpers';
+import { formatDate, firstNameOf } from '../utils/helpers';
+import OrgRequestsAlert from '../components/dashboard/OrgRequestsAlert';
+import DashboardWelcome, { welcomeAction } from '../components/dashboard/DashboardWelcome';
 
 export default function HospitalDashboard() {
   const { t } = useTranslation('doctorCore');
@@ -23,7 +25,7 @@ export default function HospitalDashboard() {
     enabled:  !!org?.id,
   });
 
-  const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Doctor';
+  const firstName = firstNameOf(me?.name || user?.name, 'Doctor');
   const profile   = me?.profile as any;
 
   const activeConsultations  = (consultations as any[]).filter(c => c.status === 'active').length;
@@ -44,54 +46,35 @@ export default function HospitalDashboard() {
     <div className="space-y-6">
 
       {/* Welcome banner */}
-      <div className="relative bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 rounded-2xl p-6 overflow-hidden text-white">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-20 translate-x-20" />
-        <div className="absolute bottom-0 left-40 w-40 h-40 bg-white/5 rounded-full translate-y-16" />
-        <div className="relative flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold bg-white/15 border border-white/20 px-2.5 py-0.5 rounded-full">
-                🏥 {t('hospitalDashboard.badge')}
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold mt-2">
-              {org?.name || t('hospitalDashboard.defaultName')}
-            </h1>
-            <p className="text-blue-200 text-sm mt-1">
-              {t('dashboard.welcomeBack', { name: firstName })} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </p>
-            {profile?.specialization && (
-              <p className="text-blue-300 text-xs mt-1">{profile.specialization}</p>
-            )}
-          </div>
-          <div className="hidden sm:flex flex-col items-center bg-white/10 rounded-xl p-4 shrink-0">
-            <span className="text-4xl">🏥</span>
-            <p className="text-xs mt-1 text-blue-200">{t('hospitalDashboard.avatarLabel')}</p>
-          </div>
-        </div>
+      <DashboardWelcome
+        role="org"
+        eyebrow={t('hospitalDashboard.badge')}
+        title={org?.name || t('hospitalDashboard.defaultName')}
+        subtitle={
+          <>
+            {t('dashboard.welcomeBack', { name: firstName })} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            {profile?.specialization && <span className="block text-white/50 text-sm mt-1">{profile.specialization}</span>}
+          </>
+        }
+        actions={
+          <>
+            <Link to="/hospital/consultations" className={welcomeAction}>
+              <Stethoscope size={15} strokeWidth={2} /> {t('dashboard.actions.newConsultation')}
+            </Link>
+            <Link to="/hospital/lab-requests" className={welcomeAction}>
+              <FlaskConical size={15} strokeWidth={2} /> {t('dashboard.actions.labRequests')}
+            </Link>
+            <Link to="/hospital/requests" className={welcomeAction}>
+              <ShieldCheck size={15} strokeWidth={2} /> {t('hospitalDashboard.actions.accessRequests')}
+              {pendingRequests > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pendingRequests}</span>
+              )}
+            </Link>
+          </>
+        }
+      />
 
-        {/* Quick action buttons */}
-        <div className="relative mt-5 flex flex-wrap gap-2">
-          <Link
-            to="/hospital/consultations"
-            className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
-          >
-            <Stethoscope size={13} /> {t('dashboard.actions.newConsultation')}
-          </Link>
-          <Link
-            to="/hospital/lab-requests"
-            className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
-          >
-            <FlaskConical size={13} /> {t('dashboard.actions.labRequests')}
-          </Link>
-          <Link
-            to="/hospital/requests"
-            className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors"
-          >
-            <ShieldCheck size={13} /> {t('hospitalDashboard.actions.accessRequests')} {pendingRequests > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRequests}</span>}
-          </Link>
-        </div>
-      </div>
+      <OrgRequestsAlert orgId={org?.id} basePath="/hospital" />
 
       {/* Stats */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">

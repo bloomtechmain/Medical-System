@@ -35,7 +35,7 @@
       "inventory": "Inventory"
     },
     "title": "System Dashboard",
-    "subtitle": "Core Health — multi-tenant system overview",
+    "subtitle": "Suwela — multi-tenant system overview",
     "systemAdministrator": "System Administrator",
     "pendingApproval_one": "{{count}} organization pending approval",
     "pendingApproval_other": "{{count}} organizations pending approval",

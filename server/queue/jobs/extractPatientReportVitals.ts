@@ -1,9 +1,12 @@
 import type { Job } from 'pg-boss';
 import { boss, DEFAULT_QUEUE_OPTIONS } from '../boss';
 import { isEnabled } from '../../config/featureFlags';
-import { extractVitalsFromText, extractReportText } from '../../utils/labVitalsParser';
+import { queryAs } from '../../config/db';
+import { logger } from '../../config/logger';
+import { extractVitalsFromReport } from '../../utils/labVitalsParser';
 import { saveVitalsFromPatientUpload } from '../../controllers/patientVitalsController';
 import { readUploadToTempFile } from '../../utils/fileStorage';
+import { sendNotification } from '../../utils/notify';
 
 const JOB_NAME = 'extract-patient-report-vitals';
 
@@ -12,6 +15,19 @@ interface Payload {
   patientReportId: number;
   filename: string;
 }
+
+// Report types whose files are read for vitals. A discharge summary or an
+// unlabelled report often carries the same numbers as a lab report;
+// imaging, prescriptions and vaccination cards do not.
+export const READABLE_REPORT_TYPES = ['lab_report', 'discharge_summary', 'other'];
+
+const setStatus = (patientId: number, reportId: number, status: 'extracted' | 'none' | 'failed', found: number, confidence: number | null) =>
+  queryAs({ id: patientId, role: 'patient' },
+    `UPDATE patient_reports
+        SET vitals_status=$1, vitals_found=$2, vitals_confidence=$3, vitals_checked_at=NOW(), updated_at=NOW()
+      WHERE id=$4 AND patient_id=$5`,
+    [status, found, confidence, reportId, patientId]
+  );
 
 // PERF-06: previously ran inline via setImmediate when a patient self-
 // uploaded a report tagged `lab_report`. Safe to retry — saveVitalsFromPatientUpload
@@ -22,20 +38,36 @@ interface Payload {
 const processOne = async (data: Payload): Promise<void> => {
   const { patientId, patientReportId, filename } = data;
 
-  const { filePath, cleanup } = await readUploadToTempFile('patient-reports', filename);
-  let reportText: string;
+  let result;
   try {
-    reportText = await extractReportText(filePath);
-  } finally {
-    cleanup();
+    const { filePath, cleanup } = await readUploadToTempFile('patient-reports', filename);
+    try {
+      result = await extractVitalsFromReport(filePath);
+    } finally {
+      cleanup();
+    }
+  } catch (err) {
+    logger.error({ err, patientReportId }, 'Could not read uploaded report for vitals');
+    await setStatus(patientId, patientReportId, 'failed', 0, null);
+    throw err; // let pg-boss retry a transient storage failure
   }
 
-  if (reportText.trim().length > 20) {
-    const extracted = extractVitalsFromText(reportText);
-    if (Object.keys(extracted).length > 0) {
-      await saveVitalsFromPatientUpload(patientId, extracted as Record<string, number | undefined>, patientReportId);
-    }
+  const found = Object.values(result.vitals).filter(v => v !== undefined).length;
+  if (found > 0) {
+    await saveVitalsFromPatientUpload(patientId, result.vitals as Record<string, number | undefined>, patientReportId);
   }
+  await setStatus(patientId, patientReportId, found > 0 ? 'extracted' : 'none', found,
+    result.method === 'none' ? null : Math.round(result.confidence * 100) / 100);
+
+  // Tell the patient what happened — before this, a report that yielded
+  // nothing looked exactly like one still being processed, forever.
+  await sendNotification(patientId,
+    found > 0 ? 'report_vitals_extracted' : 'report_vitals_none',
+    found > 0 ? 'Health values updated from your report' : 'We couldn\'t read values from your report',
+    found > 0
+      ? `We read ${found} value${found === 1 ? '' : 's'} from your report and added them to My Health. Please check they match the report.`
+      : 'The report was saved, but no test values could be read from it. A clearer photo (flat, well lit, in focus) or a PDF from the lab usually works. You can also enter the values yourself in My Health.',
+    { patient_report_id: patientReportId, found });
 };
 
 const handler = (jobs: Job<Payload>[]): Promise<void[]> => Promise.all(jobs.map(j => processOne(j.data)));

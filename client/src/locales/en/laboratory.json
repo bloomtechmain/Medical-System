@@ -6,7 +6,7 @@
     "welcome": "Welcome,",
     "defaultName": "Lab",
     "defaultLabType": "Diagnostic Laboratory",
-    "portalTagline": "Core Health Portal",
+    "portalTagline": "Suwela Portal",
     "stats": {
       "labName": "Lab Name",
       "labTypes": "Lab Types",
@@ -48,8 +48,8 @@
       "empty": "No services listed yet."
     },
     "infoTip": {
-      "title": "Core Health — Laboratory Portal",
-      "body": "Features for test request management, result uploads, and doctor referrals are coming in the next update. Your profile is now visible to doctors and patients on the Core Health network."
+      "title": "Suwela — Laboratory Portal",
+      "body": "Features for test request management, result uploads, and doctor referrals are coming in the next update. Your profile is now visible to doctors and patients on the Suwela network."
     },
     "editModal": {
       "title": "Edit Laboratory Profile",

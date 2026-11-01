@@ -336,6 +336,10 @@ CREATE TABLE public.organization_membership_requests (
   -- 'join' only: proposed weekly hours, same shape as
   -- doctor_weekly_availability, applied the moment the owner accepts.
   proposed_schedule JSONB,
+  -- Migration 015: TRUE when created by the doctor's own sign-up — the owner
+  -- is certifying the registration, and the admin cannot approve the account
+  -- until every such request is answered.
+  is_registration  BOOLEAN     NOT NULL DEFAULT FALSE,
   responded_by     INTEGER     REFERENCES public.users(id) ON DELETE SET NULL,
   responded_at     TIMESTAMPTZ,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -345,6 +349,8 @@ CREATE UNIQUE INDEX idx_omr_one_pending ON public.organization_membership_reques
   WHERE status = 'pending';
 CREATE INDEX idx_omr_org    ON public.organization_membership_requests(organization_id, status);
 CREATE INDEX idx_omr_doctor ON public.organization_membership_requests(doctor_id, status);
+CREATE INDEX idx_omr_registration_pending ON public.organization_membership_requests (doctor_id)
+  WHERE is_registration = TRUE AND status = 'pending';
 
 -- 2.3c plans / plan_assignments (migration 014) — subscription packages per
 -- dashboard type (doctor, pharmacy, laboratory, hospital, clinic). Patients
@@ -953,6 +959,13 @@ CREATE TABLE clinical.patient_reports (
   file_path          VARCHAR(500) NOT NULL,
   file_mimetype      VARCHAR(100),
   file_original_name VARCHAR(255),
+  -- Migration 015: outcome of reading vitals from the file — pending,
+  -- extracted (vitals_found values saved), none (nothing recognised),
+  -- failed (unreadable). NULL for report types that are not read.
+  vitals_status      VARCHAR(12)  CHECK (vitals_status IN ('pending','extracted','none','failed')),
+  vitals_found       INTEGER,
+  vitals_confidence  NUMERIC(5,2),
+  vitals_checked_at  TIMESTAMPTZ,
   -- PRO-25: clinical records are soft-deleted, not removed. See public.users.
   deleted_at         TIMESTAMPTZ,
   created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),

@@ -12,18 +12,7 @@ import {
 } from 'lucide-react';
 import { useDashboardPlan } from '../../hooks/useDashboardPlan';
 import { featureForPath, DASHBOARD_AUDIENCE } from '../../constants/plans';
-
-// ── 4-dot logo mark ───────────────────────────────────────────────────────────
-function LogoMark() {
-  return (
-    <svg viewBox="0 0 28 28" fill="none" className="w-6 h-6 shrink-0">
-      <circle cx="9"  cy="9"  r="5.5" fill="white" opacity="0.95" />
-      <circle cx="19" cy="9"  r="5.5" fill="white" opacity="0.95" />
-      <circle cx="9"  cy="19" r="5.5" fill="white" opacity="0.95" />
-      <circle cx="19" cy="19" r="5.5" fill="white" opacity="0.95" />
-    </svg>
-  );
-}
+import BrandMark from '../landing/BrandMark';
 
 interface NavItem {
   to: string;
@@ -192,16 +181,17 @@ export default function Sidebar() {
     ">
 
       {/* ── Logo ── */}
-      <div className="h-16 flex items-center gap-3 px-[13px] border-b border-white/5 shrink-0">
-        {/* icon always visible */}
-        <div className="w-10 h-10 flex items-center justify-center shrink-0">
-          <LogoMark />
-        </div>
-        {/* text fades in on expand */}
-        <div className="overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
-          <p className="text-sm font-bold text-white whitespace-nowrap leading-tight">Core Health</p>
-          <p className="text-[11px] text-slate-500 whitespace-nowrap">by BloomTech</p>
-        </div>
+      {/* The real Suwela lockup, the same component the public site uses — this
+          rail used to draw its own four-dot placeholder that appeared nowhere
+          else in the brand. The emblem stays put on the collapsed rail and the
+          wordmark fades in when the sidebar expands. */}
+      <div className="h-16 flex items-center px-[17px] border-b border-white/5 shrink-0">
+        <BrandMark
+          tone="light"
+          size="sm"
+          emblemClassName="w-8 h-8"
+          wordmarkClassName="overflow-hidden whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100"
+        />
       </div>
 
       {/* ── Role / Org badge ── */}

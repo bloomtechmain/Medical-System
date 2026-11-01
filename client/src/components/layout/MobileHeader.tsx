@@ -1,47 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Activity } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { notificationApi } from '../../services/api';
 import { Notification } from '../../types';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import LanguageSwitcher from '../common/LanguageSwitcher';
+import BrandMark from '../landing/BrandMark';
 
-// 4-dot logo
-function LogoMark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5">
-      <circle cx="7"  cy="7"  r="4.5" fill="#0d9488" />
-      <circle cx="17" cy="7"  r="4.5" fill="#0d9488" opacity="0.7" />
-      <circle cx="7"  cy="17" r="4.5" fill="#0d9488" opacity="0.7" />
-      <circle cx="17" cy="17" r="4.5" fill="#0d9488" opacity="0.4" />
-    </svg>
-  );
-}
-
-const TYPE_ICON: Record<string, React.ReactNode> = {
-  new_consultation:       <Stethoscope size={13} />,
-  consultation_assigned:  <Pill size={13} />,
-  prescription_dispensed: <CheckCircle2 size={13} />,
-  lab_request_assigned:   <FlaskConical size={13} />,
-  lab_report_ready:       <ClipboardList size={13} />,
-  vitals_updated:         <Activity size={13} />,
-};
-
-const NOTIF_ROUTE: Record<string, (role?: string) => string> = {
-  new_consultation:       (role) => role === 'patient' ? '/patient/medical'      : '/doctor/consultations',
-  consultation_assigned:  ()     => '/pharmacist/consultations',
-  prescription_dispensed: (role) => role === 'doctor'  ? '/doctor/consultations' : '/patient/medical',
-  lab_request_assigned:   ()     => '/laboratory/reports',
-  lab_report_ready:       (role) => role === 'doctor'  ? '/doctor/lab-requests'  : '/patient/lab-reports',
-  vitals_updated:         ()     => '/patient',
-  access_request:         ()     => '/patient/requests',
-  access_accepted:        ()     => '/doctor/requests',
-  access_declined:        ()     => '/doctor/requests',
-};
-
+import { notificationRoute, notificationIcon } from '../../utils/notificationRoutes';
 function timeAgo(ts: string): string {
   const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
   if (diff < 60)    return `${diff}s`;
@@ -96,17 +65,16 @@ export default function MobileHeader() {
 
   const handleNotifClick = (n: any) => {
     if (!n.is_read) markOneMutation.mutate(n.id);
-    const fn = NOTIF_ROUTE[n.type];
-    if (fn) { setOpen(false); navigate(fn(user?.role)); }
+    const to = notificationRoute(n.type, user);
+    if (to) { setOpen(false); navigate(to); }
   };
 
   return (
     <header className="md:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 shadow-sm">
 
-      {/* Left: logo + name */}
-      <div className="flex items-center gap-2.5">
-        <LogoMark />
-        <span className="text-sm font-bold text-gray-900 tracking-tight">Core Health</span>
+      {/* Left: the public site's lockup, not a bespoke mark */}
+      <div className="flex items-center">
+        <BrandMark size="sm" showHub={false} emblemClassName="w-6 h-6" />
       </div>
 
       {/* Right: actions */}
@@ -155,12 +123,12 @@ export default function MobileHeader() {
                     <p className="text-sm text-gray-400">{t('header.noNotifications')}</p>
                   </div>
                 ) : notifications.slice(0, 10).map(n => {
-                  const hasRoute = !!NOTIF_ROUTE[n.type];
+                  const hasRoute = !!notificationRoute(n.type, user);
                   return (
                     <div key={n.id} onClick={() => handleNotifClick(n)}
                       className={`flex items-start gap-3 px-4 py-3 active:bg-gray-50 ${hasRoute ? 'cursor-pointer' : ''} ${!n.is_read ? 'bg-primary-50/40' : ''}`}>
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${!n.is_read ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500'}`}>
-                        {TYPE_ICON[n.type] || <Bell size={13} />}
+                        {(() => { const NotifIcon = notificationIcon(n.type); return <NotifIcon size={13} />; })()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-semibold truncate ${!n.is_read ? 'text-primary-800' : 'text-gray-800'}`}>{n.title}</p>

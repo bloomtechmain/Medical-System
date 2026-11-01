@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { userApi, authApi } from '../services/api';
 import PlanSummaryCard from '../components/plans/PlanSummaryCard';
+import DashboardWelcome from '../components/dashboard/DashboardWelcome';
 import { formatDate, formatCurrency } from '../utils/helpers';
 import {
   Users, Stethoscope, FlaskConical, Pill, Truck,
@@ -88,15 +89,12 @@ export default function AdminDashboard() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t('dashboard.subtitle')}</p>
-        </div>
-        <span className="inline-flex items-center gap-2 bg-red-50 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-red-200 self-start sm:self-auto">
-          🛡️ {t('dashboard.systemAdministrator')}
-        </span>
-      </div>
+      <DashboardWelcome
+        role="admin"
+        eyebrow={t('dashboard.systemAdministrator')}
+        title={t('dashboard.title')}
+        subtitle={t('dashboard.subtitle')}
+      />
 
       {/* Pending organization approvals alert */}
       {Number(org?.pending_organizations) > 0 && (

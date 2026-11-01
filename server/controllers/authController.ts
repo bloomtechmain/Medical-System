@@ -13,6 +13,7 @@ import { DbUser } from '../types';
 import { audienceForRole } from '../config/planCatalog';
 import { resolveRegistrationPlan, effectivePlanForUser, toPlan, Plan } from '../utils/plans';
 import { recordRegistrationPlan } from './planController';
+import { sendNotification } from '../utils/notify';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
 const REFRESH_TOKEN_DAYS = 7;
@@ -271,24 +272,50 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
     if (profile) await createProfile(client, role, user.id, profile);
     if (plan) await recordRegistrationPlan(client, { userId: user.id }, plan.id);
 
-    // A doctor can self-register already affiliated with 0+ existing hospitals/
-    // clinics (more can be added later from Settings) — just membership rows,
-    // same as the admin-driven addMember flow, no approval needed.
+    // Migration 015: a doctor names the hospitals/clinics they work at, and
+    // each one has to vouch for that. These used to be written straight into
+    // organization_members — affiliated on the doctor's say-so, with nobody
+    // at the hospital asked. Now each becomes a registration request the
+    // owner certifies or rejects from their dashboard; the membership row is
+    // only created when they certify (orgMembershipRequestController.respond),
+    // and the admin cannot approve the account until all are answered.
+    let certifyingOrgs: { id: number; name: string }[] = [];
     if (role === 'doctor' && Array.isArray(hospital_organization_ids) && hospital_organization_ids.length) {
-      const { rows: validOrgs } = await client.query(
-        "SELECT id FROM public.organizations WHERE id = ANY($1) AND is_active = TRUE AND org_type IN ('hospital','clinic')",
-        [hospital_organization_ids]
-      );
-      for (const org of validOrgs) {
+      const ids = [...new Set(hospital_organization_ids.map(Number).filter(Number.isInteger))];
+      ({ rows: certifyingOrgs } = await client.query(
+        "SELECT id, name FROM public.organizations WHERE id = ANY($1) AND is_active = TRUE AND org_type IN ('hospital','clinic')",
+        [ids]
+      ));
+      for (const org of certifyingOrgs) {
         await client.query(
-          `INSERT INTO public.organization_members (organization_id, user_id, member_role)
-           VALUES ($1, $2, 'doctor') ON CONFLICT (organization_id, user_id) DO NOTHING`,
-          [org.id, user.id]
+          `INSERT INTO public.organization_membership_requests
+             (organization_id, doctor_id, kind, requested_by, is_registration, message)
+           VALUES ($1, $2, 'join', $2, TRUE, $3)
+           ON CONFLICT DO NOTHING`,
+          [org.id, user.id, 'Registered on Suwela and listed this organisation as a place they work.']
         );
       }
     }
 
     await client.query('COMMIT');
+
+    // Ask each organisation to certify. After COMMIT so a notification can
+    // never point at a request that was rolled back.
+    for (const org of certifyingOrgs) {
+      try {
+        const { rows: [owner] } = await pool.query(
+          "SELECT user_id FROM public.organization_members WHERE organization_id=$1 AND member_role='owner' LIMIT 1",
+          [org.id]
+        );
+        if (owner) {
+          await sendNotification(owner.user_id, 'org_registration_certification', 'Certify a new doctor',
+            `Dr. ${user.name} has registered on Suwela and says they work at ${org.name}. Please confirm or reject this from your Team page.`,
+            { organization_id: org.id, doctor_id: user.id });
+        }
+      } catch (notifyErr) {
+        logger.error({ err: notifyErr, orgId: org.id }, 'Could not notify organisation owner about a registration to certify');
+      }
+    }
 
     // PRO-11: send the confirmation link. After COMMIT, deliberately — the
     // account must exist before a link pointing at it goes out, and a mail
@@ -398,10 +425,25 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
         actorRole: user.role,
         metadata: { reason: awaitingApproval ? 'awaiting_approval' : 'deactivated' },
       });
+      // Migration 015: the password has been verified, so the applicant can
+      // be shown where their registration stands — which hospitals have
+      // certified them and what is still outstanding — instead of a
+      // featureless "please wait".
+      const { rows: certifications } = awaitingApproval
+        ? await pool.query(
+            `SELECT o.name AS organization_name, r.status
+               FROM public.organization_membership_requests r
+               JOIN public.organizations o ON o.id = r.organization_id
+              WHERE r.doctor_id = $1 AND r.is_registration = TRUE AND r.status <> 'cancelled'
+              ORDER BY r.created_at`,
+            [user.id]
+          )
+        : { rows: [] };
       res.status(403).json(
         awaitingApproval
           ? {
               awaitingApproval: true,
+              registrationProgress: { certifications },
               message: 'Your registration is still waiting for an administrator to approve it. You will be emailed once it is approved — there is nothing you need to do in the meantime.',
             }
           : {
