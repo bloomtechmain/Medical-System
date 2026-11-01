@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { queryAs, RLSActor } from '../config/db';
 import { streamUploadToResponse } from '../utils/fileStorage';
 import { parsePaging } from '../utils/pagination';
-import { enqueue as enqueuePatientReportVitals } from '../queue/jobs/extractPatientReportVitals';
+import { enqueue as enqueuePatientReportVitals, READABLE_REPORT_TYPES } from '../queue/jobs/extractPatientReportVitals';
 
 // patient_reports / data_access_requests live in the `clinical` schema
 // behind row-level security — every query against them must carry the
@@ -32,19 +32,23 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
       req.file.filename, req.file.mimetype, req.file.originalname,
     ]);
 
-    // ── Respond right away — don't block the upload on OCR/PDF extraction ──
-    res.status(201).json(report);
-
     // PERF-06: queue vitals extraction instead of running OCR/PDF parsing
     // inline (setImmediate — no retry, lost on restart). See
-    // queue/jobs/extractPatientReportVitals.ts.
-    if (report_type === 'lab_report') {
-      await enqueuePatientReportVitals({
+    // queue/jobs/extractPatientReportVitals.ts. Migration 015: mark it
+    // 'pending' first so the reports page can show "reading…" straight away.
+    if (READABLE_REPORT_TYPES.includes(report_type)) {
+      const jobId = await enqueuePatientReportVitals({
         patientId: req.user.id,
         patientReportId: report.id,
         filename: req.file.filename,
       });
+      if (jobId) {
+        await queryAs(actor(req), `UPDATE patient_reports SET vitals_status='pending' WHERE id=$1`, [report.id]);
+        report.vitals_status = 'pending';
+      }
     }
+
+    res.status(201).json(report);
   } catch (err) { next(err); }
 };
 

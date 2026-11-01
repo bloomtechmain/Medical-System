@@ -4,7 +4,7 @@
     "title": "Patient Health Report",
     "generatedLabel": "Generated: {{date}}  {{time}}",
     "patientRole": "Patient",
-    "idLine": "Core Health ID: #{{id}}",
+    "idLine": "Suwela ID: #{{id}}",
     "sections": {
       "personal": "Personal Information",
       "health": "Health Information",
@@ -190,7 +190,7 @@
     }
   },
   "setupPrompt": {
-    "title": "Welcome to Core Health!",
+    "title": "Welcome to Suwela!",
     "message": "Complete your profile — phone, date of birth, blood type, emergency contact and more — so doctors and labs have what they need to care for you.",
     "completeButton": "Complete Setup",
     "laterButton": "Later"

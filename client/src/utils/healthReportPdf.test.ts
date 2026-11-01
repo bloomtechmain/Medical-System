@@ -154,16 +154,16 @@ describe('buildHealthReportPdf', () => {
 describe('healthReportFilename', () => {
   it('is dated and carries the patient name without spaces', () => {
     expect(healthReportFilename(baseData()))
-      .toBe('CoreHealth_Report_Saman_Kumara_2026-10-14.pdf');
+      .toBe('Suwela_Report_Saman_Kumara_2026-10-14.pdf');
   });
 
   it('falls back to a generic name rather than producing a broken filename', () => {
     const data = baseData({ patient: { ...baseData().patient, name: '' } });
-    expect(healthReportFilename(data)).toBe('CoreHealth_Report_Patient_2026-10-14.pdf');
+    expect(healthReportFilename(data)).toBe('Suwela_Report_Patient_2026-10-14.pdf');
   });
 
   it('collapses runs of whitespace so the name is always one token', () => {
     const data = baseData({ patient: { ...baseData().patient, name: '  Nimal   Perera  ' } });
-    expect(healthReportFilename(data)).toBe('CoreHealth_Report_Nimal_Perera_2026-10-14.pdf');
+    expect(healthReportFilename(data)).toBe('Suwela_Report_Nimal_Perera_2026-10-14.pdf');
   });
 });

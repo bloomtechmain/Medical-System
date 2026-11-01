@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { ShieldCheck, X, Check, Stethoscope, Pill, FlaskConical, Building2 } from 'lucide-react';
+import { ShieldCheck, X, Check, Stethoscope, Pill, FlaskConical, Building2, Clock3, AlertTriangle } from 'lucide-react';
 import { userApi } from '../../services/api';
 import { formatDate } from '../../utils/helpers';
 import { formatPrice } from '../../constants/plans';
@@ -34,6 +34,7 @@ interface PendingUser {
   plan_name?: string | null;
   plan_price_monthly?: number | null;
   plan_currency?: string | null;
+  affiliation_certifications?: { id: number; organization_name: string; org_type: string; status: string; responded_at: string | null }[];
 }
 
 const ROLE_META: Record<string, { Icon: typeof Stethoscope; label: string; tint: string }> = {
@@ -50,7 +51,10 @@ const credentials = (u: PendingUser): { label: string; value: string }[] => {
   if (u.role === 'doctor') {
     if (u.doctor_license) out.push({ label: 'Licence', value: u.doctor_license });
     if (u.specialization) out.push({ label: 'Specialization', value: u.specialization });
-    if (u.hospital_affiliation) out.push({ label: 'Affiliation', value: u.hospital_affiliation });
+    // A workplace that is on Suwela is certified by the organisation itself
+    // (shown separately below); only a typed-in one needs the admin to check.
+    const certified = (u.affiliation_certifications ?? []).some(c => c.organization_name === u.hospital_affiliation);
+    if (u.hospital_affiliation && !certified) out.push({ label: 'Main workplace (not on Suwela — verify)', value: u.hospital_affiliation });
   } else if (u.role === 'pharmacist') {
     if (u.pharmacist_license) out.push({ label: 'Licence', value: u.pharmacist_license });
     if (u.pharmacy_name) out.push({ label: 'Pharmacy', value: u.pharmacy_name });
@@ -85,8 +89,13 @@ export default function PendingApprovals() {
     qc.invalidateQueries({ queryKey: ['admin-stats'] });
   };
 
+  // Approving before every hospital has answered is possible (an
+  // organisation that never responds would otherwise block a doctor
+  // forever) but has to be a deliberate, confirmed choice.
+  const [overriding, setOverriding] = useState<PendingUser | null>(null);
+
   const approve = useMutation({
-    mutationFn: (id: number) => userApi.approve(id),
+    mutationFn: ({ id, override }: { id: number; override?: boolean }) => userApi.approve(id, override),
     onSuccess: (res: { name?: string; verificationEmailSent?: boolean }) => {
       // Say whether the email actually went, because the applicant still
       // cannot log in until they confirm — "approved" alone would imply they
@@ -96,6 +105,7 @@ export default function PendingApprovals() {
           ? `${res.name ?? 'Account'} approved — a confirmation email has been sent.`
           : `${res?.name ?? 'Account'} approved.`
       );
+      setOverriding(null);
       refresh();
     },
     onError: (e: { message?: string }) => toast.error(e?.message || 'Could not approve the account.'),
@@ -158,17 +168,50 @@ export default function PendingApprovals() {
                       ))}
                     </dl>
                   )}
+
+                  {/* Migration 015: each hospital/clinic the doctor named
+                      certifies them before the admin decides. */}
+                  {(u.affiliation_certifications?.length ?? 0) > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Hospital / clinic certification</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {u.affiliation_certifications!.map(c => {
+                          const s = c.status === 'accepted'
+                            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', Icon: Check, text: 'Certified' }
+                            : c.status === 'declined'
+                              ? { cls: 'bg-red-50 text-red-700 border-red-200', Icon: X, text: 'Not confirmed' }
+                              : { cls: 'bg-amber-50 text-amber-700 border-amber-200', Icon: Clock3, text: 'Waiting' };
+                          return (
+                            <span key={c.id} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${s.cls}`}>
+                              <s.Icon className="w-3 h-3" /> {c.organization_name} · {s.text}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => approve.mutate(u.id)}
-                    disabled={approve.isPending}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
-                  >
-                    <Check className="w-4 h-4" /> Approve
-                  </button>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                 <div className="flex gap-2">
+                  {(() => {
+                    const waiting = (u.affiliation_certifications ?? []).filter(c => c.status === 'pending');
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => waiting.length ? setOverriding(u) : approve.mutate({ id: u.id })}
+                        disabled={approve.isPending}
+                        title={waiting.length ? 'Waiting for hospital certification' : undefined}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 ${
+                          waiting.length
+                            ? 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                            : 'bg-teal-600 text-white hover:bg-teal-700'}`}
+                      >
+                        {waiting.length ? <Clock3 className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                        {waiting.length ? `Awaiting ${waiting.length} hospital${waiting.length === 1 ? '' : 's'}` : 'Approve'}
+                      </button>
+                    );
+                  })()}
                   <button
                     type="button"
                     onClick={() => { setDeclining(u); setReason(''); }}
@@ -176,12 +219,52 @@ export default function PendingApprovals() {
                   >
                     <X className="w-4 h-4" /> Decline
                   </button>
+                 </div>
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+
+      {overriding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <h3 className="text-lg font-semibold text-gray-900">Hospitals haven't responded yet</h3>
+            </div>
+            <p className="mt-2 text-sm text-gray-600">
+              <span className="font-medium">{overriding.name}</span> is still waiting for{' '}
+              <span className="font-medium">
+                {(overriding.affiliation_certifications ?? []).filter(c => c.status === 'pending').map(c => c.organization_name).join(', ')}
+              </span>{' '}
+              to confirm they work there. The usual order is to wait for them.
+            </p>
+            <p className="mt-2 text-sm text-gray-600">
+              Approve anyway only if you have verified the doctor another way. The hospitals can still certify later,
+              and this override is recorded in the audit log.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setOverriding(null)}
+                className="flex-1 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700"
+              >
+                Wait for hospitals
+              </button>
+              <button
+                type="button"
+                onClick={() => approve.mutate({ id: overriding.id, override: true })}
+                disabled={approve.isPending}
+                className="rounded-lg border border-amber-300 px-4 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+              >
+                {approve.isPending ? 'Approving...' : 'Approve anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Declining is destructive from the applicant's point of view, so it
           asks rather than firing on one click. The reason is recorded in the

@@ -9,7 +9,9 @@ import HospitalSearchAdd from '../components/common/HospitalSearchAdd';
 import { LEGAL_VERSION } from '../legal';
 import PlanPicker from '../components/plans/PlanPicker';
 import { Plan } from '../types';
-import { ArrowRight, Building2, Check, X } from 'lucide-react';
+import { ArrowRight, Building2, Check, X, BadgeCheck, PenLine } from 'lucide-react';
+import { SPECIALIZATIONS, OTHER_SPECIALIZATION } from '../constants/specializations';
+import RegistrationProgress, { Certification } from '../components/registration/RegistrationProgress';
 import AuthShell from '../components/landing/AuthShell';
 import { roleById } from '../components/landing/roles';
 import { Leaf, Cross } from '../components/landing/Shapes';
@@ -33,12 +35,6 @@ const ROLES: RoleOption[] = [
   },
 ];
 
-const SPECIALIZATIONS = [
-  'General Practice', 'Cardiology', 'Dermatology', 'Endocrinology',
-  'Gastroenterology', 'Neurology', 'Oncology', 'Orthopedics',
-  'Pediatrics', 'Psychiatry', 'Pulmonology', 'Radiology',
-  'Surgery', 'Urology', 'Gynecology', 'Ophthalmology',
-];
 
 export default function Register() {
   const [step, setStep] = useState(1);
@@ -46,11 +42,38 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [hospitals, setHospitals] = useState<any[]>([]);
+  // Main workplace. Picked from organisations already on Suwela it gets a
+  // certification request like the list below; typed by hand (not on
+  // Suwela yet) it is checked by the admin instead.
+  const [primaryOrg, setPrimaryOrg] = useState<any | null>(null);
+  const [typingAffiliation, setTypingAffiliation] = useState(false);
+  // After a registration that needs approval: what it is waiting for.
+  const [submitted, setSubmitted] = useState<{ name: string; certifications: Certification[]; unlisted: string | null } | null>(null);
   // Migration 014: the package a doctor signs up for. Patients have none —
   // everything is free for them — so they skip that step entirely.
   const [plan, setPlan] = useState<Plan | null>(null);
   const choosePlan = useCallback((p: Plan) => setPlan(p), []);
+
+  // The step *ids* this role walks through — not their positions. Step 2 (the
+  // package picker) only exists for doctors, so a patient goes 1 → 3 and the
+  // indicator above shows two dots, not three.
   const steps = selectedRole === 'doctor' ? [1, 2, 3] : [1, 3];
+
+  // Patients skip step 2 entirely. Sending them to it (which is what this did)
+  // left them on a blank screen: the step-2 card renders for doctors only, the
+  // step-3 form hadn't activated, and Back lives inside those cards — so there
+  // was no form, no package picker and no way out of the flow.
+  const chooseRole = useCallback((roleId: string) => {
+    setSelectedRole(roleId);
+    if (roleId === 'doctor') {
+      setStep(2);
+      return;
+    }
+    // Clear any package picked during an abandoned doctor attempt, so going
+    // back and switching to Patient can't leave a stale plan on the state.
+    setPlan(null);
+    setStep(3);
+  }, []);
   const { register, handleSubmit, watch, formState: { errors } } = useForm();
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -60,19 +83,47 @@ export default function Register() {
   const onSubmit = async (data: Record<string, any>) => {
     setLoading(true);
     try {
-      const { name, email, password, confirmPassword: _confirmPassword, ...profileData } = data;
+      const { name, email, password, confirmPassword: _confirmPassword, specialization_other, ...profileData } = data;
 
       const profile: Record<string, unknown> = {};
       Object.entries(profileData).forEach(([k, v]) => {
         if (v !== '' && v !== undefined) profile[k] = v;
       });
 
-      const hospital_organization_ids = selectedRole === 'doctor' ? hospitals.map(h => h.id) : undefined;
+      let unlisted: string | null = null;
+      if (selectedRole === 'doctor') {
+        // "Other" → the specialty they typed.
+        if (profile.specialization === OTHER_SPECIALIZATION) profile.specialization = String(specialization_other || '').trim();
+        // The main workplace is either a Suwela organisation (its name is
+        // stored as the affiliation and it is asked to certify) or free text.
+        if (primaryOrg) {
+          profile.hospital_affiliation = primaryOrg.name;
+        } else if (typeof profile.hospital_affiliation === 'string') {
+          unlisted = profile.hospital_affiliation.trim() || null;
+        }
+      } else {
+        delete profile.hospital_affiliation;
+      }
+
+      const certifyingOrgs = selectedRole === 'doctor'
+        ? [primaryOrg, ...hospitals].filter((o, i, all) => o && all.findIndex(x => x?.id === o.id) === i)
+        : [];
+      const hospital_organization_ids = selectedRole === 'doctor' ? certifyingOrgs.map(h => h.id) : undefined;
       // COMP-02: send which version of the terms/privacy policy was on screen,
       // so there is a record of what this person actually agreed to rather
       // than just that they clicked a button at some point.
       const plan_id = selectedRole === 'doctor' ? plan?.id : undefined;
       const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids, plan_id, accepted_terms_version: LEGAL_VERSION }) as unknown as { user: User; token?: string; refreshToken?: string; pending?: boolean; message?: string };
+      if (res.pending && selectedRole === 'doctor') {
+        // Show what happens next instead of dropping them on the login page.
+        setSubmitted({
+          name,
+          certifications: certifyingOrgs.map(o => ({ organization_name: o.name, status: 'pending' })),
+          unlisted,
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
       if (res.pending || !res.token) {
         toast.success(res.message || 'Account created — pending admin approval.', { duration: 6000 });
         navigate('/login');
@@ -90,6 +141,40 @@ export default function Register() {
   };
 
   const roleMeta = roleById(selectedRole === 'doctor' ? 'doctor' : 'patient');
+  const specializationChoice = watch('specialization');
+
+  if (submitted) {
+    return (
+      <AuthShell
+        title={<>Almost there, <em className="text-suwela-mint">Dr. {submitted.name.replace(/^dr\.?\s*/i, '').split(' ')[0]}.</em></>}
+        text="Your registration is in. Here is exactly what happens before you can sign in.">
+        <div className="w-full max-w-xl">
+          <div className="sw-rise bg-white rounded-[32px] shadow-[0_24px_60px_-34px_rgba(14,44,82,0.5)] p-7 sm:p-9">
+            <span className="w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-5"
+                  style={{ backgroundImage: 'linear-gradient(135deg, #1598E9, #13A58F)' }}>
+              <BadgeCheck className="w-7 h-7" />
+            </span>
+            <h1 className="font-display text-3xl text-suwela-navy">Registration received</h1>
+            <p className="text-suwela-slate mt-2 mb-6">
+              {submitted.certifications.length
+                ? 'We have asked the hospitals and clinics you listed to confirm you work there. Once they respond, the Suwela team reviews your licence and approves your account.'
+                : 'The Suwela team will review your licence and approve your account.'}
+            </p>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5">
+              <RegistrationProgress certifications={submitted.certifications} unlistedAffiliation={submitted.unlisted} />
+            </div>
+            <p className="text-xs text-gray-400 mt-5">
+              You can check this progress any time by signing in with your email and password.
+            </p>
+            <Link to="/login" className="btn-primary w-full py-3 rounded-full text-base mt-6 inline-flex items-center justify-center gap-2"
+                  style={{ backgroundImage: 'linear-gradient(90deg, #1598E9, #13A58F)' }}>
+              Go to sign in <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell
@@ -99,12 +184,14 @@ export default function Register() {
         {/* Header */}
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="flex items-center gap-2">
-            {[1, 2].map((s) => (
+            {steps.map((s, i) => (
               <div key={s} className="flex items-center gap-2">
+                {/* The dot shows its position in this role's journey (i + 1),
+                    not the step id — a patient's second dot is step 3. */}
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                   step >= s ? 'text-white' : 'bg-white text-suwela-slate shadow-sm'
-                }`} style={step >= s ? { backgroundColor: '#13A58F' } : undefined}>{step > s ? <Check className="w-4 h-4" strokeWidth={3} /> : s}</div>
-                {s < 2 && <div className="w-16 h-1 rounded-full" style={{ backgroundColor: step > s ? '#13A58F' : '#E2E7E3' }} />}
+                }`} style={step >= s ? { backgroundColor: '#13A58F' } : undefined}>{step > s ? <Check className="w-4 h-4" strokeWidth={3} /> : i + 1}</div>
+                {i < steps.length - 1 && <div className="w-16 h-1 rounded-full" style={{ backgroundColor: step > s ? '#13A58F' : '#E2E7E3' }} />}
               </div>
             ))}
           </div>
@@ -132,7 +219,7 @@ export default function Register() {
                   <button
                     key={r.id}
                     type="button"
-                    onClick={() => { setSelectedRole(r.id); setStep(2); }}
+                    onClick={() => chooseRole(r.id)}
                     className="group relative overflow-hidden text-left p-7 rounded-[32px] bg-white transition-all duration-300 hover:-translate-y-1.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-200 shadow-[0_24px_50px_-30px_rgba(14,44,82,0.45)]"
                   >
                     <Shape from={m.tint} to={m.color} className="absolute -right-10 -top-10 w-40 h-40 opacity-15 transition-transform duration-700 group-hover:rotate-45 group-hover:scale-125" />
@@ -277,8 +364,20 @@ export default function Register() {
                       <select className="input" {...register('specialization', { required: 'Specialization is required' })}>
                         <option value="">Select specialization</option>
                         {SPECIALIZATIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                        <option value={OTHER_SPECIALIZATION}>Other — not in this list</option>
                       </select>
                       {errors.specialization && <p className="text-xs text-red-500 mt-1">{errors.specialization.message as string}</p>}
+                      {specializationChoice === OTHER_SPECIALIZATION && (
+                        <>
+                          <input className="input mt-2" autoFocus placeholder="Type your specialization, e.g. Neonatology"
+                            {...register('specialization_other', {
+                              shouldUnregister: true,
+                              validate: (v: string) => (v?.trim().length ?? 0) >= 3 || 'Please type your specialization',
+                              maxLength: { value: 150, message: 'Keep it under 150 characters' },
+                            })} />
+                          {errors.specialization_other && <p className="text-xs text-red-500 mt-1">{errors.specialization_other.message as string}</p>}
+                        </>
+                      )}
                     </div>
                     <div>
                       <label className="label">Medical License No. <span className="text-red-400">*</span></label>
@@ -294,12 +393,39 @@ export default function Register() {
                       <input className="input" placeholder="e.g., University of Colombo, Faculty of Medicine" {...register('medical_school')} />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="label">Hospital / Clinic Affiliation</label>
-                      <input className="input" placeholder="e.g., Nawaloka Hospital, Colombo" {...register('hospital_affiliation')} />
+                      <label className="label">Main Hospital / Clinic</label>
+                      {primaryOrg ? (
+                        <div className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-primary-50 px-3.5 py-2.5">
+                          <span className="flex items-center gap-2 text-sm font-medium text-primary-800 min-w-0">
+                            <Building2 size={15} className="shrink-0" /> <span className="truncate">{primaryOrg.name}</span>
+                          </span>
+                          <button type="button" onClick={() => setPrimaryOrg(null)} className="text-primary-400 hover:text-red-500" aria-label="Remove">
+                            <X size={15} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      ) : typingAffiliation ? (
+                        <>
+                          <input className="input" placeholder="e.g., Base Hospital, Kandy" {...register('hospital_affiliation', { shouldUnregister: true })} />
+                          <button type="button" onClick={() => setTypingAffiliation(false)} className="text-xs text-primary-600 hover:underline mt-1.5">
+                            Search Suwela instead
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <HospitalSearchAdd
+                            onAdd={(org) => { setPrimaryOrg(org); setHospitals(hs => hs.filter(h => h.id !== org.id)); }}
+                            excludeIds={hospitals.map(h => h.id)}
+                            placeholder="Search for your hospital or clinic on Suwela..."
+                          />
+                          <button type="button" onClick={() => setTypingAffiliation(true)} className="text-xs text-primary-600 hover:underline mt-1.5 inline-flex items-center gap-1">
+                            <PenLine size={12} /> My hospital isn't on Suwela — type it instead
+                          </button>
+                        </>
+                      )}
                     </div>
                     <div className="sm:col-span-2">
                       <label className="label">
-                        Registered Hospitals / Clinics <span className="text-gray-400 font-normal">(optional — more can be added later from Settings)</span>
+                        Other Hospitals / Clinics <span className="text-gray-400 font-normal">(optional — more can be added later from Settings)</span>
                       </label>
                       {hospitals.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-2">
@@ -316,10 +442,19 @@ export default function Register() {
                       )}
                       <HospitalSearchAdd
                         onAdd={(org) => setHospitals(hs => hs.some(x => x.id === org.id) ? hs : [...hs, org])}
-                        excludeIds={hospitals.map(h => h.id)}
+                        excludeIds={[...hospitals.map(h => h.id), ...(primaryOrg ? [primaryOrg.id] : [])]}
                         placeholder="Search for a hospital or clinic already on Suwela..."
                       />
                     </div>
+                    {(primaryOrg || hospitals.length > 0) && (
+                      <div className="sm:col-span-2 flex gap-2.5 rounded-xl border border-sky-100 bg-sky-50 px-3.5 py-3 text-xs text-sky-900">
+                        <BadgeCheck size={16} className="shrink-0 text-sky-600 mt-0.5" />
+                        <p>
+                          Each hospital or clinic you choose here will be asked to <strong>certify that you work there</strong>.
+                          After they respond, the Suwela team approves your account.
+                        </p>
+                      </div>
+                    )}
                     <div>
                       <label className="label">Consultation Fee (LKR)</label>
                       <input type="number" min="0" className="input" placeholder="e.g., 2500" {...register('consultation_fee')} />

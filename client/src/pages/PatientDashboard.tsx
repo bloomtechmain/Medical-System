@@ -6,23 +6,29 @@ import { useTranslation } from 'react-i18next';
 import { LucideIcon } from 'lucide-react';
 import {
   Download, Activity, CalendarPlus, Stethoscope, FlaskConical, FolderOpen,
-  Phone, MapPin, Droplet, User, Calendar, CreditCard, Settings, ArrowRight,
+  Phone, MapPin, Droplet, User, Calendar, CreditCard, Settings, ArrowRight, HeartPulse,
 } from 'lucide-react';
 import { authApi, consultationApi, healthReportApi, labApi, patientVitalsApi } from '../services/api';
 import { downloadHealthReport } from '../utils/healthReportPdf';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../utils/helpers';
+import { formatDate, firstNameOf } from '../utils/helpers';
 import MiniCalendar from '../components/common/MiniCalendar';
 import VitalsOverview from '../components/common/VitalsOverview';
 import Modal from '../components/common/Modal';
+import DashboardWelcome, { welcomeChip, welcomeAction } from '../components/dashboard/DashboardWelcome';
 
 function ProfileSetupPrompt({ onComplete, onDismiss }: { onComplete: () => void; onDismiss: () => void }) {
   const { t } = useTranslation('patientDashboard');
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-primary-100 flex items-center justify-center mx-auto mb-4 text-3xl">
-          👋
+        {/* Was a 👋 emoji — rendered differently on every OS and read as a
+            placeholder. The emblem's own chip with a real icon instead. */}
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white"
+          style={{ backgroundImage: 'linear-gradient(135deg, #5EDDB0, #13A58F)' }}
+        >
+          <HeartPulse size={26} strokeWidth={1.8} />
         </div>
         <h2 className="text-lg font-bold text-gray-900 mb-2">{t('setupPrompt.title')}</h2>
         <p className="text-sm text-gray-500 mb-6">{t('setupPrompt.message')}</p>
@@ -204,7 +210,7 @@ export default function PatientDashboard() {
   const { data: labReports = [] }    = useQuery({ queryKey: ['patient-lab-reports'], queryFn: labApi.getAll });
 
   const profile   = me?.profile as any;
-  const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Patient';
+  const firstName = firstNameOf(me?.name || user?.name, 'Patient');
   const showSetupPrompt = !!me && !profile?.phone && !setupDismissed;
 
   const activeConsultations = useMemo(() => (consultations as any[]).filter((c: any) => c.status === 'active'), [consultations]);
@@ -280,46 +286,42 @@ export default function PatientDashboard() {
         />
       )}
 
-      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-6 text-white relative overflow-hidden">
-        <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full" />
-        <div className="absolute -bottom-12 -right-4 w-56 h-56 bg-white/5 rounded-full" />
-
-        <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <p className="text-primary-200 text-sm font-medium">{t('welcomeBanner.welcomeBack')}</p>
-            <h1 className="text-3xl font-bold mt-1 leading-tight">{firstName}</h1>
-            <div className="flex flex-wrap items-center gap-2 mt-4">
-              {profile?.blood_type && (
-                <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
-                  🩸 {profile.blood_type}
-                </span>
-              )}
-              {age != null && (
-                <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
-                  {t('welcomeBanner.ageBadge', { age })}
-                </span>
-              )}
-              {activeConsultations.length > 0 && (
-                <span className="bg-yellow-400/25 text-yellow-100 text-xs font-semibold px-3 py-1.5 rounded-full border border-yellow-300/30">
-                  {t('welcomeBanner.activeTreatments', { count: activeConsultations.length })}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <button
-            onClick={handleDownload}
-            disabled={downloading || !me}
-            className="shrink-0 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-2 border border-white/20 backdrop-blur-sm"
-          >
+      <DashboardWelcome
+        role="patient"
+        eyebrow={t('welcomeBanner.welcomeBack')}
+        title={firstName}
+        chips={
+          <>
+            {profile?.blood_type && (
+              <span className={welcomeChip}>
+                <Droplet size={13} strokeWidth={2.2} />
+                {profile.blood_type}
+              </span>
+            )}
+            {age != null && (
+              <span className={welcomeChip}>
+                <Calendar size={13} strokeWidth={2.2} />
+                {t('welcomeBanner.ageBadge', { age })}
+              </span>
+            )}
+            {activeConsultations.length > 0 && (
+              <span className={`${welcomeChip} !bg-amber-300/20 !border-amber-200/35`}>
+                <Activity size={13} strokeWidth={2.2} />
+                {t('welcomeBanner.activeTreatments', { count: activeConsultations.length })}
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <button onClick={handleDownload} disabled={downloading || !me} className={welcomeAction}>
             {downloading
               ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               : <Download size={15} strokeWidth={2} />
             }
             {downloading ? t('welcomeBanner.generating') : t('welcomeBanner.healthReportButton')}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <QuickActionsRow actions={quickActions} />
 

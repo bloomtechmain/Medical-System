@@ -380,7 +380,19 @@ const listPendingApprovals = async (_req: Request, res: Response, next: NextFunc
               -- organisation's for an owner, their own for a doctor.
               COALESCE(op.name, up.name) AS plan_name,
               COALESCE(op.price_monthly, up.price_monthly)::float AS plan_price_monthly,
-              COALESCE(op.currency, up.currency) AS plan_currency
+              COALESCE(op.currency, up.currency) AS plan_currency,
+              -- Migration 015: where each hospital/clinic the doctor named
+              -- stands on certifying them. Approval waits on every one.
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                         'id', r.id, 'organization_id', r.organization_id,
+                         'organization_name', ro.name, 'org_type', ro.org_type,
+                         'status', r.status, 'responded_at', r.responded_at)
+                       ORDER BY r.created_at)
+                  FROM public.organization_membership_requests r
+                  JOIN public.organizations ro ON ro.id = r.organization_id
+                 WHERE r.doctor_id = u.id AND r.is_registration = TRUE AND r.status <> 'cancelled'
+              ), '[]'::json) AS affiliation_certifications
          FROM public.users u
          LEFT JOIN public.doctor_profiles     dp ON dp.user_id = u.id
          LEFT JOIN public.pharmacist_profiles pp ON pp.user_id = u.id
@@ -408,6 +420,26 @@ const listPendingApprovals = async (_req: Request, res: Response, next: NextFunc
 // while the request sat in this queue.
 const approveUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    // Migration 015: a doctor's hospitals/clinics certify first, then the
+    // admin approves. `override` exists for an organisation that never
+    // answers — an explicit, audited admin decision, never the default.
+    const override = (req.body as { override?: boolean } | undefined)?.override === true;
+    const { rows: waiting } = await pool.query(
+      `SELECT o.name
+         FROM public.organization_membership_requests r
+         JOIN public.organizations o ON o.id = r.organization_id
+        WHERE r.doctor_id = $1 AND r.is_registration = TRUE AND r.status = 'pending'`,
+      [req.params.id]
+    );
+    if (waiting.length && !override) {
+      res.status(409).json({
+        code: 'AFFILIATION_PENDING',
+        message: `Waiting for ${waiting.map(w => w.name).join(', ')} to certify this doctor. Approve once they respond.`,
+        pending: waiting.map(w => w.name),
+      });
+      return;
+    }
+
     const { rows } = await pool.query(
       `UPDATE public.users
           SET is_active = TRUE, approved_at = NOW(), approved_by = $1, updated_at = NOW()
@@ -427,8 +459,11 @@ const approveUser = async (req: Request, res: Response, next: NextFunction): Pro
       action: AuditAction.USER_APPROVED,
       targetType: 'user',
       targetId: user.id,
-      metadata: { role: user.role },
+      metadata: { role: user.role, ...(waiting.length ? { overrodePendingCertification: waiting.map(w => w.name) } : {}) },
     });
+
+    await sendNotification(user.id, 'account_approved', 'Welcome to Suwela',
+      'Your registration has been approved. You can now sign in and start using your dashboard.', {});
 
     // Only if they still need to confirm — an account approved after already
     // verifying (possible if verification was off when they registered) must
@@ -469,6 +504,19 @@ const declineUser = async (req: Request, res: Response, next: NextFunction): Pro
       return;
     }
     await revokeRefreshTokens(rows[0].id);
+    // Migration 015: a declined doctor must not linger in any hospital's
+    // certification queue, nor stay on a team an owner already certified
+    // them onto.
+    await pool.query(
+      `UPDATE public.organization_membership_requests
+          SET status='cancelled', updated_at=NOW()
+        WHERE doctor_id=$1 AND status='pending'`,
+      [rows[0].id]
+    );
+    await pool.query(
+      "DELETE FROM public.organization_members WHERE user_id=$1 AND member_role='doctor'",
+      [rows[0].id]
+    );
     audit(req, {
       action: AuditAction.USER_DECLINED,
       targetType: 'user',

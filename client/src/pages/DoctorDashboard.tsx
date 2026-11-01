@@ -8,8 +8,9 @@ import {
 } from 'lucide-react';
 import { authApi, accessRequestApi, consultationApi, labApi, labViewRequestApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { formatDate, formatDateTime } from '../utils/helpers';
+import { formatDate, formatDateTime, firstNameOf } from '../utils/helpers';
 import { useDebounce } from '../hooks/useDebounce';
+import DashboardWelcome, { WelcomeStats } from '../components/dashboard/DashboardWelcome';
 
 const daysSince = (dateStr: string | null | undefined): number => {
   if (!dateStr) return 0;
@@ -226,7 +227,7 @@ export default function DoctorDashboard() {
   });
 
   const profile   = me?.profile;
-  const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Doctor';
+  const firstName = firstNameOf(me?.name || user?.name, 'Doctor');
 
   const pendingRequests = requests.filter((r: any) => r.status === 'pending').length;
   const accepted        = requests.filter((r: any) => r.status === 'accepted').length;
@@ -281,41 +282,22 @@ export default function DoctorDashboard() {
     <div className="space-y-6 p-4 md:p-0">
 
       {/* Welcome banner */}
-      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 rounded-2xl p-5 md:p-6 text-white relative overflow-hidden">
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full" />
-        <div className="relative flex items-start justify-between gap-4">
-          <div>
-            <p className="text-primary-200 text-sm font-medium">{t('doctorDashboard.welcome.greeting')}</p>
-            <h1 className="text-2xl font-bold mt-0.5">{t('doctorDashboard.welcome.namePrefix', { name: firstName })}</h1>
-            <p className="text-primary-300 text-sm mt-1">
-              {profile?.specialization || t('doctorDashboard.welcome.defaultSpecialization')} · Core Health
-            </p>
-          </div>
-          <div className="hidden sm:flex items-center justify-center w-14 h-14 rounded-2xl bg-white/15 border border-white/20 shrink-0">
-            <Stethoscope size={28} strokeWidth={1.5} className="text-white" />
-          </div>
-        </div>
-        <div className="relative flex gap-6 mt-4">
-          <div>
-            <p className="text-2xl font-bold">{pendingRequests}</p>
-            <p className="text-xs text-primary-300">{t('doctorDashboard.welcome.pendingRequests')}</p>
-          </div>
-          <div className="w-px bg-white/15" />
-          <div>
-            <p className="text-2xl font-bold">{accepted}</p>
-            <p className="text-xs text-primary-300">{t('doctorDashboard.welcome.accessGranted')}</p>
-          </div>
-          {profile?.years_experience && (
-            <>
-              <div className="w-px bg-white/15" />
-              <div>
-                <p className="text-2xl font-bold">{profile.years_experience}</p>
-                <p className="text-xs text-primary-300">{t('doctorDashboard.welcome.yearsExp')}</p>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      <DashboardWelcome
+        role="doctor"
+        eyebrow={t('doctorDashboard.welcome.greeting')}
+        title={t('doctorDashboard.welcome.namePrefix', { name: firstName })}
+        subtitle={`${profile?.specialization || t('doctorDashboard.welcome.defaultSpecialization')} · Suwela`}
+      >
+        <WelcomeStats
+          items={[
+            { label: t('doctorDashboard.welcome.pendingRequests'), value: pendingRequests },
+            { label: t('doctorDashboard.welcome.accessGranted'), value: accepted },
+            ...(profile?.years_experience
+              ? [{ label: t('doctorDashboard.welcome.yearsExp'), value: profile.years_experience }]
+              : []),
+          ]}
+        />
+      </DashboardWelcome>
 
       {/* Stats */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">

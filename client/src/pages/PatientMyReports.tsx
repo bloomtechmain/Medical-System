@@ -5,7 +5,9 @@ import {
   FlaskConical, Pill, ScanLine, ClipboardList, Syringe, FileText,
   Building2, Stethoscope, MapPin, Eye, Trash2, Upload, X,
   Search, FolderOpen, Plus, Calendar, Clock, Filter,
+  Loader2, AlertTriangle, Activity,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { patientReportApi, labApi } from '../services/api';
 import { openAuthedFile } from '../utils/authedFiles';
 import { formatDate } from '../utils/helpers';
@@ -30,6 +32,40 @@ const fmtDate  = (d: string | null | undefined) =>
 const today = () => new Date().toISOString().split('T')[0];
 
 const EMPTY_FORM = { title: '', report_type: '', laboratory_name: '', doctor_name: '', hospital_clinic: '', issued_date: '', description: '' };
+
+// ── Vitals reading status (migration 015) ─────────────────────────────────────
+// What happened when the uploaded file was read for health values — so a
+// report that yielded nothing no longer looks like one still processing.
+function ReadingStatus({ r }: { r: any }) {
+  const { t } = useTranslation('patientReports');
+  if (!r.vitals_status) return null;
+  if (r.vitals_status === 'pending') {
+    return (
+      <div className="flex items-center gap-2 text-[11px] font-medium text-sky-700 bg-sky-50 border border-sky-100 px-2.5 py-1.5 rounded-lg">
+        <Loader2 size={12} className="animate-spin shrink-0" /> {t('myReports.reading.pending')}
+      </div>
+    );
+  }
+  if (r.vitals_status === 'extracted') {
+    const lowQuality = r.vitals_confidence !== null && r.vitals_confidence !== undefined && Number(r.vitals_confidence) < 70;
+    return (
+      <Link to="/patient" className={`flex items-center gap-2 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border hover:opacity-80 ${
+        lowQuality ? 'text-amber-800 bg-amber-50 border-amber-100' : 'text-emerald-700 bg-emerald-50 border-emerald-100'}`}>
+        {lowQuality ? <AlertTriangle size={12} className="shrink-0" /> : <Activity size={12} className="shrink-0" />}
+        <span className="flex-1">
+          {t('myReports.reading.extracted', { count: r.vitals_found })}
+          {lowQuality && <span className="block font-normal">{t('myReports.reading.checkValues')}</span>}
+        </span>
+      </Link>
+    );
+  }
+  return (
+    <div className="flex items-start gap-2 text-[11px] text-gray-600 bg-gray-50 border border-gray-100 px-2.5 py-1.5 rounded-lg">
+      <AlertTriangle size={12} className="shrink-0 mt-0.5 text-gray-400" />
+      <span>{r.vitals_status === 'failed' ? t('myReports.reading.failed') : t('myReports.reading.none')}</span>
+    </div>
+  );
+}
 
 // ── Lab Report detail modal ───────────────────────────────────────────────────
 function LabReportModal({ r, onClose }: { r: any; onClose: () => void }) {
@@ -195,6 +231,9 @@ function UploadModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
           <div>
             <label className="label">{t('myReports.uploadModal.fileLabel')}</label>
+            {['lab_report', 'discharge_summary', 'other'].includes(form.report_type) && (
+              <p className="text-[11px] text-sky-800 bg-sky-50 border border-sky-100 rounded-lg px-2.5 py-1.5 mb-2">{t('myReports.reading.uploadTip')}</p>
+            )}
             <div onClick={() => fileRef.current?.click()}
               className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors
                 ${errors.file ? 'border-red-400 bg-red-50' : file ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-primary-400 hover:bg-gray-50'}`}>
@@ -245,7 +284,13 @@ export default function PatientMyReports() {
   const [deleteId,  setDeleteId]  = useState<number|null>(null);
   const [toast,     setToast]     = useState<{msg:string;type:string}|null>(null);
 
-  const { data: personal = [] } = useQuery({ queryKey: ['patient-reports'],     queryFn: patientReportApi.getAll });
+  const { data: personal = [] } = useQuery({
+    queryKey: ['patient-reports'],
+    queryFn: patientReportApi.getAll,
+    // While a report is still being read, check back so its result (and the
+    // updated health values) appear without a manual refresh.
+    refetchInterval: (q) => ((q.state.data as any[] | undefined) ?? []).some(r => r.vitals_status === 'pending') ? 5000 : false,
+  });
   const { data: lab      = [] } = useQuery({ queryKey: ['patient-lab-reports'], queryFn: labApi.getAll });
 
   const showToast = (msg: string, type = 'success') => { setToast({msg,type}); setTimeout(() => setToast(null), 3000); };
@@ -525,6 +570,8 @@ export default function PatientMyReports() {
                       </div>
                     )}
                   </div>
+
+                  <ReadingStatus r={r} />
 
                   <div className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-50 px-2.5 py-1.5 rounded-lg">
                     <span>{r.file_original_name?.toLowerCase().endsWith('.pdf') ? '📄' : '🖼️'}</span>

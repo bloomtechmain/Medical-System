@@ -166,6 +166,15 @@
     "deleteConfirm": {
       "title": "Delete Report?",
       "message": "This will permanently remove the report and its file."
+    },
+    "reading": {
+      "pending": "Reading health values from this report…",
+      "extracted_one": "{{count}} health value added to My Health",
+      "extracted_other": "{{count}} health values added to My Health",
+      "checkValues": "The photo was hard to read — please check the values match the report.",
+      "none": "No test values could be read from this file. A flat, well-lit, in-focus photo or the lab's PDF works best — or enter the values in My Health.",
+      "failed": "This file couldn't be read. Try uploading it again, or a clearer photo.",
+      "uploadTip": "Lab reports, discharge summaries and other reports are read automatically and their values added to My Health. For best results upload the lab's PDF, or a flat, well-lit photo taken straight on."
     }
   },
   "accessRequests": {

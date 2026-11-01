@@ -3,6 +3,8 @@ import { Stethoscope, Building2, Pill, FlaskConical, User as UserIcon, ShieldChe
 import { useAuth } from '../context/AuthContext';
 import { dashboardContexts, setActiveContextKey } from '../constants/dashboards';
 import type { DashboardContext } from '../constants/dashboards';
+import BrandMark from '../components/landing/BrandMark';
+import { firstNameOf } from '../utils/helpers';
 
 // Requirement 1: shown after login when the account has more than one
 // dashboard — typically a doctor who also owns a hospital, or a lab owner who
@@ -50,20 +52,12 @@ export default function ChooseDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary-50/60 via-gray-50 to-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-lg">
-        <Link to="/welcome" className="flex flex-col items-center gap-2 mb-10">
-          <div className="w-11 h-11 bg-primary-600 rounded-xl flex items-center justify-center shadow-sm shadow-primary-600/20">
-            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 12h15m-7.5-7.5v15M9 7.5H6a1.5 1.5 0 00-1.5 1.5v9A1.5 1.5 0 006 19.5h12a1.5 1.5 0 001.5-1.5V9A1.5 1.5 0 0018 7.5h-3" />
-            </svg>
-          </div>
-          <div className="text-center">
-            <p className="font-bold text-gray-900 leading-none">Core Health</p>
-            <p className="text-xs text-gray-400">by BloomTech</p>
-          </div>
+        <Link to="/welcome" className="flex justify-center mb-10">
+          <BrandMark />
         </Link>
 
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.name?.split(' ')[0]}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {firstNameOf(user?.name, 'there')}</h1>
           <p className="text-gray-500 text-sm mt-1.5 max-w-sm mx-auto">
             This account has access to more than one dashboard. Which would you like to open?
           </p>

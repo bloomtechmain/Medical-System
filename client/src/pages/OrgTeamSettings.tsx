@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { UserPlus, X, Shield, Mail, Hourglass, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { UserPlus, X, Shield, Mail, Hourglass, CheckCircle2, XCircle, Clock, BadgeCheck } from 'lucide-react';
 import { orgTeamApi, orgMembershipRequestApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/common/PageHeader';
@@ -85,66 +85,124 @@ function ChannelingRequests({ orgId }: { orgId: number }) {
     queryKey: ['org-membership-requests', orgId],
     queryFn:  () => orgMembershipRequestApi.forOrg(orgId),
   });
-  const pending = (requests as any[]).filter(r => r.kind === 'join' && r.status === 'pending');
+  const pendingJoins = (requests as any[]).filter(r => r.kind === 'join' && r.status === 'pending');
+  // Migration 015: a doctor's own sign-up asking this organisation to
+  // vouch for them — worded as certification, not as a channeling request.
+  const toCertify = pendingJoins.filter(r => r.is_registration);
+  const pending   = pendingJoins.filter(r => !r.is_registration);
+
+  // Arriving from the dashboard alert (…/team#certify): jump to the list.
+  useEffect(() => {
+    if (window.location.hash === '#certify' && toCertify.length) {
+      document.getElementById('certify')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [toCertify.length]);
 
   const respondMutation = useMutation({
-    mutationFn: ({ id, decision }: { id: number; decision: 'accept' | 'decline' }) => orgMembershipRequestApi.respond(id, decision),
+    mutationFn: ({ id, decision }: { id: number; decision: 'accept' | 'decline'; registration?: boolean }) => orgMembershipRequestApi.respond(id, decision),
     onSuccess: (_data, vars) => {
-      toast.success(vars.decision === 'accept' ? t('channeling.toastAccepted') : t('channeling.toastDeclined'));
+      toast.success(vars.registration
+        ? (vars.decision === 'accept' ? t('channeling.toastCertified') : t('channeling.toastRejected'))
+        : (vars.decision === 'accept' ? t('channeling.toastAccepted') : t('channeling.toastDeclined')));
       qc.invalidateQueries({ queryKey: ['org-membership-requests', orgId] });
       qc.invalidateQueries({ queryKey: ['org-team', orgId] });
+      qc.invalidateQueries({ queryKey: ['org-members', orgId] });
     },
     onError: (err: any) => toast.error(err.message || t('channeling.toastFailed')),
   });
 
-  if (pending.length === 0) return null;
+  if (pendingJoins.length === 0) return null;
+
+  const doctorLines = (r: any) => (
+    <>
+      <p className="text-xs text-gray-500 mt-0.5">{r.doctor_email}{r.doctor_phone ? ` · ${r.doctor_phone}` : ''}</p>
+      {(r.doctor_specialization || r.doctor_license_number) && (
+        <p className="text-xs text-gray-500 mt-0.5">
+          {[r.doctor_specialization, r.doctor_license_number && `SLMC ${r.doctor_license_number}`, r.doctor_years_experience > 0 && t('channeling.experience', { count: r.doctor_years_experience })]
+            .filter(Boolean).join(' · ')}
+        </p>
+      )}
+      {r.doctor_medical_school && <p className="text-xs text-gray-400 mt-0.5">{r.doctor_medical_school}</p>}
+    </>
+  );
+
+  const buttons = (r: any, registration: boolean) => (
+    <div className="flex gap-2 shrink-0">
+      <button disabled={respondMutation.isPending}
+        onClick={() => respondMutation.mutate({ id: r.id, decision: 'accept', registration })}
+        className="flex items-center gap-1 text-xs font-bold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
+        <CheckCircle2 size={12} strokeWidth={2.5} /> {registration ? t('channeling.certifyBtn') : t('channeling.acceptBtn')}
+      </button>
+      <button disabled={respondMutation.isPending}
+        onClick={() => respondMutation.mutate({ id: r.id, decision: 'decline', registration })}
+        className="flex items-center gap-1 text-xs font-bold text-red-600 bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg disabled:opacity-50">
+        <XCircle size={12} strokeWidth={2.5} /> {registration ? t('channeling.rejectBtn') : t('channeling.declineBtn')}
+      </button>
+    </div>
+  );
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
-      <p className="text-sm font-bold text-gray-900">{t('channeling.title')}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{t('channeling.subtitle')}</p>
-
-      <div className="space-y-3 mt-4">
-        {pending.map((r: any) => (
-          <div key={r.id} className="rounded-xl border border-yellow-100 bg-yellow-50/60 p-4">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                  <Hourglass size={13} strokeWidth={2} className="text-yellow-600 shrink-0" />
-                  Dr. {r.doctor_name}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">{r.doctor_email}</p>
-                {r.doctor_specialization && (
-                  <p className="text-xs text-gray-400 mt-0.5">{r.doctor_specialization}{r.doctor_license_number ? ` · ${r.doctor_license_number}` : ''}</p>
-                )}
-                {r.message && <p className="text-xs text-gray-600 italic mt-1.5">"{r.message}"</p>}
-                {Array.isArray(r.proposed_schedule) && r.proposed_schedule.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap mt-2">
-                    <Clock size={12} strokeWidth={2} className="text-gray-400" />
-                    {r.proposed_schedule.map((b: any, i: number) => (
-                      <span key={i} className="text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-2 py-0.5">
-                        {DAYS[b.day_of_week]} {b.start_time?.slice(0, 5)}–{b.end_time?.slice(0, 5)}
-                      </span>
-                    ))}
+    <div className="space-y-6 mb-6">
+      {toCertify.length > 0 && (
+        <div id="certify" className="bg-white rounded-2xl border border-sky-100 p-5 shadow-sm">
+          <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+            <BadgeCheck size={16} className="text-sky-600" /> {t('channeling.certifyTitle')}
+            <span className="text-[11px] font-bold text-white bg-sky-600 rounded-full px-2 py-0.5">{toCertify.length}</span>
+          </p>
+          <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t('channeling.certifySubtitle')}</p>
+          <div className="space-y-3 mt-4">
+            {toCertify.map((r: any) => (
+              <div key={r.id} className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
+                      Dr. {r.doctor_name}
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-700 bg-white border border-sky-200 rounded-full px-2 py-0.5">{t('channeling.certifyBadge')}</span>
+                    </p>
+                    {doctorLines(r)}
                   </div>
-                )}
+                  {buttons(r, true)}
+                </div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <button disabled={respondMutation.isPending}
-                  onClick={() => respondMutation.mutate({ id: r.id, decision: 'accept' })}
-                  className="flex items-center gap-1 text-xs font-bold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
-                  <CheckCircle2 size={12} strokeWidth={2.5} /> {t('channeling.acceptBtn')}
-                </button>
-                <button disabled={respondMutation.isPending}
-                  onClick={() => respondMutation.mutate({ id: r.id, decision: 'decline' })}
-                  className="flex items-center gap-1 text-xs font-bold text-red-600 bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg disabled:opacity-50">
-                  <XCircle size={12} strokeWidth={2.5} /> {t('channeling.declineBtn')}
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <p className="text-sm font-bold text-gray-900">{t('channeling.title')}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{t('channeling.subtitle')}</p>
+
+          <div className="space-y-3 mt-4">
+            {pending.map((r: any) => (
+              <div key={r.id} className="rounded-xl border border-yellow-100 bg-yellow-50/60 p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                      <Hourglass size={13} strokeWidth={2} className="text-yellow-600 shrink-0" />
+                      Dr. {r.doctor_name}
+                    </p>
+                    {doctorLines(r)}
+                    {r.message && <p className="text-xs text-gray-600 italic mt-1.5">"{r.message}"</p>}
+                    {Array.isArray(r.proposed_schedule) && r.proposed_schedule.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                        <Clock size={12} strokeWidth={2} className="text-gray-400" />
+                        {r.proposed_schedule.map((b: any, i: number) => (
+                          <span key={i} className="text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-2 py-0.5">
+                            {DAYS[b.day_of_week]} {b.start_time?.slice(0, 5)}–{b.end_time?.slice(0, 5)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {buttons(r, false)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

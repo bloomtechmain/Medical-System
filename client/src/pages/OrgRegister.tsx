@@ -256,7 +256,7 @@ export default function OrgRegister() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </div>
-          <span className="font-bold text-gray-900">Core Health</span>
+          <span className="font-bold text-gray-900">Suwela</span>
           <span className="text-gray-400 text-sm">by BloomTech</span>
         </Link>
         <div className="flex items-center gap-3 text-sm">
@@ -269,7 +269,7 @@ export default function OrgRegister() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Register Your Organization</h1>
-          <p className="text-gray-500 text-sm mt-1">Join the Core Health network as a verified healthcare organization</p>
+          <p className="text-gray-500 text-sm mt-1">Join the Suwela network as a verified healthcare organization</p>
 
           {/* Step indicator */}
           <div className="flex items-center justify-center gap-2 mt-5">
@@ -581,7 +581,7 @@ export default function OrgRegister() {
               {!ownerUser && (
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Already on Core Health? <span className="text-gray-400 font-normal">(search by name or email)</span>
+                    Already on Suwela? <span className="text-gray-400 font-normal">(search by name or email)</span>
                   </label>
                   <div className="relative">
                     <input
@@ -679,7 +679,7 @@ export default function OrgRegister() {
               <div>
                 <p className="text-sm font-semibold text-amber-800">Pending Approval</p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Your organization will be inactive until reviewed and approved by a Core Health administrator.
+                  Your organization will be inactive until reviewed and approved by a Suwela administrator.
                   You will not be able to sign in until approval is granted.
                 </p>
               </div>
@@ -704,7 +704,7 @@ export default function OrgRegister() {
             {/* COMP-02: see Register.tsx — the documents now exist and the
                 accepted version is recorded. */}
             <p className="text-center text-xs text-gray-400">
-              By registering, you agree to Core Health's{' '}
+              By registering, you agree to Suwela's{' '}
               <Link to="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-700">
                 Terms of Service
               </Link>{' '}

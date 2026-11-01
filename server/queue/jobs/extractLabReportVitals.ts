@@ -2,7 +2,7 @@ import type { Job } from 'pg-boss';
 import { boss, DEFAULT_QUEUE_OPTIONS } from '../boss';
 import { isEnabled } from '../../config/featureFlags';
 import { queryAs } from '../../config/db';
-import { extractVitalsFromText, extractReportText } from '../../utils/labVitalsParser';
+import { extractVitalsFromText, extractVitalsFromReport } from '../../utils/labVitalsParser';
 import { saveVitalsFromLab } from '../../controllers/patientVitalsController';
 import { readUploadToTempFile } from '../../utils/fileStorage';
 
@@ -40,18 +40,16 @@ const processOne = async (data: Payload): Promise<void> => {
     } catch { /* ignore bad JSON */ }
   }
 
-  // Priority 2: PDF text extraction (pdfjs) OR image OCR (tesseract)
+  // Priority 2: PDF text layer, else pre-processed multi-pass OCR with
+  // per-field voting (see utils/reportOcr.ts) — survives blurred/shadowed
+  // phone photos that a single plain tesseract pass misreads.
   if (Object.keys(vitalsToSave).length === 0) {
     const { filePath, cleanup } = await readUploadToTempFile('lab-reports', reportFilename);
-    let reportText: string;
     try {
-      reportText = await extractReportText(filePath);
+      const { vitals } = await extractVitalsFromReport(filePath);
+      if (Object.keys(vitals).length > 0) vitalsToSave = vitals as Record<string, number | undefined>;
     } finally {
       cleanup();
-    }
-    if (reportText.trim().length > 20) {
-      const extracted = extractVitalsFromText(reportText);
-      if (Object.keys(extracted).length > 0) vitalsToSave = extracted as Record<string, number | undefined>;
     }
   }
 

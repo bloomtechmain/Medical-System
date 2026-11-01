@@ -32,6 +32,15 @@
     "declineBtn": "Decline",
     "toastAccepted": "Accepted — they're now affiliated and their hours are live",
     "toastDeclined": "Declined",
-    "toastFailed": "That didn't go through"
+    "toastFailed": "That didn't go through",
+    "certifyTitle": "Doctors to certify",
+    "certifySubtitle": "These doctors registered on Suwela and said they work at your organisation. Confirm only if they really do — the Suwela team approves their account after you respond.",
+    "certifyBadge": "New registration",
+    "certifyBtn": "Yes, works here",
+    "rejectBtn": "Not our doctor",
+    "toastCertified": "Certified — the Suwela team will now review their registration",
+    "toastRejected": "Marked as not affiliated",
+    "experience": "{{count}} yrs experience",
+    "awaitingAdmin": "Account awaiting Suwela approval"
   }
 }

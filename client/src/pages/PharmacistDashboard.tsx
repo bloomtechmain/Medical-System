@@ -9,8 +9,9 @@ import { useTranslation } from 'react-i18next';
 import { inventoryApi, saleApi, authApi, orderApi, medicineApi, prescriptionAssignmentApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
-import { formatCurrency, formatDate, formatDateTime, stockStatus } from '../utils/helpers';
+import { formatCurrency, formatDate, formatDateTime, stockStatus, firstNameOf } from '../utils/helpers';
 import { useDashboardPlan } from '../hooks/useDashboardPlan';
+import DashboardWelcome, { WelcomeStats } from '../components/dashboard/DashboardWelcome';
 
 const daysUntil = (dateStr: string | null | undefined): number | null => {
   if (!dateStr) return null;
@@ -78,7 +79,7 @@ export default function PharmacistDashboard() {
   });
 
   const profile = me?.profile;
-  const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || t('dashboard.defaultName');
+  const firstName = firstNameOf(me?.name || user?.name, t('dashboard.defaultName'));
 
   const todaySales = sales.filter(
     (s: any) => new Date(s.sold_at).toDateString() === new Date().toDateString()
@@ -121,43 +122,26 @@ export default function PharmacistDashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome banner + stats list */}
-      <div className="w-full lg:w-3/4 bg-gradient-to-r from-purple-600 to-purple-900 rounded-2xl p-6 text-white">
-        <p className="text-purple-200 text-sm font-medium">{t('dashboard.welcome')}</p>
-        <h1 className="text-2xl font-bold mt-0.5">{firstName} 💊</h1>
-        <p className="text-purple-200 text-sm mt-2">
-          {profile?.pharmacy_name || t('dashboard.defaultPharmacyName')} · {t('dashboard.portalSuffix')}
-        </p>
-
-        <div className="mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
-          {(() => {
-            const fields = [
-              { key: 'totalMedicines', label: t('dashboard.stats.totalMedicines'), value: summary?.total_medicines ?? '—',  sub: null },
-              { key: 'lowStockItems', label: t('dashboard.stats.lowStockItems'),  value: summary?.low_stock_count ?? '—',  sub: null },
-              { key: 'expiredItems', label: t('dashboard.stats.expiredItems'),    value: summary?.expired_count   ?? '—',  sub: null },
-              { key: 'todaysRevenue', label: t('dashboard.stats.todaysRevenue'),  value: formatCurrency(todayRevenue),     sub: t('dashboard.stats.salesCount', { count: todaySales.length }) },
-            ];
-            const rows = [];
-            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
-            return rows.map((row, i) => (
-              <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10 max-w-2xl">
-                {row.map((c) => (
-                  <Link
-                    to={statLinks[c.key]}
-                    key={c.key}
-                    className="flex items-center gap-3 px-6 py-3 min-w-0 hover:bg-white/5 transition-colors"
-                  >
-                    <span className="flex-1 text-sm text-purple-100 truncate">{c.label}</span>
-                    <span className="shrink-0 text-right">
-                      <span className="block text-base font-bold text-white">{c.value}</span>
-                      {c.sub && <span className="block text-xs text-purple-300">{c.sub}</span>}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            ));
-          })()}
-        </div>
-      </div>
+      <DashboardWelcome
+        role="pharmacist"
+        eyebrow={t('dashboard.welcome')}
+        title={firstName}
+        subtitle={`${profile?.pharmacy_name || t('dashboard.defaultPharmacyName')} · ${t('dashboard.portalSuffix')}`}
+      >
+        <WelcomeStats
+          items={[
+            { label: t('dashboard.stats.totalMedicines'), value: summary?.total_medicines ?? '—', to: statLinks.totalMedicines },
+            { label: t('dashboard.stats.lowStockItems'),  value: summary?.low_stock_count  ?? '—', to: statLinks.lowStockItems },
+            { label: t('dashboard.stats.expiredItems'),   value: summary?.expired_count    ?? '—', to: statLinks.expiredItems },
+            {
+              label: t('dashboard.stats.todaysRevenue'),
+              value: formatCurrency(todayRevenue),
+              sub: t('dashboard.stats.salesCount', { count: todaySales.length }),
+              to: statLinks.todaysRevenue,
+            },
+          ]}
+        />
+      </DashboardWelcome>
 
       {/* Quick actions + medicine search */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 flex flex-col sm:flex-row sm:items-center gap-4">

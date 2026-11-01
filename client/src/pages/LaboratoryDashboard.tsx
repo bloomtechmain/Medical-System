@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { Pencil, X, Plus, AlertTriangle, ClipboardList } from 'lucide-react';
 import { authApi, userApi, labApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../utils/helpers';
+import { formatDate, firstNameOf } from '../utils/helpers';
+import DashboardWelcome, { WelcomeStats } from '../components/dashboard/DashboardWelcome';
 
 const OVERDUE_HOURS = 48;
 const isOverdue = (r: any) => r.status === 'pending' && (Date.now() - new Date(r.created_at).getTime()) > OVERDUE_HOURS * 3600 * 1000;
@@ -91,7 +92,7 @@ export default function LaboratoryDashboard() {
   };
 
   const profile    = me?.profile as any;
-  const firstName  = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || t('dashboard.defaultName');
+  const firstName  = firstNameOf(me?.name || user?.name, t('dashboard.defaultName'));
 
   const overdue = (requests as any[]).filter(isOverdue);
   const recent  = [...(requests as any[])]
@@ -119,36 +120,21 @@ export default function LaboratoryDashboard() {
     <div className="space-y-6">
 
       {/* Welcome banner + stats list */}
-      <div className="w-full lg:w-3/4 bg-gradient-to-r from-cyan-600 to-cyan-900 rounded-2xl p-6 text-white">
-        <p className="text-cyan-200 text-sm font-medium">{t('dashboard.welcome')}</p>
-        <h1 className="text-2xl font-bold mt-0.5">{profile?.lab_name || firstName} 🔬</h1>
-        <p className="text-cyan-200 text-sm mt-2">
-          {profile?.lab_type || t('dashboard.defaultLabType')} · {t('dashboard.portalTagline')}
-        </p>
-
-        <div className="mt-5 -mx-6 border-t border-white/15 divide-y divide-white/10">
-          {(() => {
-            const fields = [
-              { label: t('dashboard.stats.labName'),        value: profile?.lab_name       || '—' },
-              { label: t('dashboard.stats.labTypes'),       value: labTypes.length ? t('dashboard.stats.typesCount', { count: labTypes.length }) : '—' },
-              { label: t('dashboard.stats.license'),        value: profile?.license_number || '—' },
-              { label: t('dashboard.stats.accreditations'), value: accreditations.length ? t('dashboard.stats.certificationsCount', { count: accreditations.length }) : '—' },
-            ];
-            const rows = [];
-            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
-            return rows.map((row, i) => (
-              <div key={i} className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-white/10 max-w-2xl">
-                {row.map((c) => (
-                  <div key={c.label} className="flex items-center gap-3 px-6 py-3 min-w-0">
-                    <span className="flex-1 text-sm text-cyan-100 truncate">{c.label}</span>
-                    <span className="text-base font-bold text-white shrink-0 truncate">{c.value}</span>
-                  </div>
-                ))}
-              </div>
-            ));
-          })()}
-        </div>
-      </div>
+      <DashboardWelcome
+        role="laboratory"
+        eyebrow={t('dashboard.welcome')}
+        title={profile?.lab_name || firstName}
+        subtitle={`${profile?.lab_type || t('dashboard.defaultLabType')} · ${t('dashboard.portalTagline')}`}
+      >
+        <WelcomeStats
+          items={[
+            { label: t('dashboard.stats.labName'),  value: profile?.lab_name || '—' },
+            { label: t('dashboard.stats.labTypes'), value: labTypes.length ? t('dashboard.stats.typesCount', { count: labTypes.length }) : '—' },
+            { label: t('dashboard.stats.license'),  value: profile?.license_number || '—' },
+            { label: t('dashboard.stats.accreditations'), value: accreditations.length ? t('dashboard.stats.certificationsCount', { count: accreditations.length }) : '—' },
+          ]}
+        />
+      </DashboardWelcome>
 
       {/* Overdue alert */}
       {overdue.length > 0 && (
