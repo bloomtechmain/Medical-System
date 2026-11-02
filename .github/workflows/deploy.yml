@@ -138,7 +138,7 @@ jobs:
 
       # The default `docker` driver can't export cache (cache-to below) —
       # only the docker-container driver this creates can.
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # Server only — the client is not an ECS service on AWS, see the
       # client build step below.
