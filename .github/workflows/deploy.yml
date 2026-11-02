@@ -173,7 +173,7 @@ jobs:
       # see scripts/deploy/write-client-config.sh — because nothing
       # environment-specific is baked into this build, which is exactly what
       # lets it be built once and promoted like the server image.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
