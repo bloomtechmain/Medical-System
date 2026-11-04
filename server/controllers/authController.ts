@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
+import { OAuth2Client, TokenPayload } from 'google-auth-library';
 import { Request, Response, NextFunction } from 'express';
 import { pool, queryAs, revokeRefreshTokens } from '../config/db';
 import { sendMail } from '../config/mailer';
@@ -14,6 +15,7 @@ import { audienceForRole } from '../config/planCatalog';
 import { resolveRegistrationPlan, effectivePlanForUser, toPlan, Plan } from '../utils/plans';
 import { recordRegistrationPlan } from './planController';
 import { sendNotification } from '../utils/notify';
+import { verificationCodeEmail, passwordResetEmail } from '../utils/emailTemplates';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
 const REFRESH_TOKEN_DAYS = 7;
@@ -317,27 +319,38 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
       }
     }
 
-    // PRO-11: send the confirmation link. After COMMIT, deliberately — the
-    // account must exist before a link pointing at it goes out, and a mail
-    // failure must not roll back a successfully created account. If the send
-    // fails the user can ask for another via /auth/resend-verification, so
-    // this is logged rather than surfaced as a registration failure.
-    //
-    // SEC-17 #2 interaction: a professional sign-up is inactive until an
-    // admin approves it, so a verification link sent now would be redeemable
-    // long before the account can actually be used — and the 48-hour window
-    // would usually expire while the registration sat in the admin queue,
-    // leaving the user with a dead link and no idea why. The link is sent by
-    // approveUser() instead, at the point it becomes useful. Patients need no
-    // approval, so theirs goes out immediately as before.
+    // PRO-11 / migration 017: email the 6-digit code. After COMMIT,
+    // deliberately — the account must exist before a code pointing at it goes
+    // out, and a mail failure must not roll back a successfully created
+    // account (the screen that asks for the code has a "send a new code"
+    // button). Every role gets it now, professionals included: confirming the
+    // address up front means the admin only ever reviews registrations with a
+    // working inbox, and nobody is left holding a dead link for days while
+    // their registration waits in the queue.
     const verificationRequired = isEnabled('REQUIRE_EMAIL_VERIFICATION');
-    const sendLinkNow = verificationRequired && !requiresApproval;
-    if (sendLinkNow) {
+    let codeSent = false;
+    if (verificationRequired) {
       try {
         await sendVerificationEmail({ id: user.id, name: user.name, email: user.email });
+        codeSent = true;
       } catch (mailErr) {
-        logger.error({ err: mailErr, userId: user.id }, 'Could not send verification email at registration');
+        logger.error({ err: mailErr, userId: user.id }, 'Could not send verification code at registration');
       }
+    }
+
+    if (verificationRequired) {
+      res.status(201).json({
+        user,
+        email: user.email,
+        emailVerificationRequired: true,
+        codeSent,
+        pending: !user.is_active,
+        awaitingApproval: !user.is_active,
+        message: codeSent
+          ? `We sent a 6-digit code to ${user.email}. Enter it to finish creating your account.`
+          : 'Your account was created, but we could not send the code just now. Press "Send a new code" to try again.',
+      });
+      return;
     }
 
     if (!user.is_active) {
@@ -345,29 +358,13 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
         user,
         pending: true,
         awaitingApproval: true,
-        // Nothing for the user to do yet, so do not ask them to check an
-        // inbox — the link has not been sent (see sendLinkNow above).
-        emailVerificationRequired: verificationRequired,
-        message: verificationRequired
-          ? 'Your registration has been received and is waiting for an administrator to approve it. Once approved, we will email you a link to confirm your address, and then you can log in.'
-          : 'Your registration has been received and is waiting for an administrator to approve it. You will be able to log in once it is approved.',
+        emailVerificationRequired: false,
+        message: 'Your registration has been received and is waiting for an administrator to approve it. You will be able to log in once it is approved.',
       });
       return;
     }
 
-    // An active account (a patient) still cannot log in until the address is
-    // confirmed, so handing back a session here would contradict the login
-    // check. Say what is needed instead.
-    if (verificationRequired) {
-      res.status(201).json({
-        user,
-        emailVerificationRequired: true,
-        message: 'Your account has been created. Please confirm your email address using the link we just sent, then log in.',
-      });
-      return;
-    }
-
-    res.status(201).json({ user, token: generateToken(user as DbUser), refreshToken: await issueRefreshToken(user.id) });
+    res.status(201).json({ ...(await sessionPayload(user as DbUser)) });
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
@@ -470,7 +467,7 @@ const login = async (req: Request, res: Response, next: NextFunction): Promise<v
         metadata: { reason: 'email_unverified' },
       });
       res.status(403).json({
-        message: 'Please confirm your email address before logging in. Check your inbox for the confirmation link.',
+        message: 'Please confirm your email address before signing in. Enter the 6-digit code we email you.',
         emailUnverified: true,
       });
       return;
@@ -843,73 +840,153 @@ const buildClientLink = (path: string): string => {
   return `${base}${path}`;
 };
 
-// PRO-11 — email verification. Same opaque-token-hashed-at-rest shape as the
-// password reset above, because the threat model is the same.
-const EMAIL_VERIFICATION_HOURS = 48;
+// PRO-11 / migration 017 — email verification by a 6-digit code.
+//
+// The code is emailed at registration (every role — a professional proves the
+// address up front, before the registration goes into the admin queue) and
+// typed into the registration or sign-in screen. Only SHA-256("<id>:<code>")
+// is stored. A code lives 15 minutes, is single-use, and is burned after 5
+// wrong guesses — together with authLimiter that keeps the 10^6 space out of
+// brute-force reach. Issuing a new code invalidates every older one, so only
+// the newest email in someone's inbox works.
+const EMAIL_CODE_MINUTES = 15;
+const EMAIL_CODE_MAX_ATTEMPTS = 5;
+const EMAIL_CODES_PER_HOUR = 5;
 
-// Issues a token and emails the link. Called on registration and by the
-// resend endpoint. Deliberately returns void and swallows nothing — a mail
-// failure must surface, or a user waits forever for an email that was never
-// sent.
+const hashEmailCode = (userId: number, code: string): string =>
+  crypto.createHash('sha256').update(`${userId}:${code}`).digest('hex');
+
+// Issues a code and emails it. Called on registration, by the resend endpoint
+// and when an admin approves an account that somehow is still unverified.
+// Deliberately swallows nothing — a mail failure must surface, or a user
+// waits forever for an email that was never sent.
 const sendVerificationEmail = async (user: { id: number; name: string; email: string }): Promise<void> => {
-  const token = crypto.randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_HOURS * 60 * 60 * 1000);
+  const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
+  const expiresAt = new Date(Date.now() + EMAIL_CODE_MINUTES * 60 * 1000);
+  await pool.query(
+    'UPDATE public.email_verification_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL',
+    [user.id]
+  );
   await pool.query(
     'INSERT INTO public.email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
-    [user.id, hashRefreshToken(token), expiresAt]
+    [user.id, hashEmailCode(user.id, code), expiresAt]
   );
 
-  const verifyUrl = buildClientLink(`/verify-email?token=${token}`);
-  await sendMail(
-    user.email,
-    'Confirm your Core Health email address',
-    `<p>Hi ${user.name},</p>
-     <p>Confirm this email address to activate your Core Health account. This link expires in ${EMAIL_VERIFICATION_HOURS} hours.</p>
-     <p><a href="${verifyUrl}">${verifyUrl}</a></p>
-     <p>If you didn't create this account, you can ignore this email — the account cannot be used until the address is confirmed.</p>`
-  );
+  let link: string | undefined;
+  try { link = buildClientLink(`/verify-email?email=${encodeURIComponent(user.email)}`); } catch { link = undefined; }
+  const mail = verificationCodeEmail({ name: user.name, code, minutes: EMAIL_CODE_MINUTES, link });
+  await sendMail(user.email, mail.subject, mail.html, { text: mail.text });
 };
 
-// Redeems a verification token. used_at is checked as well as expires_at, so
-// a link cannot be replayed within its validity window. Intentionally
-// idempotent-ish from the user's point of view: an already-verified account
-// gets a success response rather than an error, because clicking the link
-// twice is a normal thing for a person to do and failing it looks broken.
+// Everything the client needs to start a session — the same shape login
+// returns, so every way in (password, MFA, email code, Google) ends in the
+// same place on the client.
+const sessionPayload = async (user: DbUser) => {
+  const memberships = await getMembershipsForUser(user.id);
+  const organization = memberships.find(m => m.member_role === 'owner') ?? memberships[0] ?? null;
+  const plan = await personalPlan(user);
+  const { password: _, mfa_secret: __, ...safeUser } = user;
+  return {
+    user: { ...safeUser, organization, memberships, plan },
+    token: generateToken(user),
+    refreshToken: await issueRefreshToken(user.id),
+  };
+};
+
+// Checks a code. On success the address is confirmed and:
+//   - an active account (a patient) is signed straight in — registration is
+//     complete, there is nothing left to wait for;
+//   - an account awaiting approval (doctor, organisation owner) is told so.
+// Errors are deliberately generic about whether the address exists.
 const verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { token } = req.body as { token: string };
-    if (!token) { res.status(400).json({ message: 'A verification token is required' }); return; }
+    const { email, code } = req.body as { email: string; code: string };
+    const invalid = { message: 'That code is not correct or has expired. Check the latest email, or request a new code.' };
 
-    const { rows } = await pool.query(
-      `SELECT t.id, t.user_id, u.email_verified_at
-       FROM public.email_verification_tokens t
-       JOIN public.users u ON u.id = t.user_id
-       WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > NOW()`,
-      [hashRefreshToken(token)]
+    const { rows: users } = await pool.query<DbUser>(
+      'SELECT * FROM public.users WHERE email = $1 AND deleted_at IS NULL', [email]
     );
+    if (!users.length) { res.status(400).json(invalid); return; }
+    let user = users[0];
 
-    if (!rows.length) {
-      res.status(400).json({ message: 'This verification link is invalid or has expired. Request a new one.' });
+    if (user.email_verified_at) {
+      // Already confirmed (a second tab, a double submit). Not a session:
+      // without a fresh code this proves nothing, so send them to sign in.
+      res.json({ verified: true, message: 'Your email is already confirmed. Please sign in.' });
       return;
     }
 
-    await pool.query(
-      'UPDATE public.users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = $1',
-      [rows[0].user_id]
+    const { rows: tokens } = await pool.query<{ id: number; token_hash: string; attempts: number }>(
+      `SELECT id, token_hash, attempts FROM public.email_verification_tokens
+        WHERE user_id = $1 AND used_at IS NULL AND expires_at > NOW()
+        ORDER BY created_at DESC LIMIT 1`,
+      [user.id]
     );
-    await pool.query(
-      'UPDATE public.email_verification_tokens SET used_at = NOW() WHERE id = $1',
-      [rows[0].id]
-    );
+    if (!tokens.length) {
+      res.status(400).json({ ...invalid, codeExpired: true });
+      return;
+    }
+    const token = tokens[0];
+    const expected = Buffer.from(token.token_hash.trim(), 'hex');
+    const given = Buffer.from(hashEmailCode(user.id, String(code)), 'hex');
+    const matches = expected.length === given.length && crypto.timingSafeEqual(expected, given);
 
+    if (!matches) {
+      const attempts = token.attempts + 1;
+      const burned = attempts >= EMAIL_CODE_MAX_ATTEMPTS;
+      await pool.query(
+        `UPDATE public.email_verification_tokens
+            SET attempts = $2, used_at = CASE WHEN $3::boolean THEN NOW() ELSE used_at END
+          WHERE id = $1`,
+        [token.id, attempts, burned]
+      );
+      res.status(400).json(burned
+        ? { message: 'Too many wrong attempts. Request a new code and try again.', codeExpired: true }
+        : { message: 'That code is not correct. Please check it and try again.', attemptsLeft: EMAIL_CODE_MAX_ATTEMPTS - attempts });
+      return;
+    }
+
+    await pool.query('UPDATE public.email_verification_tokens SET used_at = NOW() WHERE id = $1', [token.id]);
+    const { rows: [updated] } = await pool.query<DbUser>(
+      'UPDATE public.users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = $1 RETURNING *',
+      [user.id]
+    );
+    user = updated ?? user;
     audit(req, {
       action: AuditAction.EMAIL_VERIFIED,
-      actorId: rows[0].user_id,
+      actorId: user.id,
+      actorEmail: user.email,
+      actorRole: user.role,
       targetType: 'user',
-      targetId: rows[0].user_id,
+      targetId: user.id,
     });
 
-    res.json({ message: 'Email confirmed. You can now log in.' });
+    if (!user.is_active) {
+      res.json({
+        verified: true,
+        awaitingApproval: !user.approved_at,
+        message: user.approved_at
+          ? 'Email confirmed, but this account has been deactivated. Please contact support.'
+          : 'Email confirmed. Your registration is now waiting for an administrator to approve it — we will let you know by email once it is approved.',
+      });
+      return;
+    }
+
+    // An MFA-enrolled account still has to pass MFA — a code proves the inbox,
+    // not the second factor.
+    if (user.mfa_enabled) {
+      res.json({ verified: true, message: 'Email confirmed. Please sign in.' });
+      return;
+    }
+
+    audit(req, {
+      action: AuditAction.LOGIN_SUCCESS,
+      actorId: user.id,
+      actorEmail: user.email,
+      actorRole: user.role,
+      metadata: { method: 'email_code' },
+    });
+    res.json({ verified: true, message: 'Email confirmed. Welcome to Suwela!', ...(await sessionPayload(user)) });
   } catch (err) { next(err); }
 };
 
@@ -920,7 +997,7 @@ const verifyEmail = async (req: Request, res: Response, next: NextFunction): Pro
 const resendVerification = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email } = req.body as { email: string };
-    const generic = { message: 'If that address needs confirming, a new link has been sent.' };
+    const generic = { message: 'If that address needs confirming, a new code has been sent.' };
 
     const { rows } = await pool.query<{ id: number; name: string; email: string; email_verified_at: Date | null }>(
       'SELECT id, name, email, email_verified_at FROM public.users WHERE email = $1 AND deleted_at IS NULL',
@@ -928,18 +1005,168 @@ const resendVerification = async (req: Request, res: Response, next: NextFunctio
     );
     if (!rows.length || rows[0].email_verified_at) { res.json(generic); return; }
 
-    // Cheap per-account ceiling on top of authLimiter's per-IP one: sending
-    // mail costs money and an unthrottled resend is a way to use this server
-    // to spam a third party's inbox.
+    // Per-account ceiling on top of authLimiter's per-IP one: an unthrottled
+    // resend is a way to use this server to spam a third party's inbox.
     const { rows: recent } = await pool.query<{ n: string }>(
       `SELECT COUNT(*)::bigint AS n FROM public.email_verification_tokens
        WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
       [rows[0].id]
     );
-    if (Number(recent[0].n) >= 5) { res.json(generic); return; }
+    if (Number(recent[0].n) >= EMAIL_CODES_PER_HOUR) { res.json(generic); return; }
 
     await sendVerificationEmail(rows[0]);
     res.json(generic);
+  } catch (err) { next(err); }
+};
+
+// Google sign-in — patients only.
+//
+// The browser gets an ID token from Google Identity Services and posts it
+// here; it is verified against Google's keys and this app's client id
+// (GOOGLE_CLIENT_ID), so a token minted for another site is refused.
+//   - An existing patient (matched on google_sub, then on the address) is
+//     signed in, and the Google id is linked on first use.
+//   - An existing NON-patient is refused: doctors, pharmacies, labs,
+//     hospitals and admins sign in with their password (+ MFA) only.
+//   - No account yet: a patient account is created. Google has already
+//     confirmed the address, so no code is needed.
+const GOOGLE_PATIENTS_ONLY = {
+  code: 'GOOGLE_PATIENTS_ONLY',
+  message: 'Google sign-in is only for patient accounts. Please sign in with your email and password.',
+};
+
+let googleClient: OAuth2Client | null = null;
+const googleClientId = (): string => (process.env.GOOGLE_CLIENT_ID || '').trim();
+
+const verifyGoogleCredential = async (credential: string): Promise<TokenPayload | null> => {
+  const audience = googleClientId();
+  googleClient ??= new OAuth2Client(audience);
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience });
+    return ticket.getPayload() ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const googleAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!googleClientId()) {
+      res.status(503).json({ message: 'Google sign-in is not available right now. Please use your email and password.' });
+      return;
+    }
+    const { credential, accepted_terms_version } = req.body as { credential: string; accepted_terms_version?: string };
+
+    const payload = await verifyGoogleCredential(credential);
+    if (!payload?.sub || !payload.email) {
+      res.status(401).json({ message: 'Google sign-in could not be verified. Please try again.' });
+      return;
+    }
+    if (!payload.email_verified) {
+      res.status(400).json({ message: 'This Google account has no verified email address. Please register with your email instead.' });
+      return;
+    }
+    const email = payload.email.trim().toLowerCase();
+
+    const { rows } = await pool.query<DbUser & { google_sub: string | null }>(
+      `SELECT * FROM public.users
+        WHERE deleted_at IS NULL AND (google_sub = $1 OR LOWER(email) = $2)
+        ORDER BY (google_sub = $1) DESC NULLS LAST LIMIT 1`,
+      [payload.sub, email]
+    );
+
+    let user: DbUser;
+    let created = false;
+    if (rows.length) {
+      user = rows[0];
+      if (user.role !== 'patient') {
+        audit(req, {
+          action: AuditAction.LOGIN_FAILURE, outcome: 'denied',
+          actorId: user.id, actorEmail: user.email, actorRole: user.role,
+          metadata: { reason: 'google_not_patient', method: 'google' },
+        });
+        res.status(403).json(GOOGLE_PATIENTS_ONLY);
+        return;
+      }
+      if (!user.is_active) {
+        audit(req, {
+          action: AuditAction.LOGIN_FAILURE, outcome: 'denied',
+          actorId: user.id, actorEmail: user.email, actorRole: user.role,
+          metadata: { reason: 'deactivated', method: 'google' },
+        });
+        res.status(403).json({ accountDeactivated: true, message: 'This account has been deactivated. Please contact support if you think this is a mistake.' });
+        return;
+      }
+      // A different Google account already claimed this address's patient
+      // account — refuse rather than silently re-pointing it.
+      if (rows[0].google_sub && rows[0].google_sub !== payload.sub) {
+        res.status(409).json({ message: 'This email is linked to a different Google account. Please sign in with your email and password.' });
+        return;
+      }
+      const { rows: [linked] } = await pool.query<DbUser>(
+        `UPDATE public.users
+            SET google_sub = COALESCE(google_sub, $2),
+                email_verified_at = COALESCE(email_verified_at, NOW())
+          WHERE id = $1 RETURNING *`,
+        [user.id, payload.sub]
+      );
+      user = linked ?? user;
+    } else {
+      // New patient. They never chose a password, so store a random one
+      // nobody knows — "Forgot password" sets a real one if they ever want it.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const name = (payload.name || email.split('@')[0]).slice(0, 150);
+        const randomPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+        let inserted: DbUser;
+        try {
+          ({ rows: [inserted] } = await client.query<DbUser>(
+            `INSERT INTO public.users
+               (name, email, password, role, is_active, email_verified_at, google_sub,
+                accepted_terms_version, accepted_terms_at)
+             VALUES ($1,$2,$3,'patient',TRUE,NOW(),$4,$5, CASE WHEN $5::varchar IS NULL THEN NULL ELSE NOW() END)
+             RETURNING *`,
+            [name, email, randomPassword, payload.sub, accepted_terms_version || null]
+          ));
+        } catch (err) {
+          if ((err as { code?: string }).code === '23505') {
+            await client.query('ROLLBACK');
+            res.status(409).json({ message: 'An account with this email was just created. Please try signing in again.' });
+            return;
+          }
+          throw err;
+        }
+        await client.query(
+          `SELECT set_config('app.user_id', $1, true), set_config('app.role', 'patient', true)`,
+          [String(inserted.id)]
+        );
+        await createProfile(client, 'patient', inserted.id, {});
+        await client.query('COMMIT');
+        user = inserted;
+        created = true;
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
+
+    if (user.mfa_enabled) {
+      const mfaToken = jwt.sign({ id: user.id, purpose: MFA_PENDING_PURPOSE }, process.env.JWT_SECRET as string, { expiresIn: '5m' });
+      res.json({ mfaRequired: true, mfaToken });
+      return;
+    }
+
+    audit(req, {
+      action: AuditAction.LOGIN_SUCCESS,
+      actorId: user.id,
+      actorEmail: user.email,
+      actorRole: user.role,
+      metadata: { method: 'google', created },
+    });
+    res.status(created ? 201 : 200).json({ created, ...(await sessionPayload(user)) });
   } catch (err) { next(err); }
 };
 
@@ -1002,14 +1229,8 @@ const forgotPassword = async (req: Request, res: Response, next: NextFunction): 
     );
 
     const resetUrl = buildClientLink(`/reset-password?token=${token}`);
-    await sendMail(
-      user.email,
-      'Reset your Core Health password',
-      `<p>Hi ${user.name},</p>
-       <p>Click the link below to reset your password. This link expires in ${PASSWORD_RESET_MINUTES} minutes and can only be used once.</p>
-       <p><a href="${resetUrl}">${resetUrl}</a></p>
-       <p>If you didn't request this, you can safely ignore this email.</p>`
-    );
+    const mail = passwordResetEmail({ name: user.name, link: resetUrl, minutes: PASSWORD_RESET_MINUTES });
+    await sendMail(user.email, mail.subject, mail.html, { text: mail.text });
 
     res.json(generic);
   } catch (err) { next(err); }
@@ -1054,4 +1275,4 @@ const resetPassword = async (req: Request, res: Response, next: NextFunction): P
   } catch (err) { next(err); }
 };
 
-export { register, login, verifyEmail, resendVerification, acceptTerms, sendVerificationEmail, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };
+export { register, login, verifyEmail, resendVerification, googleAuth, acceptTerms, sendVerificationEmail, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, createProfile, generateToken, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword };

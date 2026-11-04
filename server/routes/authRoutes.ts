@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword, verifyEmail, resendVerification, acceptTerms } from '../controllers/authController';
+import { register, login, mfaLogin, mfaSetup, mfaVerifySetup, mfaDisable, getMe, impersonate, listImpersonations, listImpersonationActions, refreshAccessToken, logout, changePassword, forgotPassword, resetPassword, verifyEmail, resendVerification, acceptTerms, googleAuth } from '../controllers/authController';
 import { protect, authorize } from '../middleware/auth';
 import validate from '../middleware/validate';
 import { authLimiter } from '../middleware/rateLimiter';
@@ -35,9 +35,25 @@ router.post('/register',
 // inbox. resendVerification adds a per-account hourly cap on top.
 router.post('/verify-email',
   authLimiter,
-  [body('token').isString().isLength({ min: 32, max: 128 })],
+  [
+    body('email').isEmail().isLength({ max: 254 }).normalizeEmail(),
+    // Migration 017: the 6-digit code from the email.
+    body('code').isString().trim().matches(/^\d{6}$/).withMessage('Enter the 6-digit code from the email'),
+  ],
   validate,
   verifyEmail
+);
+
+// Google sign-in (patients only — enforced in the controller). The credential
+// is the ID token Google Identity Services hands the browser.
+router.post('/google',
+  authLimiter,
+  [
+    body('credential').isString().isLength({ min: 20, max: 4096 }),
+    body('accepted_terms_version').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  ],
+  validate,
+  googleAuth
 );
 
 router.post('/resend-verification',

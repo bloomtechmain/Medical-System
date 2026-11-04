@@ -79,9 +79,43 @@ variable "container_image_tag" {
 }
 
 variable "feature_require_email_verification" {
-  description = "Stays false until SES is set up and out of the sandbox."
+  description = "New accounts must enter the emailed 6-digit code. Only takes effect when smtp_host is set (no mail path = no codes)."
   type        = bool
-  default     = false
+  default     = true
+}
+
+# ── Email (SMTP) ──────────────────────────────────────────────────────────────
+# Empty smtp_host = no mail: the API logs emails instead of sending them and
+# email verification stays off. The SMTP username/password live in SSM
+# (/suwela/prod/smtp/user, /suwela/prod/smtp/password), not here.
+variable "smtp_host" {
+  description = "SMTP server, e.g. smtp.gmail.com / smtp.zoho.com / email-smtp.ap-south-1.amazonaws.com. Empty = mail off."
+  type        = string
+  default     = ""
+}
+
+variable "smtp_port" {
+  description = "587 (STARTTLS, smtp_secure = false) or 465 (TLS, smtp_secure = true). Port 25 is blocked on EC2."
+  type        = number
+  default     = 587
+}
+
+variable "smtp_secure" {
+  type    = bool
+  default = false
+}
+
+variable "smtp_from" {
+  description = "From header. Must be an address the SMTP account may send as."
+  type        = string
+  default     = "Suwela Medical Hub <no-reply@suwela.com>"
+}
+
+# ── Google sign-in (patients only) ───────────────────────────────────────────
+variable "google_client_id" {
+  description = "Google OAuth 2.0 Web client id. Public (the browser gets it too). Empty = no Google button."
+  type        = string
+  default     = ""
 }
 
 variable "cloudflare_ipv4_ranges" {

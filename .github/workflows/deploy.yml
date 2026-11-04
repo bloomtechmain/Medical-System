@@ -29,6 +29,8 @@ name: Deploy
 #                      = https://www.suwela.com / https://app.suwela.com / https://dashboard.suwela.com
 #                      (admin.suwela.com is recognised by the app as a second
 #                      name for the dashboard zone; it needs no variable)
+#                    GOOGLE_CLIENT_ID (optional) = Google OAuth web client id
+#                      for patients' "Continue with Google"; unset = no button
 #   Environment `production` secrets (optional): SMOKE_TEST_EMAIL /
 #   SMOKE_TEST_PASSWORD for a login check, SLACK_WEBHOOK_URL.
 
@@ -180,6 +182,7 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL }}
           APP_URL: ${{ vars.APP_URL }}
           DASHBOARD_URL: ${{ vars.DASHBOARD_URL }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
         # Served by the server's HTTPS proxy with Cloudflare caching in front
         # (infra/lean). Cache headers decide what Cloudflare may keep:
         # index.html and config.js never (a deploy shows immediately),

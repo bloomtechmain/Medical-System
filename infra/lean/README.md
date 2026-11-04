@@ -94,6 +94,28 @@ Delete everything in `336246706489` (ECS, EC2/ASG, ALBs, NAT gateways, EIPs, RDS
 S3, CloudFront, ECR, Secrets Manager, logs, VPCs) — keep one database export on a local disk,
 not in AWS — then optionally close the account.
 
+## Email (SMTP) and Google sign-in
+
+Registration emails a 6-digit code that must be entered before the account is
+created; patients may also sign in/up with Google. Both are off until set:
+
+1. **SMTP** — store the login (never in Terraform/state), then set the host:
+   ```bash
+   MSYS_NO_PATHCONV=1 aws ssm put-parameter --profile suwela-prod --overwrite --type SecureString      --name /suwela/prod/smtp/user --value 'no-reply@suwela.com'
+   MSYS_NO_PATHCONV=1 aws ssm put-parameter --profile suwela-prod --overwrite --type SecureString      --name /suwela/prod/smtp/password --value '<smtp password>'
+   ```
+   `prod.auto.tfvars`: `smtp_host = "smtp.example.com"` (plus `smtp_port` /
+   `smtp_secure` / `smtp_from` if not 587 / false / no-reply@suwela.com).
+   Port 25 is blocked on EC2 — use 587 or 465. With `smtp_host` set,
+   `feature_require_email_verification` (default true) takes effect.
+2. **Google** — `prod.auto.tfvars`: `google_client_id = "...apps.googleusercontent.com"`
+   (server) **and** GitHub variable `GOOGLE_CLIENT_ID` (same value, for the
+   website's config.js).
+3. `terraform apply`, then run the Deploy workflow — it rolls the service onto
+   the newest task-definition revision (the one Terraform just registered).
+
+Cost: $0 on AWS (SMTP is the provider's; Google sign-in is free).
+
 ## Growing later
 Change `instance_type` (t3.medium ≈ +$16) or `db_instance_class` (db.t4g.small ≈ +$17) and
 apply — **only after raising `budget_limit_usd` with the owner's agreement.**

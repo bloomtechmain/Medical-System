@@ -7,6 +7,10 @@ import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 import AuthShell from '../components/landing/AuthShell';
 import RegistrationProgress, { Certification } from '../components/registration/RegistrationProgress';
+import EmailCodeForm, { VerifyResult } from '../components/auth/EmailCodeForm';
+import GoogleSignInButton, { OrDivider } from '../components/auth/GoogleSignInButton';
+import { LEGAL_VERSION } from '../legal';
+import { GOOGLE_CLIENT_ID } from '../env';
 
 interface LoginFormData {
   email: string;
@@ -29,8 +33,6 @@ export default function Login() {
   // end that needs support. Neither should offer the resend button — the
   // account cannot verify until it is approved.
   const [blocked, setBlocked] = useState<{ kind: 'approval' | 'deactivated'; message: string; certifications?: Certification[] } | null>(null);
-  const [resending, setResending] = useState(false);
-  const [resent, setResent] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -59,7 +61,6 @@ export default function Login() {
       // rather than a toast that disappears.
       if (err?.emailUnverified) {
         setUnverifiedEmail(data.email);
-        setResent(false);
         return;
       }
       if (err?.awaitingApproval) {
@@ -76,19 +77,38 @@ export default function Login() {
     }
   };
 
-  const handleResend = async () => {
-    if (!unverifiedEmail) return;
-    setResending(true);
+  // Migration 017: the code screen shown after a refused unverified sign-in.
+  const onEmailVerified = (res: VerifyResult) => {
+    setUnverifiedEmail(null);
+    if (res.token && res.user?.role) {
+      login(res.user, res.token, res.refreshToken);
+      toast.success('Email verified — welcome!');
+      goToRoleHome(res.user);
+      return;
+    }
+    if (res.awaitingApproval) {
+      setBlocked({ kind: 'approval', message: res.message || 'Your registration is waiting for approval.', certifications: [] });
+      return;
+    }
+    toast.success(res.message || 'Email verified. Please sign in.');
+  };
+
+  // Google sign-in — patients only (the server refuses everyone else with a
+  // message telling them to use their password).
+  const onGoogleCredential = async (credential: string) => {
+    setLoading(true);
     try {
-      await authApi.resendVerification(unverifiedEmail);
-    } catch {
-      // Deliberately ignored. The endpoint always answers the same way
-      // whether or not the address exists or is already confirmed, so there
-      // is nothing here worth reporting differently — and a distinguishing
-      // error would turn this into an account-enumeration oracle.
+      const res = await authApi.googleAuth(credential, LEGAL_VERSION) as { user: User; token: string; refreshToken: string; mfaRequired?: boolean; mfaToken?: string; created?: boolean };
+      if (res.mfaRequired && res.mfaToken) { setMfaToken(res.mfaToken); return; }
+      if (!res?.user?.role) throw new Error('Invalid response from server');
+      login(res.user, res.token, res.refreshToken);
+      if (res.created) toast.success('Your patient account has been created. Welcome to Suwela!');
+      goToRoleHome(res.user);
+    } catch (err: any) {
+      if (err?.accountDeactivated) { setBlocked({ kind: 'deactivated', message: err.message }); return; }
+      toast.error(err?.message || 'Google sign-in failed. Please try again.', { duration: 6000 });
     } finally {
-      setResending(false);
-      setResent(true);
+      setLoading(false);
     }
   };
 
@@ -161,64 +181,16 @@ export default function Login() {
                 </button>
               </>
             ) : unverifiedEmail ? (
-              /* PRO-11: the way out of "confirm your email before logging
-                 in". Previously that message was a toast with no action
-                 attached, so a user whose confirmation email never arrived —
-                 or who registered before the address was confirmable — had no
-                 route forward anywhere in the product. */
-              <>
-                <div className="mb-6">
-                  <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center mb-4">
-                    <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <h1 className="text-2xl font-bold text-gray-900">Confirm your email</h1>
-                  <p className="text-gray-500 text-sm mt-1">
-                    Your password was correct, but this address still needs confirming before you can sign in.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 mb-4">
-                  <p className="text-xs text-gray-500">Account</p>
-                  <p className="text-sm font-medium text-gray-900 break-all">{unverifiedEmail}</p>
-                </div>
-
-                {resent ? (
-                  <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 mb-4">
-                    <p className="text-sm text-teal-800 font-medium">Confirmation link sent</p>
-                    {/* Same wording whether or not the address exists or was
-                        already confirmed — a distinguishing message would
-                        confirm which emails have accounts. */}
-                    <p className="text-xs text-teal-700 mt-1">
-                      If that address needs confirming, a new link is on its way. It expires in 48 hours.
-                    </p>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResend}
-                    disabled={resending}
-                    className="btn-primary w-full py-2.5 disabled:opacity-60"
-                  >
-                    {resending ? 'Sending...' : 'Send a new confirmation link'}
-                  </button>
-                )}
-
-                <p className="text-xs text-gray-400 mt-4 leading-relaxed">
-                  Check your spam folder too. If the link still does not arrive, contact support — your
-                  account exists and only needs its address confirmed.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => { setUnverifiedEmail(null); setResent(false); }}
-                  className="w-full text-sm text-gray-500 hover:text-gray-700 text-center mt-5"
-                >
-                  &larr; Back to sign in
-                </button>
-              </>
+              /* PRO-11 / migration 017: the password was right but the
+                 address is unconfirmed. A fresh code is sent as this opens,
+                 so there is always something in the inbox to type in. */
+              <EmailCodeForm
+                email={unverifiedEmail}
+                sendOnMount
+                onVerified={onEmailVerified}
+                onBack={() => setUnverifiedEmail(null)}
+                backLabel="Back to sign in"
+              />
             ) : mfaToken ? (
               <>
                 <div className="mb-6">
@@ -257,6 +229,9 @@ export default function Login() {
               <h1 className="font-display text-4xl text-suwela-navy">Welcome back</h1>
               <p className="text-suwela-slate mt-2">Sign in to your Suwela account</p>
             </div>
+
+            <GoogleSignInButton onCredential={onGoogleCredential} text="signin_with" />
+            <OrDivider label="or sign in with email" />
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
@@ -311,6 +286,8 @@ export default function Login() {
               </button>
             </form>
 
+            {GOOGLE_CLIENT_ID && <GoogleNote />}
+
             <p className="text-center text-sm text-gray-500 mt-6">
               Don't have an account?{' '}
               <Link to="/register" className="text-primary-600 font-medium hover:text-primary-700">
@@ -332,5 +309,18 @@ export default function Login() {
           </p>
         </div>
     </AuthShell>
+  );
+}
+
+// Shown only when Google sign-in is configured (the button itself hides
+// otherwise). Patients-only is a rule people should learn before they press
+// the button, not from an error after it.
+function GoogleNote() {
+  return (
+    <p className="text-center text-xs text-gray-400 mt-4 leading-relaxed" data-google-note>
+      Google sign-in is for patients. New patients signing in with Google agree to Suwela's{' '}
+      <Link to="/terms" target="_blank" className="underline hover:text-gray-600">Terms</Link> and{' '}
+      <Link to="/privacy" target="_blank" className="underline hover:text-gray-600">Privacy Policy</Link>.
+    </p>
   );
 }

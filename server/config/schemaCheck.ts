@@ -85,6 +85,9 @@ const REQUIREMENTS: Requirement[] = [
   column('public', 'organizations', 'plan_expires_at', '016_subscription_billing'),
   table('public', 'subscription_payments', '016_subscription_billing'),
   table('public', 'plan_change_requests', '016_subscription_billing'),
+
+  column('public', 'email_verification_tokens', 'attempts', '017_email_code_and_google_signin'),
+  column('public', 'users', 'google_sub', '017_email_code_and_google_signin'),
 ];
 
 const verifySchema = async (): Promise<void> => {

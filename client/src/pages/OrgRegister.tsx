@@ -9,6 +9,7 @@ import MultiSelectWithCustom from '../components/common/MultiSelectWithCustom';
 import { LEGAL_VERSION } from '../legal';
 import PlanPicker from '../components/plans/PlanPicker';
 import { Plan, PlanAudience } from '../types';
+import EmailCodeForm from '../components/auth/EmailCodeForm';
 
 interface OwnerCandidate {
   id: number;
@@ -110,6 +111,9 @@ export default function OrgRegister() {
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  // Migration 017: a new owner account confirms its email with a 6-digit code
+  // before the registration counts as submitted.
+  const [verifying, setVerifying] = useState<{ email: string; codeSent: boolean } | null>(null);
   const [orgSpecializations, setOrgSpecializations] = useState<string[]>([]);
   const [showPwd, setShowPwd] = useState(false);
   // Migration 014: the package this organisation signs up for.
@@ -184,7 +188,7 @@ export default function OrgRegister() {
         if (data[k] !== undefined && data[k] !== '') profile[k] = data[k];
       });
 
-      await orgApi.register({
+      const res = await orgApi.register({
         org_name:       data.org_name,
         slug:           data.slug,
         org_type:       selectedType,
@@ -196,8 +200,13 @@ export default function OrgRegister() {
         specializations: orgSpecializations.length ? orgSpecializations : undefined,
         accepted_terms_version: LEGAL_VERSION,
         plan_id:        plan?.id,
-      });
+      }) as { emailVerificationRequired?: boolean; email?: string; codeSent?: boolean };
 
+      if (res?.emailVerificationRequired && res.email) {
+        setVerifying({ email: res.email, codeSent: res.codeSent !== false });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
       setDone(true);
     } catch (err: any) {
       toast.error(err.message || 'Registration failed. Please try again.');
@@ -207,6 +216,17 @@ export default function OrgRegister() {
   };
 
   const selectedTypeInfo = ORG_TYPES.find(t => t.id === selectedType);
+
+  if (verifying) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-emerald-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 sm:p-10 max-w-md w-full">
+          <EmailCodeForm email={verifying.email} initialCodeSent={verifying.codeSent}
+                         onVerified={() => { setVerifying(null); setDone(true); }} />
+        </div>
+      </div>
+    );
+  }
 
   if (done) {
     return (

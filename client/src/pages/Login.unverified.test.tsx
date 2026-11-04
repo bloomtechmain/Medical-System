@@ -3,24 +3,27 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
-// PRO-11: "Please confirm your email address before logging in" used to be a
-// toast and nothing else — correct, but a dead end. The password was right,
-// the account exists, and the user had no action available anywhere in the
-// product. These cover the way out.
+// PRO-11 / migration 017: an unverified account that signs in with the right
+// password is shown the 6-digit code screen — a fresh code is sent as it
+// opens — instead of a dead-end toast.
 
 const login = vi.fn();
 const resendVerification = vi.fn();
+const verifyEmail = vi.fn();
+const authLogin = vi.fn();
 
 vi.mock('../services/api', () => ({
   authApi: {
     login: (...args: unknown[]) => login(...args),
     resendVerification: (...args: unknown[]) => resendVerification(...args),
+    verifyEmail: (...args: unknown[]) => verifyEmail(...args),
+    googleAuth: vi.fn(),
     mfaLogin: vi.fn(),
   },
 }));
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ login: vi.fn() }),
+  useAuth: () => ({ login: authLogin }),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -43,65 +46,67 @@ const signIn = async (email = 'patient@example.lk', password = 'CorrectPass123')
 
 beforeEach(() => {
   login.mockReset();
-  resendVerification.mockReset();
+  resendVerification.mockReset().mockResolvedValue({ message: 'ok' });
+  verifyEmail.mockReset();
+  authLogin.mockReset();
 });
 afterEach(() => vi.clearAllMocks());
 
 describe('login with an unverified email address', () => {
-  it('shows an actionable panel instead of only a toast', async () => {
-    login.mockRejectedValue({
-      emailUnverified: true,
-      message: 'Please confirm your email address before logging in.',
-    });
+  it('opens the code screen and sends a fresh code to the refused address', async () => {
+    login.mockRejectedValue({ emailUnverified: true, message: 'Please confirm your email address.' });
 
     renderLogin();
-    await signIn();
+    await signIn('stuck@example.lk');
 
-    await waitFor(() => {
-      expect(screen.getByText(/confirm your email/i)).toBeInTheDocument();
-    });
-    // States plainly that the credentials were fine — otherwise the user
-    // reasonably assumes they typed the password wrong and retries forever.
-    expect(screen.getByText(/password was correct/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument());
     // The address is echoed back so a typo'd registration is visible.
-    expect(screen.getByText('patient@example.lk')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /send a new confirmation link/i })).toBeInTheDocument();
+    expect(screen.getByText('stuck@example.lk')).toBeInTheDocument();
+    await waitFor(() => expect(resendVerification).toHaveBeenCalledWith('stuck@example.lk'));
+    expect(screen.getAllByLabelText(/digit \d/i)).toHaveLength(6);
     // A disappearing toast is not the right surface for this.
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it('resends to the address that was refused, not to whatever is typed later', async () => {
+  it('signs the user in once the right code is typed', async () => {
     login.mockRejectedValue({ emailUnverified: true });
-    resendVerification.mockResolvedValue({ message: 'ok' });
+    verifyEmail.mockResolvedValue({ verified: true, user: { id: 1, role: 'patient' }, token: 't', refreshToken: 'r' });
 
     renderLogin();
-    const user = await signIn('stuck@example.lk');
+    const user = await signIn('p@example.lk');
 
-    await waitFor(() => screen.getByRole('button', { name: /send a new confirmation link/i }));
-    await user.click(screen.getByRole('button', { name: /send a new confirmation link/i }));
+    await waitFor(() => screen.getByLabelText('Digit 1'));
+    await user.type(screen.getByLabelText('Digit 1'), '123456');
 
-    await waitFor(() => {
-      expect(resendVerification).toHaveBeenCalledWith('stuck@example.lk');
-    });
-    expect(screen.getByText(/confirmation link sent/i)).toBeInTheDocument();
+    await waitFor(() => expect(verifyEmail).toHaveBeenCalledWith('p@example.lk', '123456'));
+    await waitFor(() => expect(authLogin).toHaveBeenCalledWith({ id: 1, role: 'patient' }, 't', 'r'));
   });
 
-  it('reports the same thing when the resend call fails', async () => {
-    // The endpoint answers identically whether or not the address exists, so
-    // a failure must not be distinguishable either — otherwise this becomes
-    // an account-enumeration oracle.
+  it('shows the server message for a wrong code and clears the boxes', async () => {
     login.mockRejectedValue({ emailUnverified: true });
-    resendVerification.mockRejectedValue({ message: 'boom' });
+    verifyEmail.mockRejectedValue({ message: 'That code is not correct. Please check it and try again.', attemptsLeft: 4 });
 
     renderLogin();
     const user = await signIn();
 
-    await waitFor(() => screen.getByRole('button', { name: /send a new confirmation link/i }));
-    await user.click(screen.getByRole('button', { name: /send a new confirmation link/i }));
+    await waitFor(() => screen.getByLabelText('Digit 1'));
+    await user.type(screen.getByLabelText('Digit 1'), '000000');
 
-    await waitFor(() => {
-      expect(screen.getByText(/confirmation link sent/i)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/not correct/i));
+    expect((screen.getByLabelText('Digit 1') as HTMLInputElement).value).toBe('');
+    expect(authLogin).not.toHaveBeenCalled();
+  });
+
+  it('reports a fixed message when sending fails, never the server text', async () => {
+    // The endpoint answers identically whether or not the address exists, so
+    // a failure must not be distinguishable either (account enumeration).
+    login.mockRejectedValue({ emailUnverified: true });
+    resendVerification.mockRejectedValue({ message: 'boom' });
+
+    renderLogin();
+    await signIn();
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/could not send a new code/i));
     expect(screen.queryByText(/boom/i)).not.toBeInTheDocument();
   });
 
@@ -111,22 +116,20 @@ describe('login with an unverified email address', () => {
     renderLogin();
     const user = await signIn();
 
-    await waitFor(() => screen.getByText(/confirm your email/i));
+    await waitFor(() => screen.getByText(/check your email/i));
     await user.click(screen.getByRole('button', { name: /back to sign in/i }));
 
     expect(screen.getByText(/welcome back/i)).toBeInTheDocument();
-    expect(screen.queryByText(/confirm your email/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/check your email/i)).not.toBeInTheDocument();
   });
 
   it('still treats a genuinely wrong password as a normal failure', async () => {
-    // The panel must not swallow ordinary 401s — otherwise a mistyped
-    // password would wrongly tell the user their email needs confirming.
     login.mockRejectedValue({ message: 'Invalid credentials' });
 
     renderLogin();
     await signIn();
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Invalid credentials'));
-    expect(screen.queryByText(/confirm your email/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/check your email/i)).not.toBeInTheDocument();
   });
 });

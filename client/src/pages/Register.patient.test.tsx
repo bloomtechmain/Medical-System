@@ -11,10 +11,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // cards). Patient registration was unreachable. These pin the way through.
 
 const registerUser = vi.fn();
+const verifyEmail = vi.fn();
 
 vi.mock('../services/api', () => ({
   authApi: {
     register: (...args: unknown[]) => registerUser(...args),
+    verifyEmail: (...args: unknown[]) => verifyEmail(...args),
+    resendVerification: vi.fn(() => Promise.resolve({})),
+    googleAuth: vi.fn(),
   },
   // Imported by PlanPicker / HospitalSearchAdd at module load. Neither renders
   // on the patient path, but the named exports have to exist — and the doctor
@@ -145,6 +149,38 @@ describe('patient registration', () => {
     expect(body.hospital_organization_ids).toBeUndefined();
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/patient'));
+  });
+
+  // Migration 017: registration is only finished once the emailed 6-digit
+  // code is entered — then the patient is signed straight in.
+  it('asks for the emailed code, then signs the patient in', async () => {
+    registerUser.mockResolvedValue({
+      user: { id: 9, role: 'patient', email: 'kamala@example.lk' },
+      email: 'kamala@example.lk',
+      emailVerificationRequired: true,
+      codeSent: true,
+    });
+    verifyEmail.mockResolvedValue({ verified: true, user: { id: 9, role: 'patient' }, token: 'tok', refreshToken: 'ref' });
+
+    renderRegister();
+    const user = await pickPatient();
+
+    await waitFor(() => screen.getByPlaceholderText('you@example.com'));
+    await user.type(screen.getByPlaceholderText('Dr. Jane Smith'), 'Kamala Silva');
+    await user.type(screen.getByPlaceholderText('you@example.com'), 'kamala@example.lk');
+    await user.type(screen.getByPlaceholderText('Min. 10 characters'), 'LongEnoughPass1');
+    await user.type(screen.getByPlaceholderText('Repeat password'), 'LongEnoughPass1');
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+
+    await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument());
+    expect(navigate).not.toHaveBeenCalled();
+    expect(authLogin).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Digit 1'), '654321');
+
+    await waitFor(() => expect(verifyEmail).toHaveBeenCalledWith('kamala@example.lk', '654321'));
+    await waitFor(() => expect(authLogin).toHaveBeenCalledWith({ id: 9, role: 'patient' }, 'tok', 'ref'));
+    expect(navigate).toHaveBeenCalledWith('/patient');
   });
 
   it('does not carry a package over from an abandoned doctor attempt', async () => {

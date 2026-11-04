@@ -166,6 +166,9 @@ CREATE TABLE public.users (
   -- the demo fixtures in corehealth_seed_data.sql) must set this explicitly
   -- or it creates an account nobody can log into.
   email_verified_at      TIMESTAMPTZ,
+  -- Migration 017: Google account id ("sub" of a Google ID token) for patients
+  -- who sign in with Google. Unique when set (uq_users_google_sub below).
+  google_sub             VARCHAR(255),
   -- SEC-17 #2: professional sign-ups are inactive until an admin approves
   -- them. is_active alone cannot say WHY an account is off — these two
   -- columns distinguish "waiting for approval" from "deactivated by an
@@ -240,12 +243,19 @@ CREATE INDEX idx_password_reset_tokens_hash ON public.password_reset_tokens(toke
 CREATE TABLE public.email_verification_tokens (
   id         BIGSERIAL    PRIMARY KEY,
   user_id    INTEGER      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  token_hash CHAR(64)     NOT NULL UNIQUE,
+  -- Migration 017: the emailed secret is a 6-digit code; this is
+  -- SHA-256("<user_id>:<code>"). Not unique — the same user can rarely be
+  -- issued the same digits twice — so lookups go by user_id.
+  token_hash CHAR(64)     NOT NULL,
   expires_at TIMESTAMPTZ  NOT NULL,
   used_at    TIMESTAMPTZ,
+  -- Migration 017: wrong guesses; the code is burned at 5.
+  attempts   SMALLINT     NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_evt_user         ON public.email_verification_tokens(user_id);
+-- Migration 017: one account per Google identity.
+CREATE UNIQUE INDEX uq_users_google_sub ON public.users (google_sub) WHERE google_sub IS NOT NULL;
 -- Rate-limiting resends needs "how many have I issued to this user recently".
 CREATE INDEX idx_evt_user_created ON public.email_verification_tokens(user_id, created_at DESC);
 
