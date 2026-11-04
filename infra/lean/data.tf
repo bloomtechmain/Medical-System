@@ -49,6 +49,24 @@ resource "aws_ssm_parameter" "origin_key" {
   lifecycle { ignore_changes = [value] }
 }
 
+# SMTP login for the registration codes and password-reset emails. Same
+# pattern as the certificate: placeholder here, real value written once with
+# `aws ssm put-parameter --overwrite` (see README), never in Terraform state.
+# Not used until var.smtp_host is set.
+resource "aws_ssm_parameter" "smtp_user" {
+  name  = "/suwela/prod/smtp/user"
+  type  = "SecureString"
+  value = "PLACEHOLDER"
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "smtp_password" {
+  name  = "/suwela/prod/smtp/password"
+  type  = "SecureString"
+  value = "PLACEHOLDER"
+  lifecycle { ignore_changes = [value] }
+}
+
 # ── PostgreSQL ───────────────────────────────────────────────────────────────
 
 resource "aws_db_subnet_group" "main" {

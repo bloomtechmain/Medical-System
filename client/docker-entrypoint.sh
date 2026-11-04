@@ -14,7 +14,7 @@ set -e
 RESOLVED_API_URL="${API_URL:-${VITE_API_URL:-}}"
 
 cat > /app/dist/config.js <<EOF
-window.__APP_CONFIG__ = { API_URL: "${RESOLVED_API_URL}", SITE_URL: "${SITE_URL:-}", APP_URL: "${APP_URL:-}", DASHBOARD_URL: "${DASHBOARD_URL:-}" };
+window.__APP_CONFIG__ = { API_URL: "${RESOLVED_API_URL}", SITE_URL: "${SITE_URL:-}", APP_URL: "${APP_URL:-}", DASHBOARD_URL: "${DASHBOARD_URL:-}", GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}" };
 EOF
 
 exec node_modules/.bin/serve dist -s -l "${PORT:-3000}"

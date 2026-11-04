@@ -107,7 +107,8 @@ export const authApi = {
   forgotPassword: (email: string): Promise<any> => api.post('/auth/forgot-password', { email }),
   resetPassword:  (data: { token: string; newPassword: string }): Promise<any> => api.post('/auth/reset-password', data),
   // PRO-11: email verification
-  verifyEmail:        (token: string): Promise<any> => api.post('/auth/verify-email', { token }),
+  verifyEmail:        (email: string, code: string): Promise<any> => api.post('/auth/verify-email', { email, code }),
+  googleAuth:         (credential: string, accepted_terms_version?: string): Promise<any> => api.post('/auth/google', { credential, accepted_terms_version }),
   resendVerification: (email: string): Promise<any> => api.post('/auth/resend-verification', { email }),
   // COMP-02: re-acceptance of an updated Terms/Privacy version
   acceptTerms:        (version: string): Promise<any> => api.post('/auth/accept-terms', { version }),

@@ -255,6 +255,10 @@ locals {
   ])
 }
 
+locals {
+  mail_enabled = trimspace(var.smtp_host) != ""
+}
+
 resource "aws_ecs_task_definition" "api" {
   family                   = "suwela-prod-api"
   requires_compatibilities = ["EC2"]
@@ -271,7 +275,7 @@ resource "aws_ecs_task_definition" "api" {
       memoryReservation = 1024
       memory            = 1700
 
-      environment = [
+      environment = concat([
         { name = "NODE_ENV", value = "production" },
         { name = "PORT", value = "5000" },
         { name = "DB_HOST", value = aws_db_instance.main.address },
@@ -286,14 +290,25 @@ resource "aws_ecs_task_definition" "api" {
         # Cloudflare → Caddy → api: two proxies, so the client's real IP is
         # two hops back (rate limits must key on the user, not Cloudflare).
         { name = "TRUST_PROXY_HOPS", value = "2" },
-        { name = "FEATURE_REQUIRE_EMAIL_VERIFICATION", value = tostring(var.feature_require_email_verification) },
-      ]
+        # No mail path = no codes can arrive, so verification is forced off
+        # (the API also refuses to start with it on and no SMTP).
+        { name = "FEATURE_REQUIRE_EMAIL_VERIFICATION", value = tostring(local.mail_enabled && var.feature_require_email_verification) },
+        { name = "GOOGLE_CLIENT_ID", value = var.google_client_id },
+        ], local.mail_enabled ? [
+        { name = "SMTP_HOST", value = var.smtp_host },
+        { name = "SMTP_PORT", value = tostring(var.smtp_port) },
+        { name = "SMTP_SECURE", value = tostring(var.smtp_secure) },
+        { name = "SMTP_FROM", value = var.smtp_from },
+      ] : [])
 
-      secrets = [
+      secrets = concat([
         { name = "DB_USER", valueFrom = aws_ssm_parameter.db_username.arn },
         { name = "DB_PASSWORD", valueFrom = aws_ssm_parameter.db_password.arn },
         { name = "JWT_SECRET", valueFrom = aws_ssm_parameter.jwt_secret.arn },
-      ]
+        ], local.mail_enabled ? [
+        { name = "SMTP_USER", valueFrom = aws_ssm_parameter.smtp_user.arn },
+        { name = "SMTP_PASSWORD", valueFrom = aws_ssm_parameter.smtp_password.arn },
+      ] : [])
 
       logConfiguration = {
         logDriver = "awslogs"

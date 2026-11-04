@@ -12,7 +12,7 @@
 // in the env-var value, which breaks WebSocket URLs (space → %20). Always trim.
 declare global {
   interface Window {
-    __APP_CONFIG__?: { API_URL?: string; SITE_URL?: string; APP_URL?: string; DASHBOARD_URL?: string };
+    __APP_CONFIG__?: { API_URL?: string; SITE_URL?: string; APP_URL?: string; DASHBOARD_URL?: string; GOOGLE_CLIENT_ID?: string };
   }
 }
 
@@ -33,3 +33,10 @@ const trimOrigin = (v?: string): string | undefined => {
 export const SITE_URL = typeof window !== 'undefined' ? trimOrigin(window.__APP_CONFIG__?.SITE_URL) : undefined;
 export const APP_URL = typeof window !== 'undefined' ? trimOrigin(window.__APP_CONFIG__?.APP_URL) : undefined;
 export const DASHBOARD_URL = typeof window !== 'undefined' ? trimOrigin(window.__APP_CONFIG__?.DASHBOARD_URL) : undefined;
+
+// Google sign-in (patients only). The OAuth *web* client id — public by
+// design, it is in every page that shows the button. Unset = no button.
+export const GOOGLE_CLIENT_ID: string | undefined =
+  (typeof window !== 'undefined' ? window.__APP_CONFIG__?.GOOGLE_CLIENT_ID?.trim() : undefined)
+  || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim()
+  || undefined;

@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import { pool, revokeRefreshTokens } from '../config/db';
-import { createProfile } from './authController';
+import { createProfile, sendVerificationEmail } from './authController';
+import { isEnabled } from '../config/featureFlags';
+import { logger } from '../config/logger';
 import { recordRegistrationPlan } from './planController';
 import { resolveRegistrationPlan } from '../utils/plans';
 import { isPlanAudience } from '../config/planCatalog';
@@ -333,6 +335,28 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
     }
 
     await client.query('COMMIT');
+
+    // Migration 017: a brand-new owner account confirms its address with a
+    // 6-digit code now, the same as an individual sign-up, so the admin only
+    // reviews organisations whose owner has a working inbox. After COMMIT; a
+    // mail failure is logged, and the code screen offers "send a new code".
+    if (!existingOwner && isEnabled('REQUIRE_EMAIL_VERIFICATION')) {
+      let codeSent = false;
+      try {
+        await sendVerificationEmail(owner);
+        codeSent = true;
+      } catch (mailErr) {
+        logger.error({ err: mailErr, userId: owner.id }, 'Could not send verification code for organisation registration');
+      }
+      res.status(201).json({
+        emailVerificationRequired: true,
+        email: owner.email,
+        codeSent,
+        message: `We sent a 6-digit code to ${owner.email}. Enter it to finish your registration.`,
+      });
+      return;
+    }
+
     res.status(201).json({
       message: existingOwner
         ? 'Registration submitted. An administrator will review your organization — your existing account will gain access to it once approved.'

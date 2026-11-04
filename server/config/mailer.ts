@@ -66,18 +66,29 @@ const assertMailPath = (): void => {
 
 assertMailPath();
 
-const sendMail = async (to: string, subject: string, html: string, opts: { replyTo?: string } = {}): Promise<void> => {
+// `text` is the plain-text alternative. Spam filters score HTML-only mail
+// worse, and some people read mail as text — send both whenever there is one.
+const sendMail = async (
+  to: string,
+  subject: string,
+  html: string,
+  opts: { replyTo?: string; text?: string } = {}
+): Promise<void> => {
   if (!transporter) {
-    console.log(`[mailer] (no SMTP configured) would send to ${to}: ${subject}\n${html}`);
+    console.log(`[mailer] (no SMTP configured) would send to ${to}: ${subject}
+${opts.text ?? html}`);
     return;
   }
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || 'Core Health <no-reply@corehealth.local>',
+    from: process.env.SMTP_FROM || 'Suwela Medical Hub <no-reply@suwela.com>',
     to,
     subject,
     html,
+    text: opts.text,
     replyTo: opts.replyTo,
   });
 };
 
-export { sendMail };
+const mailConfigured = (): boolean => hasSmtp;
+
+export { sendMail, mailConfigured };

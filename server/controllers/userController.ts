@@ -5,8 +5,7 @@ import { parsePaging } from '../utils/pagination';
 import { audit, AuditAction } from '../utils/auditLog';
 import { isEnabled } from '../config/featureFlags';
 import { logger } from '../config/logger';
-// Approving is what makes the account usable, so it is also what sends the
-// confirmation link — see approveUser below.
+// Accounts approved while still unverified are sent a code — see approveUser.
 import { sendVerificationEmail } from './authController';
 import { sendNotification } from '../utils/notify';
 
@@ -465,9 +464,10 @@ const approveUser = async (req: Request, res: Response, next: NextFunction): Pro
     await sendNotification(user.id, 'account_approved', 'Welcome to Suwela',
       'Your registration has been approved. You can now sign in and start using your dashboard.', {});
 
-    // Only if they still need to confirm — an account approved after already
-    // verifying (possible if verification was off when they registered) must
-    // not be sent a pointless link.
+    // Migration 017: registrations now confirm their address with a code
+    // before they reach the admin, so this only fires for accounts created
+    // while verification was off. They get a fresh code; the sign-in screen
+    // asks for it.
     let verificationEmailSent = false;
     if (!user.email_verified_at && isEnabled('REQUIRE_EMAIL_VERIFICATION')) {
       try {

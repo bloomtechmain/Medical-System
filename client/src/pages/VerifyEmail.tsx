@@ -1,102 +1,76 @@
-import { useEffect, useState, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { authApi } from '../services/api';
+import { useState, FormEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
+import AuthShell from '../components/landing/AuthShell';
+import EmailCodeForm, { VerifyResult } from '../components/auth/EmailCodeForm';
 
-// PRO-11: the landing page for the confirmation link emailed at registration.
-type State = { status: 'working' | 'ok' | 'failed'; message: string };
-
+// Migration 017: where the "open the verification screen" link in the code
+// email lands — for someone who closed the registration tab before typing the
+// code in. ?email= pre-fills the address; without it, they type it first.
 const VerifyEmail = () => {
   const [params] = useSearchParams();
-  const token = params.get('token');
-  const [state, setState] = useState<State>({ status: 'working', message: '' });
-  const [resendEmail, setResendEmail] = useState('');
-  const [resent, setResent] = useState(false);
-  // React 18 StrictMode runs effects twice in development. The token is
-  // single-use, so without this guard the second call reports "invalid or
-  // expired" over a verification that actually succeeded.
-  const attempted = useRef(false);
+  const [email, setEmail] = useState(params.get('email')?.trim() || '');
+  const [confirmed, setConfirmed] = useState(!!params.get('email'));
+  const [done, setDone] = useState<string | null>(null);
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!token) {
-      setState({ status: 'failed', message: 'This link is missing its verification token.' });
+  const onVerified = (res: VerifyResult) => {
+    if (res.token && res.user?.role) {
+      login(res.user, res.token, res.refreshToken);
+      toast.success('Email verified — welcome to Suwela!');
+      navigate('/', { replace: true });
       return;
     }
-    if (attempted.current) return;
-    attempted.current = true;
+    setDone(res.message || 'Email verified. You can now sign in.');
+  };
 
-    authApi.verifyEmail(token)
-      .then((res: { message?: string }) =>
-        setState({ status: 'ok', message: res?.message || 'Email confirmed. You can now log in.' }))
-      .catch((err: { message?: string }) =>
-        setState({
-          status: 'failed',
-          message: err?.message || 'This verification link is invalid or has expired.',
-        }));
-  }, [token]);
+  const onEmail = (e: FormEvent) => {
+    e.preventDefault();
+    if (email.includes('@')) setConfirmed(true);
+  };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-900">Confirm your email</h1>
-
-        {state.status === 'working' && (
-          <p className="mt-4 text-sm text-gray-600">Confirming your email address…</p>
-        )}
-
-        {state.status === 'ok' && (
-          <>
-            <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-800">{state.message}</p>
-            <Link
-              to="/login"
-              className="mt-6 inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Go to login
-            </Link>
-          </>
-        )}
-
-        {state.status === 'failed' && (
-          <>
-            <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{state.message}</p>
-
-            {/* A dead end here means an account nobody can get into, so always
-                offer a new link rather than only a "contact support" line. */}
-            <div className="mt-6 border-t border-gray-100 pt-5">
-              <label className="block text-sm font-medium text-gray-700">
-                Send a new confirmation link
-              </label>
-              <input
-                type="email"
-                className="input mt-2"
-                placeholder="you@example.com"
-                value={resendEmail}
-                onChange={e => setResendEmail(e.target.value)}
-              />
-              <button
-                type="button"
-                disabled={!resendEmail || resent}
-                onClick={() => { void authApi.resendVerification(resendEmail).finally(() => setResent(true)); }}
-                className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {resent ? 'Link sent — check your inbox' : 'Send new link'}
+    <AuthShell
+      title={<>Verify your <em className="text-suwela-mint">email.</em></>}
+      text="Enter the 6-digit code we emailed you to finish setting up your Suwela account.">
+      <div className="w-full max-w-md">
+        <div className="sw-rise bg-white rounded-[32px] shadow-[0_24px_60px_-34px_rgba(14,44,82,0.5)] p-7 sm:p-9">
+          {done ? (
+            <>
+              <h1 className="font-display text-3xl text-suwela-navy">Email verified</h1>
+              <p className="mt-4 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900">{done}</p>
+              <Link to="/login" className="btn-primary w-full py-3 rounded-full text-base mt-6 inline-flex items-center justify-center"
+                    style={{ backgroundImage: 'linear-gradient(90deg, #1598E9, #13A58F)' }}>
+                Go to sign in
+              </Link>
+            </>
+          ) : confirmed ? (
+            <EmailCodeForm
+              email={email}
+              initialCodeSent={!!params.get('email')}
+              onVerified={onVerified}
+              onBack={() => setConfirmed(false)}
+              backLabel="Use a different email"
+            />
+          ) : (
+            <form onSubmit={onEmail}>
+              <h1 className="font-display text-3xl text-suwela-navy">Verify your email</h1>
+              <p className="text-suwela-slate mt-2 mb-5 text-sm">Which email address did you register with?</p>
+              <label className="label">Email address</label>
+              <input type="email" required className="input" placeholder="you@example.com"
+                     value={email} onChange={e => setEmail(e.target.value)} />
+              <button type="submit" className="btn-primary w-full mt-5 py-3 rounded-full text-base"
+                      style={{ backgroundImage: 'linear-gradient(90deg, #1598E9, #13A58F)' }}>
+                Continue
               </button>
-              {/* Deliberately the same message whether or not the address
-                  exists: this endpoint needs no login, so a distinguishing
-                  response would confirm which emails have accounts. */}
-              {resent && (
-                <p className="mt-2 text-xs text-gray-500">
-                  If that address needs confirming, a new link is on its way.
-                </p>
-              )}
-            </div>
-
-            <Link to="/login" className="mt-5 inline-block text-sm text-blue-600 hover:underline">
-              Back to login
-            </Link>
-          </>
-        )}
+              <Link to="/login" className="block text-center text-sm text-gray-500 hover:text-gray-700 mt-5">&larr; Back to sign in</Link>
+            </form>
+          )}
+        </div>
       </div>
-    </div>
+    </AuthShell>
   );
 };
 

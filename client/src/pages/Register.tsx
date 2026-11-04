@@ -15,6 +15,8 @@ import RegistrationProgress, { Certification } from '../components/registration/
 import AuthShell from '../components/landing/AuthShell';
 import { roleById } from '../components/landing/roles';
 import { Leaf, Cross } from '../components/landing/Shapes';
+import EmailCodeForm, { VerifyResult } from '../components/auth/EmailCodeForm';
+import GoogleSignInButton, { OrDivider } from '../components/auth/GoogleSignInButton';
 
 interface RoleOption {
   id: string;
@@ -49,6 +51,12 @@ export default function Register() {
   const [typingAffiliation, setTypingAffiliation] = useState(false);
   // After a registration that needs approval: what it is waiting for.
   const [submitted, setSubmitted] = useState<{ name: string; certifications: Certification[]; unlisted: string | null } | null>(null);
+  // Migration 017: the account exists, its address is not confirmed yet —
+  // the 6-digit code step. What to show after it is kept alongside.
+  const [verifying, setVerifying] = useState<{
+    email: string; codeSent: boolean; name: string; role: string;
+    certifications: Certification[]; unlisted: string | null;
+  } | null>(null);
   // Migration 014: the package a doctor signs up for. Patients have none —
   // everything is free for them — so they skip that step entirely.
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -113,7 +121,19 @@ export default function Register() {
       // so there is a record of what this person actually agreed to rather
       // than just that they clicked a button at some point.
       const plan_id = selectedRole === 'doctor' ? plan?.id : undefined;
-      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids, plan_id, accepted_terms_version: LEGAL_VERSION }) as unknown as { user: User; token?: string; refreshToken?: string; pending?: boolean; message?: string };
+      const res = await authApi.register({ name, email, password, role: selectedRole, profile, hospital_organization_ids, plan_id, accepted_terms_version: LEGAL_VERSION }) as unknown as { user: User; token?: string; refreshToken?: string; pending?: boolean; message?: string; emailVerificationRequired?: boolean; codeSent?: boolean; email?: string };
+      if (res.emailVerificationRequired) {
+        setVerifying({
+          email: res.email || res.user?.email || email,
+          codeSent: res.codeSent !== false,
+          name,
+          role: selectedRole,
+          certifications: certifyingOrgs.map(o => ({ organization_name: o.name, status: 'pending' })),
+          unlisted,
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
       if (res.pending && selectedRole === 'doctor') {
         // Show what happens next instead of dropping them on the login page.
         setSubmitted({
@@ -140,8 +160,62 @@ export default function Register() {
     }
   };
 
+  const homeFor = (role: string) => ({ doctor: '/doctor', patient: '/patient' } as Record<string, string>)[role] || '/';
+
+  const onEmailVerified = (res: VerifyResult) => {
+    const v = verifying;
+    setVerifying(null);
+    if (res.token && res.user?.role) {
+      login(res.user, res.token, res.refreshToken);
+      toast.success('Email verified — your account is ready!');
+      navigate(homeFor(res.user.role));
+      return;
+    }
+    if (res.awaitingApproval && v?.role === 'doctor') {
+      setSubmitted({ name: v.name, certifications: v.certifications, unlisted: v.unlisted });
+      return;
+    }
+    toast.success(res.message || 'Email verified. Please sign in.', { duration: 6000 });
+    navigate('/login');
+  };
+
+  // Patients only: Google creates (or signs in to) a patient account, already
+  // verified — Google has confirmed the address.
+  const onGoogleCredential = async (credential: string) => {
+    setLoading(true);
+    try {
+      const res = await authApi.googleAuth(credential, LEGAL_VERSION) as { user: User; token?: string; refreshToken?: string; mfaRequired?: boolean; created?: boolean };
+      if (res.mfaRequired || !res.token) {
+        toast('This account uses two-factor authentication — please sign in from the sign-in page.');
+        navigate('/login');
+        return;
+      }
+      login(res.user, res.token, res.refreshToken);
+      toast.success(res.created ? 'Your patient account has been created. Welcome to Suwela!' : 'Welcome back — you already had an account, so we signed you in.');
+      navigate('/patient');
+    } catch (err: any) {
+      toast.error(err?.message || 'Google sign-up failed. Please try again.', { duration: 6000 });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const roleMeta = roleById(selectedRole === 'doctor' ? 'doctor' : 'patient');
   const specializationChoice = watch('specialization');
+
+  if (verifying) {
+    return (
+      <AuthShell
+        title={<>One last step, <em className="text-suwela-mint">{verifying.name.replace(/^dr\.?\s*/i, '').split(' ')[0]}.</em></>}
+        text="Confirm your email address so we know it is really you — then your account is ready.">
+        <div className="w-full max-w-md">
+          <div className="sw-rise bg-white rounded-[32px] shadow-[0_24px_60px_-34px_rgba(14,44,82,0.5)] p-7 sm:p-9">
+            <EmailCodeForm email={verifying.email} initialCodeSent={verifying.codeSent} onVerified={onEmailVerified} />
+          </div>
+        </div>
+      </AuthShell>
+    );
+  }
 
   if (submitted) {
     return (
@@ -305,6 +379,13 @@ export default function Register() {
                   Registering as {selectedRole}
                 </span>
               </div>
+
+              {selectedRole === 'patient' && (
+                <div>
+                  <GoogleSignInButton onCredential={onGoogleCredential} text="signup_with" />
+                  <OrDivider label="or register with email" />
+                </div>
+              )}
 
               {/* Account Info */}
               <div>
@@ -486,6 +567,7 @@ export default function Register() {
                   The version is submitted with the form and stored on the
                   user row (migration 008). */}
               <p className="text-center text-xs text-gray-400">
+                We will email you a 6-digit code to verify your address.{' '}
                 By creating an account, you agree to Suwela's{' '}
                 <Link to="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-700">
                   Terms of Service
