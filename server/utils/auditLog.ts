@@ -43,6 +43,9 @@ export const AuditAction = {
   PLAN_UPDATED: 'plan.updated',
   PLAN_DELETED: 'plan.deleted',
   PLAN_ASSIGNED: 'plan.assigned',
+  BILLING_PAYMENT_RECORDED: 'billing.payment_recorded',
+  PLAN_CHANGE_APPROVED: 'plan.change_approved',
+  PLAN_CHANGE_REJECTED: 'plan.change_rejected',
 } as const;
 
 export type AuditActionName = (typeof AuditAction)[keyof typeof AuditAction];

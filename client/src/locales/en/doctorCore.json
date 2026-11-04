@@ -116,6 +116,55 @@
       "medicalSchool": "Medical School",
       "affiliation": "Affiliation",
       "bio": "Bio"
+    },
+    "overview": {
+      "todayAppointments": "Today's Appointments",
+      "activeTreatments": "Active Treatments",
+      "findPatient": "Find a Patient",
+      "schedule": "Schedule",
+      "todayTitle": "Today",
+      "openSchedule": "Full schedule",
+      "noAppointmentsToday": "No appointments booked for today.",
+      "pendingBookings_one": "{{count}} booking request waiting for you",
+      "pendingBookings_other": "{{count}} booking requests waiting for you",
+      "noReason": "Consultation",
+      "nextUp": "Next up",
+      "awaitingConfirm": "Needs confirmation",
+      "package": "Your package",
+      "profileTitle": "Profile completeness",
+      "profileDone": "Your profile is complete — patients see everything they need.",
+      "profileMissing": "Missing: {{fields}}. Complete profiles get more bookings.",
+      "completeProfile": "Complete profile",
+      "fields": {
+        "specialization": "specialization",
+        "license": "licence number",
+        "phone": "phone",
+        "fee": "consultation fee",
+        "bio": "bio",
+        "school": "medical school",
+        "experience": "years of experience"
+      },
+      "kpi": {
+        "patients": "Patients",
+        "newThisMonth_one": "{{count}} new this month",
+        "newThisMonth_other": "{{count}} new this month",
+        "consultationsMonth": "Consultations this month",
+        "vsLastMonth": "{{pct}} vs same point last month",
+        "noComparison": "First month on record",
+        "labsPending": "Lab results pending",
+        "oldest_one": "Oldest waiting {{count}} day",
+        "oldest_other": "Oldest waiting {{count}} days",
+        "waitingOnOthers": "Waiting on others",
+        "waitingHint": "Labs and patient approvals"
+      },
+      "trendTitle": "Consultations — last 14 days",
+      "trendTotal_one": "{{count}} consultation",
+      "trendTotal_other": "{{count}} consultations",
+      "trendTooltip_one": "{{date}}: {{count}} consultation",
+      "trendTooltip_other": "{{date}}: {{count}} consultations",
+      "topDiagnoses": "Top diagnoses this month",
+      "noDiagnoses": "No diagnoses recorded this month yet.",
+      "viewAllPatients": "All patients"
     }
   },
   "hospitalDashboard": {
@@ -219,5 +268,41 @@
       "responded": "Responded {{date}}",
       "view": "View"
     }
+  },
+  "patientsPage": {
+    "title": "My Patients",
+    "subtitle": "Everyone you have treated, been given access to, or have an appointment with.",
+    "filters": {
+      "all": "All",
+      "active": "Under treatment",
+      "recent": "Seen in 30 days",
+      "granted": "Access granted",
+      "awaiting": "Awaiting approval"
+    },
+    "stats": {
+      "total": "Patients",
+      "active": "Under treatment",
+      "granted": "Records shared with you",
+      "awaiting": "Awaiting patient approval"
+    },
+    "filterPlaceholder": "Filter by name, email or diagnosis…",
+    "loading": "Loading your patients…",
+    "emptyAll": "No patients yet. Find a patient below or start a consultation.",
+    "emptyFilter": "No patients match this filter.",
+    "lastVisit_one": "Last visit {{date}} · {{count}} visit",
+    "lastVisit_other": "Last visit {{date}} · {{count}} visits",
+    "noVisits": "No visits yet",
+    "badges": {
+      "active_one": "{{count}} active",
+      "active_other": "{{count}} active",
+      "granted": "Access granted",
+      "awaiting": "Awaiting approval"
+    },
+    "consult": "Consult",
+    "openProfile": "Open profile",
+    "toggleHistory": "Show history",
+    "findTitle": "Find any patient",
+    "findSubtitle": "Search every patient on Suwela by name or email, then open their profile to request access to their records.",
+    "alreadyYours": "Your patient"
   }
 }

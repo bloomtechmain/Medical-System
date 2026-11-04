@@ -409,14 +409,113 @@ CREATE TABLE IF NOT EXISTS public.plan_assignments (
   plan_id          INTEGER     REFERENCES public.plans(id)         ON DELETE SET NULL,
   -- NULL = chosen by the account holder at registration.
   assigned_by      INTEGER     REFERENCES public.users(id)         ON DELETE SET NULL,
+  -- change_request = an account holder's upgrade/downgrade, approved by an
+  -- admin (migration 016).
   reason           VARCHAR(40) NOT NULL DEFAULT 'admin_change'
-                   CHECK (reason IN ('registration','admin_change')),
+                   CONSTRAINT plan_assignments_reason_check
+                   CHECK (reason IN ('registration','admin_change','change_request')),
   note             TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK ((user_id IS NULL) <> (organization_id IS NULL))
 );
 CREATE INDEX IF NOT EXISTS idx_plan_assign_user ON public.plan_assignments (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_plan_assign_org  ON public.plan_assignments (organization_id, created_at DESC);
+
+-- Migration 016 — monthly billing for paid packages. A paid package runs
+-- month to month: plan_expires_at is the end of the covered period, past it
+-- unpaid the account is suspended (dashboard locked until an admin records a
+-- payment). Free packages have no cycle (plan_expires_at NULL). An approved
+-- upgrade/downgrade waits in next_plan_id until next_plan_effective_at.
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS plan_expires_at       TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS plan_suspended_at     TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS next_plan_id          INTEGER REFERENCES public.plans(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS next_plan_effective_at TIMESTAMPTZ;
+ALTER TABLE public.organizations
+  ADD COLUMN IF NOT EXISTS plan_expires_at       TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS plan_suspended_at     TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS next_plan_id          INTEGER REFERENCES public.plans(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS next_plan_effective_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN public.users.plan_expires_at IS
+  'End of the period a paid package is covered until. NULL = no billing cycle (free package, or not yet approved). Past this without a payment the account is suspended.';
+COMMENT ON COLUMN public.users.plan_suspended_at IS
+  'Set when a paid package expired unpaid: the dashboard is locked until an admin records a payment.';
+COMMENT ON COLUMN public.users.next_plan_id IS
+  'An approved upgrade/downgrade waiting for next_plan_effective_at (the start of the next billing period).';
+COMMENT ON COLUMN public.organizations.plan_expires_at IS
+  'End of the period a paid package is covered until. NULL = no billing cycle (free package, or not yet approved). Past this without a payment the organization is suspended.';
+COMMENT ON COLUMN public.organizations.plan_suspended_at IS
+  'Set when a paid package expired unpaid: the dashboard is locked until an admin records a payment.';
+COMMENT ON COLUMN public.organizations.next_plan_id IS
+  'An approved upgrade/downgrade waiting for next_plan_effective_at (the start of the next billing period).';
+
+CREATE INDEX IF NOT EXISTS idx_users_plan_expires ON public.users (plan_expires_at) WHERE plan_expires_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_org_plan_expires   ON public.organizations (plan_expires_at) WHERE plan_expires_at IS NOT NULL;
+
+-- Payments an admin has recorded (no payment gateway: bank transfer, cash…).
+CREATE TABLE IF NOT EXISTS public.subscription_payments (
+  id               SERIAL        PRIMARY KEY,
+  user_id          INTEGER       REFERENCES public.users(id)         ON DELETE CASCADE,
+  organization_id  INTEGER       REFERENCES public.organizations(id) ON DELETE CASCADE,
+  plan_id          INTEGER       REFERENCES public.plans(id)         ON DELETE SET NULL,
+  amount           NUMERIC(12,2) NOT NULL CHECK (amount >= 0),
+  currency         CHAR(3)       NOT NULL DEFAULT 'LKR',
+  method           VARCHAR(20)   NOT NULL DEFAULT 'bank_transfer'
+                   CHECK (method IN ('cash','bank_transfer','card','online','cheque','other')),
+  reference        VARCHAR(120),
+  note             TEXT,
+  months           INTEGER       NOT NULL DEFAULT 1 CHECK (months BETWEEN 1 AND 12),
+  period_start     TIMESTAMPTZ   NOT NULL,
+  period_end       TIMESTAMPTZ   NOT NULL,
+  recorded_by      INTEGER       REFERENCES public.users(id)         ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  CHECK ((user_id IS NULL) <> (organization_id IS NULL)),
+  CHECK (period_end > period_start)
+);
+CREATE INDEX IF NOT EXISTS idx_sub_pay_user    ON public.subscription_payments (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sub_pay_org     ON public.subscription_payments (organization_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sub_pay_created ON public.subscription_payments (created_at DESC);
+
+-- Upgrade / downgrade requests: pending → approved (scheduled) → applied,
+-- or rejected / cancelled.
+CREATE TABLE IF NOT EXISTS public.plan_change_requests (
+  id               SERIAL       PRIMARY KEY,
+  user_id          INTEGER      REFERENCES public.users(id)         ON DELETE CASCADE,
+  organization_id  INTEGER      REFERENCES public.organizations(id) ON DELETE CASCADE,
+  requested_by     INTEGER      REFERENCES public.users(id)         ON DELETE SET NULL,
+  from_plan_id     INTEGER      REFERENCES public.plans(id)         ON DELETE SET NULL,
+  to_plan_id       INTEGER      NOT NULL REFERENCES public.plans(id) ON DELETE CASCADE,
+  direction        VARCHAR(10)  NOT NULL CHECK (direction IN ('upgrade','downgrade')),
+  message          TEXT,
+  status           VARCHAR(12)  NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','approved','applied','rejected','cancelled')),
+  decided_by       INTEGER      REFERENCES public.users(id)         ON DELETE SET NULL,
+  decided_at       TIMESTAMPTZ,
+  decision_note    TEXT,
+  effective_at     TIMESTAMPTZ,
+  applied_at       TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CHECK ((user_id IS NULL) <> (organization_id IS NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pcr_one_open_user ON public.plan_change_requests (user_id)
+  WHERE user_id IS NOT NULL AND status IN ('pending','approved');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pcr_one_open_org  ON public.plan_change_requests (organization_id)
+  WHERE organization_id IS NOT NULL AND status IN ('pending','approved');
+CREATE INDEX IF NOT EXISTS idx_pcr_status ON public.plan_change_requests (status, created_at DESC);
+
+-- Billing reminders already sent (7d / 3d / 1d before expiry, and on expiry).
+CREATE TABLE IF NOT EXISTS public.billing_notices (
+  id               SERIAL      PRIMARY KEY,
+  user_id          INTEGER     REFERENCES public.users(id)         ON DELETE CASCADE,
+  organization_id  INTEGER     REFERENCES public.organizations(id) ON DELETE CASCADE,
+  period_end       TIMESTAMPTZ NOT NULL,
+  stage            VARCHAR(10) NOT NULL CHECK (stage IN ('7d','3d','1d','expired')),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK ((user_id IS NULL) <> (organization_id IS NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_notice_user ON public.billing_notices (user_id, period_end, stage) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_notice_org  ON public.billing_notices (organization_id, period_end, stage) WHERE organization_id IS NOT NULL;
 
 -- Seed packages. Prices are starting points in LKR for an administrator to
 -- adjust from the admin dashboard — nothing in the code depends on them.

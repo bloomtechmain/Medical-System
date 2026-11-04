@@ -68,7 +68,7 @@ export default function Header() {
 
   const handleNotifClick = (n: any) => {
     if (!n.is_read) markOneMutation.mutate(n.id);
-    const to = notificationRoute(n.type, user);
+    const to = notificationRoute(n.type, user, n.data as Record<string, unknown> | null);
     if (to) { setOpen(false); navigate(to); }
   };
 
@@ -162,7 +162,7 @@ export default function Header() {
                     <p className="text-sm text-gray-400">{t('header.noNotifications')}</p>
                   </div>
                 ) : notifications.map((n) => {
-                  const hasRoute = !!notificationRoute(n.type, user);
+                  const hasRoute = !!notificationRoute(n.type, user, n.data as Record<string, unknown> | null);
                   return (
                     <div
                       key={n.id}

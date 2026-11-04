@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/db';
 import { FEATURE_CATALOG, PLAN_AUDIENCES, PlanAudience, isPlanAudience, validateFeatures } from '../config/planCatalog';
-import { toPlan, planForOrganization, effectivePlanForUser, usageSummary, Plan, PlanSubject } from '../utils/plans';
+import { toPlan, planForOrganization, effectivePlanForUser, usageSummary, loadPlan, Plan, PlanSubject } from '../utils/plans';
 import { parsePaging } from '../utils/pagination';
 import { audit, AuditAction } from '../utils/auditLog';
 import { sendNotification } from '../utils/notify';
+import { billingStateFor, switchPlan, notifyAdmins, clearBillingCache } from '../utils/subscriptions';
 
 // Subscription packages (migration 014).
 
@@ -24,7 +25,8 @@ const SUBJECTS_CTE = `
   WITH subjects AS (
     SELECT 'user'::text AS kind, u.id, u.name, u.email AS contact,
            CASE u.role WHEN 'doctor' THEN 'doctor' WHEN 'pharmacist' THEN 'pharmacy' ELSE 'laboratory' END AS audience,
-           u.plan_id, u.is_active, u.approved_at, u.created_at
+           u.plan_id, u.is_active, u.approved_at, u.created_at,
+           u.plan_expires_at, u.plan_suspended_at, u.next_plan_id
       FROM public.users u
      WHERE u.deleted_at IS NULL
        AND (u.role = 'doctor'
@@ -34,7 +36,8 @@ const SUBJECTS_CTE = `
                    WHERE om.user_id = u.id
                      AND o.org_type = CASE u.role WHEN 'pharmacist' THEN 'pharmacy' ELSE 'laboratory' END)))
     UNION ALL
-    SELECT 'organization', o.id, o.name, ou.email, o.org_type, o.plan_id, o.is_active, o.approved_at, o.created_at
+    SELECT 'organization', o.id, o.name, ou.email, o.org_type, o.plan_id, o.is_active, o.approved_at, o.created_at,
+           o.plan_expires_at, o.plan_suspended_at, o.next_plan_id
       FROM public.organizations o
       LEFT JOIN public.users ou ON ou.id = o.owner_user_id
   ),
@@ -68,11 +71,28 @@ const listPublic = async (req: Request, res: Response, next: NextFunction): Prom
 
 // ── Signed-in account ────────────────────────────────────────────────────────
 
+const openRequestFor = async (subject: PlanSubject) => {
+  const { rows: [r] } = await pool.query(
+    `SELECT r.id, r.status, r.direction, r.message, r.created_at, r.effective_at, r.decided_at,
+            r.to_plan_id, tp.name AS to_plan_name, tp.price_monthly::float AS to_plan_price, tp.currency
+       FROM public.plan_change_requests r
+       JOIN public.plans tp ON tp.id = r.to_plan_id
+      WHERE r.${subject.kind === 'user' ? 'user_id' : 'organization_id'} = $1 AND r.status IN ('pending','approved')
+      ORDER BY r.created_at DESC LIMIT 1`,
+    [subject.id]
+  );
+  return r ?? null;
+};
+
 const subjectPayload = async (subject: PlanSubject, plan: Plan | null) => ({
   subject,
   plan,
   features: FEATURE_CATALOG[subject.audience],
   usage: await usageSummary(subject, plan),
+  // Migration 016: where the account is in its billing cycle, and any
+  // upgrade/downgrade it is waiting on.
+  billing: await billingStateFor(subject, plan),
+  open_request: await openRequestFor(subject),
 });
 
 /**
@@ -103,9 +123,11 @@ const getMine = async (req: Request, res: Response, next: NextFunction): Promise
 };
 
 /**
- * The account holder asks to move to another package. There is no payment
- * integration, so this does not change anything itself: it notifies every
- * administrator, who makes the change from the admin dashboard (assign).
+ * The account holder asks to move to another package (upgrade or downgrade).
+ * There is no payment integration, so this changes nothing by itself: it
+ * opens a plan_change_requests row and tells every administrator. An admin
+ * approves it from the Billing tab, and it takes effect from the next
+ * billing period (billingController.approveChangeRequest).
  */
 const requestChange = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -127,21 +149,55 @@ const requestChange = async (req: Request, res: Response, next: NextFunction): P
       label = me?.name ?? 'An account';
     }
     if (!found) { res.status(400).json({ message: 'This account is not on a package' }); return; }
+    const { subject, plan: current } = found;
 
     const { rows: [target] } = await pool.query(
-      'SELECT id, name FROM public.plans WHERE id = $1 AND audience = $2 AND is_active', [plan_id, found.subject.audience]
+      'SELECT id, name, price_monthly::float AS price_monthly, currency, sort_order FROM public.plans WHERE id = $1 AND audience = $2 AND is_active',
+      [plan_id, subject.audience]
     );
     if (!target) { res.status(404).json({ message: 'That package is not available' }); return; }
-    if (found.plan?.id === target.id) { res.status(400).json({ message: `You are already on the ${target.name} package` }); return; }
+    if (current?.id === target.id) { res.status(400).json({ message: `You are already on the ${target.name} package` }); return; }
 
-    const { rows: admins } = await pool.query(
-      "SELECT id FROM public.users WHERE role = 'admin' AND is_active AND deleted_at IS NULL"
-    );
-    const note = typeof message === 'string' && message.trim() ? ` Note: ${message.trim().slice(0, 300)}` : '';
-    await Promise.all(admins.map(a => sendNotification(a.id, 'plan_change_requested', 'Package change requested',
-      `${label} asked to move from ${found!.plan?.name ?? 'the default package'} to ${target.name}.${note}`,
-      { subject: found!.subject, plan_id: target.id })));
-    res.json({ message: `Request sent. An administrator will move you to ${target.name} and you will be notified.` });
+    const open = await openRequestFor(subject);
+    if (open) {
+      res.status(409).json({
+        message: open.status === 'approved'
+          ? `A change to ${open.to_plan_name} is already scheduled. Cancel it first to ask for a different package.`
+          : `You already asked to move to ${open.to_plan_name}. Cancel that request first to ask for a different package.`,
+        request: open,
+      });
+      return;
+    }
+
+    const currentPrice = current?.price_monthly ?? 0;
+    const direction = target.price_monthly > currentPrice
+      || (target.price_monthly === currentPrice && target.sort_order > (current?.sort_order ?? 0)) ? 'upgrade' : 'downgrade';
+    const note = typeof message === 'string' && message.trim() ? message.trim().slice(0, 300) : null;
+
+    let created;
+    try {
+      ({ rows: [created] } = await pool.query(
+        `INSERT INTO public.plan_change_requests (user_id, organization_id, requested_by, from_plan_id, to_plan_id, direction, message)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, status, direction, created_at`,
+        [subject.kind === 'user' ? subject.id : null, subject.kind === 'organization' ? subject.id : null,
+          req.user.id, current?.id ?? null, target.id, direction, note]
+      ));
+    } catch (err) {
+      // Two clicks racing past the check above hit the one-open-request index.
+      if ((err as { code?: string }).code === '23505') {
+        res.status(409).json({ message: 'You already have a package change waiting. Cancel it first to ask for a different one.' });
+        return;
+      }
+      throw err;
+    }
+
+    await notifyAdmins('plan_change_requested', `Package ${direction} requested`,
+      `${label} asked to ${direction} from ${current?.name ?? 'the default package'} to ${target.name}.${note ? ` Note: ${note}` : ''}`,
+      { subject, plan_id: target.id, request_id: created.id });
+    res.status(201).json({
+      message: `Request sent. Once an administrator approves it, you move to ${target.name} from your next billing period.`,
+      request: created,
+    });
   } catch (err) { next(err); }
 };
 
@@ -374,6 +430,7 @@ const listSubscribers = async (req: Request, res: Response, next: NextFunction):
     const { rows } = await pool.query(
       `${SUBJECTS_CTE}
        SELECT e.kind, e.id, e.name, e.contact, e.audience, e.is_active, e.approved_at, e.created_at,
+              e.plan_expires_at, e.plan_suspended_at, np.name AS next_plan_name,
               e.on_default, p.id AS plan_id, p.code AS plan_code, p.name AS plan_name,
               p.price_monthly::float AS price_monthly, p.currency,
               (SELECT pa.created_at FROM public.plan_assignments pa
@@ -381,6 +438,7 @@ const listSubscribers = async (req: Request, res: Response, next: NextFunction):
                 ORDER BY pa.created_at DESC LIMIT 1) AS plan_changed_at
          FROM effective e
          LEFT JOIN public.plans p ON p.id = e.effective_plan_id
+         LEFT JOIN public.plans np ON np.id = e.next_plan_id
          ${filter}
         ORDER BY e.created_at DESC, e.id DESC
         LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -425,15 +483,29 @@ const assign = async (req: Request, res: Response, next: NextFunction): Promise<
       return;
     }
 
+    const fullPlan = await loadPlan(subject.audience, plan.id);
+    const planSubject: PlanSubject = { kind: kind as PlanSubject['kind'], id, audience: subject.audience };
+
     await client.query('BEGIN');
-    const table = kind === 'user' ? 'public.users' : 'public.organizations';
-    await client.query(`UPDATE ${table} SET plan_id = $1 WHERE id = $2`, [plan.id, id]);
+    // Migration 016: switchPlan also keeps the billing cycle consistent —
+    // onto a paid package starts a month, onto a free one ends billing.
+    await switchPlan(client, planSubject, fullPlan!, {
+      assignedBy: req.user.id, reason: 'admin_change', note: note?.trim() || null, previousPlanId: subject.planId,
+    });
+    // A direct change replaces anything that was scheduled; a request for
+    // exactly this package has now been met.
+    const reqCol = kind === 'user' ? 'user_id' : 'organization_id';
     await client.query(
-      `INSERT INTO public.plan_assignments (user_id, organization_id, previous_plan_id, plan_id, assigned_by, reason, note)
-       VALUES ($1,$2,$3,$4,$5,'admin_change',$6)`,
-      [kind === 'user' ? id : null, kind === 'organization' ? id : null, subject.planId, plan.id, req.user.id, note?.trim() || null]
+      `UPDATE public.plan_change_requests
+          SET status = CASE WHEN to_plan_id = $2 THEN 'applied' ELSE 'cancelled' END,
+              applied_at = CASE WHEN to_plan_id = $2 THEN NOW() ELSE applied_at END,
+              decided_by = COALESCE(decided_by, $3), decided_at = COALESCE(decided_at, NOW()),
+              decision_note = COALESCE(decision_note, 'Superseded by an administrator changing the package directly')
+        WHERE ${reqCol} = $1 AND status IN ('pending','approved')`,
+      [id, plan.id, req.user.id]
     );
     await client.query('COMMIT');
+    clearBillingCache();
 
     audit(req, {
       action: AuditAction.PLAN_ASSIGNED,
@@ -513,5 +585,5 @@ const recordRegistrationPlan = async (
 
 export {
   listPublic, getMine, requestChange, getCatalog, listAll, getSummary, create, update, makeDefault, remove,
-  listSubscribers, assign, history, subscriberUsage, recordRegistrationPlan,
+  listSubscribers, assign, history, subscriberUsage, recordRegistrationPlan, subjectFromParams,
 };

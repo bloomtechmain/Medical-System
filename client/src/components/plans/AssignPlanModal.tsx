@@ -16,7 +16,7 @@ interface Props {
 
 interface HistoryRow {
   id: number;
-  reason: 'registration' | 'admin_change';
+  reason: 'registration' | 'admin_change' | 'change_request';
   note: string | null;
   created_at: string;
   previous_plan_name: string | null;

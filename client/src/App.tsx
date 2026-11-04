@@ -35,6 +35,7 @@ const HospitalDashboard     = lazy(() => import('./pages/HospitalDashboard'));
 const ClinicDashboard       = lazy(() => import('./pages/ClinicDashboard'));
 const AdminDashboard        = lazy(() => import('./pages/AdminDashboard'));
 const DoctorDashboard       = lazy(() => import('./pages/DoctorDashboard'));
+const DoctorPatients        = lazy(() => import('./pages/DoctorPatients'));
 const PharmacistDashboard   = lazy(() => import('./pages/PharmacistDashboard'));
 const PatientDashboard      = lazy(() => import('./pages/PatientDashboard'));
 const LaboratoryDashboard   = lazy(() => import('./pages/LaboratoryDashboard'));
@@ -68,6 +69,7 @@ const Organizations         = lazy(() => import('./pages/Organizations'));
 // Migration 014: subscription packages
 const MyPackage             = lazy(() => import('./pages/MyPackage'));
 const AdminPlans            = lazy(() => import('./pages/AdminPlans'));
+const AdminBilling          = lazy(() => import('./pages/AdminBilling'));
 
 const RouteFallback = BrandLoader;
 
@@ -205,6 +207,7 @@ export default function App() {
         <Route path="inventory" element={<Inventory />} />
         <Route path="organizations" element={<Organizations />} />
         <Route path="plans" element={<AdminPlans />} />
+        <Route path="billing" element={<AdminBilling />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 
@@ -239,7 +242,7 @@ export default function App() {
         <Route index element={<DoctorDashboard />} />
         <Route path="consultations"   element={<DoctorConsultations />} />
         <Route path="lab-requests"    element={<RequireFeature feature="lab_requests"><DoctorLabRequests /></RequireFeature>} />
-        <Route path="patients"        element={<DoctorDashboard />} />
+        <Route path="patients"        element={<DoctorPatients />} />
         <Route path="patients/:patientId" element={<DoctorPatientView />} />
         <Route path="requests"        element={<RequireFeature feature="patient_records_access"><DoctorAccessRequests /></RequireFeature>} />
         <Route path="appointments"    element={<RequireFeature feature="online_booking"><DoctorAppointments /></RequireFeature>} />

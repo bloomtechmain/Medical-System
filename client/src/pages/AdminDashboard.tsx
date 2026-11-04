@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { userApi, authApi } from '../services/api';
 import PlanSummaryCard from '../components/plans/PlanSummaryCard';
+import AdminBillingAlerts from '../components/billing/AdminBillingAlerts';
 import DashboardWelcome from '../components/dashboard/DashboardWelcome';
 import { formatDate, formatCurrency } from '../utils/helpers';
 import {
@@ -116,6 +117,9 @@ export default function AdminDashboard() {
           </span>
         </Link>
       )}
+
+      {/* Migration 016: payments due, expiring packages and change requests */}
+      <AdminBillingAlerts />
 
       {/* User stats */}
       <section>

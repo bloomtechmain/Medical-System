@@ -1,0 +1,9 @@
+# State holds the database password and JWT secret — never commit it.
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+*.plan
+*.tfplan
+# Account-specific values (account ID, profile) stay local.
+*.auto.tfvars

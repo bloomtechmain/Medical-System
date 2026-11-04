@@ -23,6 +23,7 @@ import { startQueue, shouldRegisterWorkersHere, QUEUE_WORKER_MODE } from './queu
 import { register as registerLabReportVitalsWorker } from './queue/jobs/extractLabReportVitals';
 import { register as registerPatientReportVitalsWorker } from './queue/jobs/extractPatientReportVitals';
 import { register as registerConsultationOcrWorker } from './queue/jobs/extractConsultationMedicines';
+import { register as registerBillingCycle } from './queue/jobs/billingCycle';
 
 // Fail fast with a clear message instead of starting in a broken state
 // (ARCH-04) — e.g. a missing JWT_SECRET would otherwise only surface later,
@@ -188,6 +189,7 @@ import healthReportRoutes   from './routes/healthReportRoutes';
 import prescriptionAssignmentRoutes from './routes/prescriptionAssignmentRoutes';
 import orgMembershipRequestRoutes from './routes/orgMembershipRequestRoutes';
 import planRoutes            from './routes/planRoutes';
+import billingRoutes         from './routes/billingRoutes';
 import contactRoutes         from './routes/contactRoutes';
 
 app.use('/api/auth',              authRoutes);
@@ -212,6 +214,7 @@ app.use('/api/health-report',     healthReportRoutes);
 app.use('/api/prescription-assignments', prescriptionAssignmentRoutes);
 app.use('/api/org-membership-requests', orgMembershipRequestRoutes);
 app.use('/api/plans',             planRoutes);
+app.use('/api/billing',           billingRoutes);
 app.use('/api/contact',           contactRoutes);
 // Public self-registration — mounted before the admin-gated organizations router
 // so it is never touched by the protect/authorize middleware.
@@ -354,6 +357,7 @@ const start = async (): Promise<void> => {
     await registerLabReportVitalsWorker();
     await registerPatientReportVitalsWorker();
     await registerConsultationOcrWorker();
+    await registerBillingCycle();
     logger.info({ queueWorkerMode: QUEUE_WORKER_MODE }, 'Queue workers registered in the API process');
   } else {
     logger.info(

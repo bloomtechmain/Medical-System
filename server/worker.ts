@@ -9,6 +9,7 @@ import { startQueue, stopQueue, shouldRegisterWorkersHere, QUEUE_WORKER_MODE } f
 import { register as registerLabReportVitalsWorker } from './queue/jobs/extractLabReportVitals';
 import { register as registerPatientReportVitalsWorker } from './queue/jobs/extractPatientReportVitals';
 import { register as registerConsultationOcrWorker } from './queue/jobs/extractConsultationMedicines';
+import { register as registerBillingCycle } from './queue/jobs/billingCycle';
 
 // PRO-15/PERF-06: the OCR and PDF-extraction workers ran inside the API
 // process. The queue (pg-boss) already gave them retries and durability, but
@@ -98,6 +99,7 @@ const start = async (): Promise<void> => {
   await registerLabReportVitalsWorker();
   await registerPatientReportVitalsWorker();
   await registerConsultationOcrWorker();
+  await registerBillingCycle();
 
   ready = true;
   logger.info('Queue worker ready — OCR and extraction jobs are being processed here');

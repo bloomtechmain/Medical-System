@@ -2,13 +2,13 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
-import { accessRequestApi, labViewRequestApi, appointmentApi } from '../../services/api';
+import { accessRequestApi, labViewRequestApi, appointmentApi, billingApi } from '../../services/api';
 import { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Stethoscope, Activity,
   FolderOpen, Users, Pill, Truck, ShoppingCart, Receipt, BarChart2,
   ClipboardList, Microscope, LogOut, Settings, UserSearch, ShieldCheck, Building2,
-  CalendarClock, CalendarPlus, Package,
+  CalendarClock, CalendarPlus, Package, CreditCard,
 } from 'lucide-react';
 import { useDashboardPlan } from '../../hooks/useDashboardPlan';
 import { featureForPath, DASHBOARD_AUDIENCE } from '../../constants/plans';
@@ -29,6 +29,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/admin/organizations',  labelKey: 'nav.organizations', icon: Building2 },
     { to: '/admin/users',          labelKey: 'nav.users',         icon: Users },
     { to: '/admin/plans',          labelKey: 'nav.packages',      icon: Package },
+    { to: '/admin/billing',        labelKey: 'nav.billing',       icon: CreditCard, badge: 'billing' },
     { to: '/admin/medicines',      labelKey: 'nav.medicines',     icon: Pill },
     { to: '/admin/suppliers',      labelKey: 'nav.suppliers',     icon: Truck },
     { to: '/admin/inventory',      labelKey: 'nav.inventory',     icon: BarChart2 },
@@ -153,7 +154,15 @@ export default function Sidebar() {
   // Patient: lab view requests waiting for their response
   const labViewPending   = (labViewRequests as Array<{ status: string }>).filter(r => r.status === 'pending').length;
   const apptPending      = (appointments as Array<{ status: string }>).filter(r => r.status === 'pending').length;
+  // Migration 016: accounts locked for payment + change requests to decide.
+  const { data: billingOverview } = useQuery<{ counts: { suspended: number; pending_requests: number } }>({
+    queryKey: ['billing-overview'],
+    queryFn: billingApi.overview,
+    enabled: user?.role === 'admin',
+    refetchInterval: 120_000,
+  });
   const getBadge = (badgeKey: string): number => {
+    if (badgeKey === 'billing') return (billingOverview?.counts.suspended ?? 0) + (billingOverview?.counts.pending_requests ?? 0);
     if (badgeKey === 'ptRequests') return accessPending + labViewPending;
     if (badgeKey === 'drRequests') return accessPending;
     if (badgeKey === 'apptRequests') return apptPending;

@@ -74,6 +74,9 @@ export function useDashboardPlan(dashboard?: string) {
     features: data?.features ?? [],
     usage: data?.usage ?? {},
     subject: data?.subject ?? null,
+    /** Migration 016: billing cycle of the package on screen (undefined until loaded). */
+    billing: applies ? data?.billing : undefined,
+    openRequest: data?.open_request ?? null,
     has,
     limit,
     refetch,

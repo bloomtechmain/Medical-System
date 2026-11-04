@@ -108,9 +108,11 @@ const emptyMed = () => ({ medicine_name: '', dosage: '', frequency: '', duration
 interface NewConsultationModalProps {
   onClose: () => void;
   onSaved: () => void;
+  /** Pre-selected patient (e.g. "New consultation" from the My Patients page). */
+  initialPatient?: { id: number; name: string; email?: string } | null;
 }
 
-function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
+function NewConsultationModal({ onClose, onSaved, initialPatient }: NewConsultationModalProps) {
   const { t } = useTranslation('doctorClinical');
   const { t: tc } = useTranslation('common');
   const [fields, setFields] = useState({
@@ -119,7 +121,7 @@ function NewConsultationModal({ onClose, onSaved }: NewConsultationModalProps) {
     sick_description: '', diagnosis: '', treatment_description: '',
     lab_tests_requested: '',
   });
-  const [selectedPatient,     setSelectedPatient]     = useState<any>(null);
+  const [selectedPatient,     setSelectedPatient]     = useState<any>(initialPatient ?? null);
   const [selectedLaboratory,  setSelectedLaboratory]  = useState<any>(null);
   const [medicines, setMedicines] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -676,6 +678,7 @@ export default function DoctorConsultations() {
   const { t } = useTranslation('doctorClinical');
   const { t: tc } = useTranslation('common');
   const [showForm, setShowForm]   = useState(false);
+  const [prefillPatient, setPrefillPatient] = useState<{ id: number; name: string; email?: string } | null>(null);
   const [selected, setSelected]   = useState<any>(null);
   const [editing,  setEditing]    = useState<any>(null);
   const qc = useQueryClient();
@@ -689,6 +692,7 @@ export default function DoctorConsultations() {
 
   useEffect(() => {
     if ((location.state as any)?.autoOpen) {
+      setPrefillPatient((location.state as any)?.patient ?? null);
       setShowForm(true);
       navigate(location.pathname, { replace: true, state: null });
     }
@@ -803,7 +807,8 @@ export default function DoctorConsultations() {
 
       {showForm && (
         <NewConsultationModal
-          onClose={() => setShowForm(false)}
+          initialPatient={prefillPatient}
+          onClose={() => { setShowForm(false); setPrefillPatient(null); }}
           onSaved={() => qc.invalidateQueries({ queryKey: ['doctor-consultations'] })}
         />
       )}

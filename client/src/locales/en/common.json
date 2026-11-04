@@ -113,7 +113,8 @@
     "team": "Team",
     "signOut": "Sign out",
     "package": "Package",
-    "packages": "Packages"
+    "packages": "Packages",
+    "billing": "Billing & Payments"
   },
   "navShort": {
     "home": "Home",
@@ -140,7 +141,8 @@
     "team": "Team",
     "signOut": "Sign Out",
     "package": "Package",
-    "packages": "Packages"
+    "packages": "Packages",
+    "billing": "Billing & Payments"
   },
   "roleLabels": {
     "adminPanel": "Admin Panel",
