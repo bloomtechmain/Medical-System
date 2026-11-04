@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
+import { Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { labCatalogApi } from '../services/api';
 import { useModal } from '../hooks/useModal';
@@ -70,7 +71,23 @@ export default function LaboratoryCatalog() {
       <PageHeader
         title={t('catalog.pageTitle')}
         description={t('catalog.pageDescription')}
-        action={<button className="btn-primary" onClick={handleAdd}>{t('catalog.addButton')}</button>}
+        action={
+          <button
+            type="button"
+            onClick={handleAdd}
+            className="group inline-flex items-center gap-2.5 rounded-xl pl-2 pr-5 py-2 text-sm font-semibold text-white
+                       bg-gradient-to-r from-[#1598E9] to-[#13A58F] shadow-md shadow-teal-600/20
+                       transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-600/30
+                       active:translate-y-0 active:shadow-sm
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 ring-1 ring-white/30
+                             transition-transform duration-200 group-hover:rotate-90">
+              <Plus size={16} strokeWidth={2.75} aria-hidden="true" />
+            </span>
+            {t('catalog.addButton')}
+          </button>
+        }
       />
 
       <div className="mb-4">
