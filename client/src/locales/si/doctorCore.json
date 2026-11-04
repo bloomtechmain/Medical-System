@@ -116,6 +116,55 @@
       "medicalSchool": "වෛද්‍ය විද්‍යාලය",
       "affiliation": "සම්බන්ධතාව",
       "bio": "ජීව දත්ත සටහන"
+    },
+    "overview": {
+      "todayAppointments": "අද හමුවීම්",
+      "activeTreatments": "ක්‍රියාත්මක ප්‍රතිකාර",
+      "findPatient": "රෝගියෙකු සොයන්න",
+      "schedule": "කාලසටහන",
+      "todayTitle": "අද",
+      "openSchedule": "සම්පූර්ණ කාලසටහන",
+      "noAppointmentsToday": "අද සඳහා හමුවීම් වෙන් කර නැත.",
+      "pendingBookings_one": "වෙන් කිරීමේ ඉල්ලීම් {{count}}ක් ඔබ එනතුරු බලා සිටී",
+      "pendingBookings_other": "වෙන් කිරීමේ ඉල්ලීම් {{count}}ක් ඔබ එනතුරු බලා සිටී",
+      "noReason": "උපදේශනය",
+      "nextUp": "ඊළඟට",
+      "awaitingConfirm": "තහවුරු කිරීම අවශ්‍යයි",
+      "package": "ඔබගේ පැකේජය",
+      "profileTitle": "පැතිකඩ සම්පූර්ණත්වය",
+      "profileDone": "ඔබගේ පැතිකඩ සම්පූර්ණයි — රෝගීන්ට අවශ්‍ය සියල්ල පෙනේ.",
+      "profileMissing": "අඩුයි: {{fields}}. සම්පූර්ණ පැතිකඩවලට වැඩි වෙන් කිරීම් ලැබේ.",
+      "completeProfile": "පැතිකඩ සම්පූර්ණ කරන්න",
+      "fields": {
+        "specialization": "විශේෂඥතාව",
+        "license": "බලපත්‍ර අංකය",
+        "phone": "දුරකථනය",
+        "fee": "උපදේශන ගාස්තුව",
+        "bio": "හැඳින්වීම",
+        "school": "වෛද්‍ය විද්‍යාලය",
+        "experience": "පළපුරුද්ද (වසර)"
+      },
+      "kpi": {
+        "patients": "රෝගීන්",
+        "newThisMonth_one": "මෙම මාසයේ නව {{count}}",
+        "newThisMonth_other": "මෙම මාසයේ නව {{count}}",
+        "consultationsMonth": "මෙම මාසයේ උපදේශන",
+        "vsLastMonth": "පසුගිය මාසයේ එම දිනට සාපේක්ෂව {{pct}}",
+        "noComparison": "වාර්තාගත පළමු මාසය",
+        "labsPending": "පොරොත්තු රසායනාගාර ප්‍රතිඵල",
+        "oldest_one": "දීර්ඝතම රැඳීම දින {{count}}",
+        "oldest_other": "දීර්ඝතම රැඳීම දින {{count}}",
+        "waitingOnOthers": "අන් අය එනතුරු",
+        "waitingHint": "රසායනාගාර සහ රෝගී අනුමැතීන්"
+      },
+      "trendTitle": "උපදේශන — පසුගිය දින 14",
+      "trendTotal_one": "උපදේශන {{count}}",
+      "trendTotal_other": "උපදේශන {{count}}",
+      "trendTooltip_one": "{{date}}: උපදේශන {{count}}",
+      "trendTooltip_other": "{{date}}: උපදේශන {{count}}",
+      "topDiagnoses": "මෙම මාසයේ ප්‍රධාන රෝග විනිශ්චය",
+      "noDiagnoses": "මෙම මාසයේ තවම රෝග විනිශ්චය සටහන් කර නැත.",
+      "viewAllPatients": "සියලු රෝගීන්"
     }
   },
   "hospitalDashboard": {
@@ -219,5 +268,41 @@
       "responded": "ප්‍රතිචාර දැක්වූයේ {{date}}",
       "view": "බලන්න"
     }
+  },
+  "patientsPage": {
+    "title": "මගේ රෝගීන්",
+    "subtitle": "ඔබ ප්‍රතිකාර කළ, ප්‍රවේශය ලබා දුන් හෝ හමුවීමක් ඇති සියලු දෙනා.",
+    "filters": {
+      "all": "සියල්ල",
+      "active": "ප්‍රතිකාර ලබමින්",
+      "recent": "දින 30 තුළ දුටු",
+      "granted": "ප්‍රවේශය ලබා දී ඇත",
+      "awaiting": "අනුමැතිය එනතුරු"
+    },
+    "stats": {
+      "total": "රෝගීන්",
+      "active": "ප්‍රතිකාර ලබමින්",
+      "granted": "ඔබ සමඟ බෙදාගත් වාර්තා",
+      "awaiting": "රෝගී අනුමැතිය එනතුරු"
+    },
+    "filterPlaceholder": "නම, ඊමේල් හෝ රෝග විනිශ්චය අනුව පෙරන්න…",
+    "loading": "ඔබගේ රෝගීන් පූරණය වෙමින්…",
+    "emptyAll": "තවම රෝගීන් නැත. පහතින් රෝගියෙකු සොයන්න හෝ උපදේශනයක් ආරම්භ කරන්න.",
+    "emptyFilter": "මෙම පෙරහනට ගැළපෙන රෝගීන් නැත.",
+    "lastVisit_one": "අවසන් පැමිණීම {{date}} · පැමිණීම් {{count}}",
+    "lastVisit_other": "අවසන් පැමිණීම {{date}} · පැමිණීම් {{count}}",
+    "noVisits": "තවම පැමිණීම් නැත",
+    "badges": {
+      "active_one": "ක්‍රියාත්මක {{count}}",
+      "active_other": "ක්‍රියාත්මක {{count}}",
+      "granted": "ප්‍රවේශය ලබා දී ඇත",
+      "awaiting": "අනුමැතිය එනතුරු"
+    },
+    "consult": "උපදේශනය",
+    "openProfile": "පැතිකඩ විවෘත කරන්න",
+    "toggleHistory": "ඉතිහාසය පෙන්වන්න",
+    "findTitle": "ඕනෑම රෝගියෙකු සොයන්න",
+    "findSubtitle": "Suwela හි සිටින සෑම රෝගියෙකුම නම හෝ ඊමේල් අනුව සොයා, ඔවුන්ගේ වාර්තාවලට ප්‍රවේශය ඉල්ලීමට පැතිකඩ විවෘත කරන්න.",
+    "alreadyYours": "ඔබගේ රෝගියා"
   }
 }

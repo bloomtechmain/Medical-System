@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { JwtUser } from '../types';
+import { logger } from '../config/logger';
+import { subscriptionBlockFor, isAllowedWhileSuspended } from '../utils/subscriptions';
 
 // SEC-17 #3: a valid JWT signature used to be the only check — a suspended
 // or deleted account kept working for up to 7 days (the token's lifetime)
@@ -25,6 +27,19 @@ const protect = async (req: Request, res: Response, next: NextFunction): Promise
     }
 
     req.user = decoded;
+
+    // Migration 016: a paid package that ran out unpaid locks the dashboard.
+    // Checked here because this is the one place every authenticated request
+    // passes through. Deliberately fail-open: a billing lookup failing must
+    // never take the clinical system down with it.
+    if (!isAllowedWhileSuspended(req.originalUrl.split('?')[0])) {
+      try {
+        const block = await subscriptionBlockFor(decoded);
+        if (block) { res.status(402).json(block); return; }
+      } catch (err) {
+        logger.error({ err, userId: decoded.id }, 'Subscription check failed; allowing the request');
+      }
+    }
 
     // SEC-17 #7: impersonation_log only recorded that a session started —
     // nothing taken during it. Mutating requests (not reads — high-volume,

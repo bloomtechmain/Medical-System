@@ -2,11 +2,16 @@ import type { User } from '../types';
 import {
   Bell, Stethoscope, Pill, CheckCircle2, FlaskConical, ClipboardList, Activity, XCircle,
   MessageCircle, ShieldCheck, CalendarClock, BadgeCheck, Building2, Package, UserCheck, ImageOff,
+  CreditCard, Lock, ArrowRightLeft, Wallet,
   type LucideIcon,
 } from 'lucide-react';
 
 /** Icon for a notification type — shared by the desktop and mobile headers. */
 export function notificationIcon(type: string): LucideIcon {
+  if (type === 'billing_suspended' || type === 'billing_admin_suspended') return Lock;
+  if (type === 'billing_payment_recorded') return Wallet;
+  if (type.startsWith('billing_')) return CreditCard;
+  if (type.startsWith('plan_change')) return ArrowRightLeft;
   if (type === 'new_consultation') return Stethoscope;
   if (type === 'consultation_assigned' || type === 'prescription_preparing') return Pill;
   if (type === 'prescription_dispensed' || type === 'prescription_delivered') return CheckCircle2;
@@ -40,7 +45,29 @@ const doctorBase = (user?: Pick<User, 'organization'> | null): string => {
   return t === 'hospital' ? '/hospital' : t === 'clinic' ? '/clinic' : '/doctor';
 };
 
-export function notificationRoute(type: string, user?: Pick<User, 'role' | 'organization'> | null): string | null {
+/**
+ * The Package page of the dashboard a billing notification is about: the
+ * organisation's dashboard when it concerns an organisation the user owns,
+ * otherwise the user's own.
+ */
+const packageRoute = (user: Pick<User, 'role' | 'organization'> | null | undefined, data?: Record<string, unknown> | null): string | null => {
+  const role = user?.role;
+  const orgType = user?.organization?.org_type;
+  if (data?.kind === 'organization' && orgType) {
+    const base = ({ hospital: '/hospital', clinic: '/clinic', pharmacy: '/pharmacist', laboratory: '/laboratory' } as Record<string, string>)[orgType];
+    if (base) return `${base}/package`;
+  }
+  if (role === 'doctor') return '/doctor/package';
+  if (role === 'pharmacist') return '/pharmacist/package';
+  if (role === 'laboratory') return '/laboratory/package';
+  return null;
+};
+
+export function notificationRoute(
+  type: string,
+  user?: Pick<User, 'role' | 'organization'> | null,
+  data?: Record<string, unknown> | null,
+): string | null {
   const role = user?.role;
   const doc = doctorBase(user);
   const byRole = (routes: Partial<Record<string, string>>): string | null => (role && routes[role]) || null;
@@ -111,11 +138,24 @@ export function notificationRoute(type: string, user?: Pick<User, 'role' | 'orga
     case 'registration_ready_for_review':
       return byRole({ admin: '/admin/users' });
     case 'plan_change_requested':
-      return byRole({ admin: '/admin/plans' });
+      return byRole({ admin: '/admin/billing#requests' });
     case 'plan_changed': {
       const base = byRole({ doctor: doc, pharmacist: '/pharmacist', laboratory: '/laboratory' });
       return base ? `${base}/package` : null;
     }
+
+    // Monthly billing (migration 016)
+    case 'billing_expiring':
+    case 'billing_suspended':
+    case 'billing_payment_recorded':
+    case 'plan_change_approved':
+    case 'plan_change_rejected':
+    case 'plan_change_applied':
+      return packageRoute(user, data);
+    case 'billing_admin_expiring':
+      return byRole({ admin: '/admin/billing#expiring' });
+    case 'billing_admin_suspended':
+      return byRole({ admin: '/admin/billing#due' });
     case 'account_approved':
       return '/';
     default:

@@ -113,7 +113,8 @@
     "team": "කණ්ඩායම",
     "signOut": "ඉවත් වන්න",
     "package": "පැකේජය",
-    "packages": "පැකේජ"
+    "packages": "පැකේජ",
+    "billing": "බිල්පත් සහ ගෙවීම්"
   },
   "navShort": {
     "home": "මුල් පිටුව",
@@ -140,7 +141,8 @@
     "team": "කණ්ඩායම",
     "signOut": "ඉවත් වන්න",
     "package": "පැකේජය",
-    "packages": "පැකේජ"
+    "packages": "පැකේජ",
+    "billing": "බිල්පත් සහ ගෙවීම්"
   },
   "roleLabels": {
     "adminPanel": "පරිපාලක පැනලය",

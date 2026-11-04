@@ -28,12 +28,19 @@ const configuredHosts = (): ZoneHosts | null => {
 // zone domains are not configured (dev/test/single-domain) or the current
 // host matches none of them (e.g. a Railway preview URL) — both cases mean
 // "don't redirect, there's only one place to be."
+// admin.<domain> is a second name for the admin (dashboard) zone, so both
+// admin.suwela.com and dashboard.suwela.com open the main admin panel.
+export const isAdminAlias = (host: string, dashboardHost: string): boolean => {
+  const parent = dashboardHost.split('.').slice(1).join('.');
+  return !!parent && host === `admin.${parent}`;
+};
+
 export const currentZone = (): Zone | null => {
   const hosts = configuredHosts();
   if (!hosts || typeof window === 'undefined') return null;
   const host = window.location.hostname;
   if (host === hosts.app) return 'app';
-  if (host === hosts.dashboard) return 'dashboard';
+  if (host === hosts.dashboard || isAdminAlias(host, hosts.dashboard)) return 'dashboard';
   if (host === hosts.site) return 'site';
   return null;
 };

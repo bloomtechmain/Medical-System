@@ -65,7 +65,7 @@ export default function MobileHeader() {
 
   const handleNotifClick = (n: any) => {
     if (!n.is_read) markOneMutation.mutate(n.id);
-    const to = notificationRoute(n.type, user);
+    const to = notificationRoute(n.type, user, n.data as Record<string, unknown> | null);
     if (to) { setOpen(false); navigate(to); }
   };
 
@@ -123,7 +123,7 @@ export default function MobileHeader() {
                     <p className="text-sm text-gray-400">{t('header.noNotifications')}</p>
                   </div>
                 ) : notifications.slice(0, 10).map(n => {
-                  const hasRoute = !!notificationRoute(n.type, user);
+                  const hasRoute = !!notificationRoute(n.type, user, n.data as Record<string, unknown> | null);
                   return (
                     <div key={n.id} onClick={() => handleNotifClick(n)}
                       className={`flex items-start gap-3 px-4 py-3 active:bg-gray-50 ${hasRoute ? 'cursor-pointer' : ''} ${!n.is_read ? 'bg-primary-50/40' : ''}`}>

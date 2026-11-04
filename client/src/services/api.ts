@@ -74,6 +74,11 @@ api.interceptors.response.use(
     } else if (err.response?.status === 401 && localStorage.getItem('token') && !isAuthEndpoint) {
       clearSessionAndRedirect();
     }
+    // Migration 016: a paid package ran out unpaid. The layout listens for
+    // this and swaps the dashboard for the "payment due" screen.
+    if (err.response?.status === 402 && err.response?.data?.code === 'SUBSCRIPTION_EXPIRED') {
+      window.dispatchEvent(new CustomEvent('suwela:subscription-expired', { detail: err.response.data }));
+    }
     return Promise.reject(err.response?.data || err);
   }
 );
@@ -331,3 +336,20 @@ export const planApi = {
   history:       (kind: string, id: number): Promise<any>         => api.get(`/plans/subscribers/${kind}/${id}/history`),
   usage:         (kind: string, id: number): Promise<any>         => api.get(`/plans/subscribers/${kind}/${id}/usage`),
 };
+
+// Monthly billing for paid packages (migration 016). The /me calls work even
+// while an account is locked for non-payment — that is how it sees what it owes.
+export const billingApi = {
+  mine:            (organization_id?: number | null): Promise<any> => api.get('/billing/me', { params: organization_id ? { organization_id } : {} }),
+  cancelRequest:   (id: number): Promise<any>                      => api.delete(`/billing/me/requests/${id}`),
+  // Admin
+  overview:        (): Promise<any>                                 => api.get('/billing/overview'),
+  accounts:        (params: Record<string, unknown>): Promise<any>  => api.get('/billing/accounts', { params }),
+  payments:        (kind: string, id: number): Promise<any>         => api.get(`/billing/accounts/${kind}/${id}/payments`),
+  recordPayment:   (kind: string, id: number, data: { months?: number; amount?: number | null; method?: string; reference?: string; note?: string }): Promise<any> =>
+    api.post(`/billing/accounts/${kind}/${id}/payments`, data),
+  changeRequests:  (status = 'open'): Promise<any>                  => api.get('/billing/change-requests', { params: { status } }),
+  approveRequest:  (id: number, data: { timing: 'next_period' | 'now'; note?: string }): Promise<any> => api.post(`/billing/change-requests/${id}/approve`, data),
+  rejectRequest:   (id: number, note?: string): Promise<any>        => api.post(`/billing/change-requests/${id}/reject`, { note }),
+};
+

@@ -74,6 +74,17 @@ const REQUIREMENTS: Requirement[] = [
   table('public', 'plans', '014_subscription_plans'),
   column('public', 'users', 'plan_id', '014_subscription_plans'),
   column('public', 'organizations', 'plan_id', '014_subscription_plans'),
+
+  // 015 was missing from this list, so a database without it started
+  // "healthy" and then failed every patient report upload with a raw
+  // `column "vitals_status" does not exist`.
+  column('public', 'organization_membership_requests', 'is_registration', '015_affiliation_certification_and_report_reading'),
+  column('clinical', 'patient_reports', 'vitals_status', '015_affiliation_certification_and_report_reading'),
+
+  column('public', 'users', 'plan_expires_at', '016_subscription_billing'),
+  column('public', 'organizations', 'plan_expires_at', '016_subscription_billing'),
+  table('public', 'subscription_payments', '016_subscription_billing'),
+  table('public', 'plan_change_requests', '016_subscription_billing'),
 ];
 
 const verifySchema = async (): Promise<void> => {

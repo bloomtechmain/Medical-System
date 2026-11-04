@@ -455,6 +455,114 @@ export interface MyPlan {
   plan: Plan | null;
   features: PlanFeatureDefinition[];
   usage: Record<string, number>;
+  /** Migration 016: where the account is in its monthly billing cycle. */
+  billing?: BillingState;
+  open_request?: PlanChangeRequest | null;
+}
+
+// ── Billing (migration 016) ──────────────────────────────────────────────────
+
+export type BillingStatus = 'free' | 'not_started' | 'active' | 'expiring' | 'suspended';
+
+export interface BillingState {
+  status: BillingStatus;
+  expires_at: string | null;
+  suspended_at: string | null;
+  days_left: number | null;
+  next_plan: { id: number; name: string; price_monthly: number; currency: string } | null;
+  next_plan_effective_at: string | null;
+}
+
+export type PlanChangeStatus = 'pending' | 'approved' | 'applied' | 'rejected' | 'cancelled';
+
+export interface PlanChangeRequest {
+  id: number;
+  status: PlanChangeStatus;
+  direction: 'upgrade' | 'downgrade';
+  message: string | null;
+  decision_note?: string | null;
+  created_at: string;
+  decided_at: string | null;
+  effective_at: string | null;
+  applied_at?: string | null;
+  from_plan_id?: number | null;
+  from_plan_name?: string | null;
+  from_plan_price?: number | null;
+  to_plan_id: number;
+  to_plan_name: string;
+  to_plan_price: number;
+  currency: string;
+  // Admin list only
+  kind?: 'user' | 'organization';
+  account_id?: number;
+  account_name?: string;
+  contact?: string | null;
+  audience?: PlanAudience;
+  requested_by_name?: string | null;
+  decided_by_name?: string | null;
+  plan_expires_at?: string | null;
+  plan_suspended_at?: string | null;
+}
+
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'card' | 'online' | 'cheque' | 'other';
+
+export interface SubscriptionPayment {
+  id: number;
+  amount: number;
+  currency: string;
+  method: PaymentMethod;
+  reference: string | null;
+  note: string | null;
+  months: number;
+  period_start: string;
+  period_end: string;
+  created_at: string;
+  plan_name: string | null;
+  recorded_by_name: string | null;
+  account_name: string | null;
+}
+
+export interface MyBilling {
+  subject: PlanSubject;
+  is_holder: boolean;
+  plan: Plan | null;
+  billing: BillingState;
+  payments: SubscriptionPayment[];
+  requests: PlanChangeRequest[];
+  instructions: string;
+}
+
+export interface BillingAccount {
+  kind: 'user' | 'organization';
+  id: number;
+  name: string;
+  contact: string | null;
+  audience: PlanAudience;
+  is_active: boolean;
+  plan_id: number;
+  plan_name: string;
+  price_monthly: number;
+  currency: string;
+  plan_expires_at: string | null;
+  plan_suspended_at: string | null;
+  next_plan_id: number | null;
+  next_plan_name: string | null;
+  next_plan_price: number | null;
+  next_plan_effective_at: string | null;
+  billing_status: BillingStatus;
+  last_payment_at: string | null;
+}
+
+export interface BillingOverview {
+  counts: {
+    free: number; not_started: number; active: number; expiring: number; suspended: number; paid: number;
+    pending_requests: number; scheduled_changes: number;
+  };
+  collected_this_month: { currency: string; amount: number; payments: number }[];
+  due_next_30_days: { currency: string; amount: number; accounts: number }[];
+  expiring: BillingAccount[];
+  suspended: BillingAccount[];
+  recent_payments: SubscriptionPayment[];
 }
 
 export interface PlanSubscriber {
@@ -473,6 +581,9 @@ export interface PlanSubscriber {
   price_monthly: number;
   currency: string;
   plan_changed_at: string | null;
+  plan_expires_at?: string | null;
+  plan_suspended_at?: string | null;
+  next_plan_name?: string | null;
 }
 
 export interface PlanSummary {

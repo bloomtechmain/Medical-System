@@ -16,6 +16,8 @@ const TYPES = [
   'org_join_request', 'org_registration_certification', 'org_doctor_left', 'org_removal_accepted', 'org_removal_declined',
   'org_join_accepted', 'org_join_declined', 'org_removal_request', 'org_registration_certified', 'org_registration_rejected',
   'registration_ready_for_review', 'plan_change_requested', 'plan_changed', 'account_approved',
+  'billing_expiring', 'billing_suspended', 'billing_payment_recorded', 'plan_change_approved', 'plan_change_rejected',
+  'plan_change_applied', 'billing_admin_expiring', 'billing_admin_suspended',
 ];
 
 // The routes App.tsx actually declares: "/section" and "/section/child".
@@ -48,6 +50,10 @@ describe('notificationRoute', () => {
     const broken: string[] = [];
     for (const type of TYPES) {
       for (const user of USERS) {
+        for (const data of [null, { kind: 'user' }, { kind: 'organization' }]) {
+          const to = notificationRoute(type, user as never, data);
+          if (to && !appRoutes.has(to.split('#')[0])) broken.push(`${type} (${user.role}/${user.organization?.org_type ?? '-'}) -> ${to}`);
+        }
         const to = notificationRoute(type, user as never);
         if (to && !appRoutes.has(to.split('#')[0])) broken.push(`${type} (${user.role}/${user.organization?.org_type ?? '-'}) -> ${to}`);
       }
@@ -58,6 +64,13 @@ describe('notificationRoute', () => {
   it('sends a hospital owner to their hospital dashboard, not the personal doctor one', () => {
     expect(notificationRoute('org_registration_certification', USERS[2] as never)).toBe('/hospital/team#certify');
     expect(notificationRoute('lab_report_ready', USERS[3] as never)).toBe('/clinic/lab-requests');
+  });
+
+  it('sends a billing notice to the package page of the dashboard it is about', () => {
+    expect(notificationRoute('billing_expiring', USERS[2] as never, { kind: 'organization' })).toBe('/hospital/package');
+    expect(notificationRoute('billing_expiring', USERS[2] as never, { kind: 'user' })).toBe('/doctor/package');
+    expect(notificationRoute('billing_suspended', USERS[1] as never, { kind: 'user' })).toBe('/doctor/package');
+    expect(notificationRoute('billing_admin_suspended', USERS[6] as never)).toBe('/admin/billing#due');
   });
 
   it('routes the patient to their own pages', () => {

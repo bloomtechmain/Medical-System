@@ -1,20 +1,29 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
-  Search, UserRound, Stethoscope, ArrowUpRight, ChevronDown,
-  FlaskConical, Pill, Clock, Activity, Plus, AlertTriangle, Send, Eye, Users,
+  Stethoscope, FlaskConical, Clock, Activity, Plus, AlertTriangle, Send, Eye, Users,
+  CalendarClock, UserSearch, Package, TrendingUp, TrendingDown, CheckCircle2, ChevronRight, Sparkles, ClipboardList,
 } from 'lucide-react';
-import { authApi, accessRequestApi, consultationApi, labApi, labViewRequestApi } from '../services/api';
+import { authApi, accessRequestApi, consultationApi, labApi, labViewRequestApi, appointmentApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDashboardPlan } from '../hooks/useDashboardPlan';
 import { formatDate, formatDateTime, firstNameOf } from '../utils/helpers';
-import { useDebounce } from '../hooks/useDebounce';
+import { formatPrice } from '../constants/plans';
 import DashboardWelcome, { WelcomeStats } from '../components/dashboard/DashboardWelcome';
+import Countdown from '../components/billing/Countdown';
+
+// The doctor's overview: what today looks like, what is waiting on someone,
+// how the practice is trending, and the state of the account (package,
+// profile). The patient list lives on its own page (DoctorPatients) — this
+// component used to be rendered for both routes.
+
+const DAY = 86_400_000;
 
 const daysSince = (dateStr: string | null | undefined): number => {
   if (!dateStr) return 0;
-  return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24)));
+  return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / DAY));
 };
 
 const waitColor = (days: number): string => {
@@ -23,225 +32,146 @@ const waitColor = (days: number): string => {
   return 'bg-amber-100 text-amber-700';
 };
 
-const STAT_THEMES: Record<string, string> = {
-  blue:   'from-blue-500 to-indigo-600',
-  teal:   'from-teal-500 to-emerald-600',
-  purple: 'from-violet-500 to-purple-600',
-  green:  'from-emerald-500 to-green-600',
-};
+const isoDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-interface StatTileProps {
-  label: string;
-  value: string;
-  color: string;
-}
-
-function StatTile({ label, value, color }: StatTileProps) {
-  const grad = STAT_THEMES[color] || STAT_THEMES.teal;
-  return (
-    <div className="ios-stat-tile relative overflow-hidden">
-      <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${grad} opacity-10`} />
-      <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${grad} flex items-center justify-center mb-3 shadow-lg`}>
-        <ArrowUpRight size={16} strokeWidth={2.5} className="text-white" />
+function KpiTile({ icon: Icon, label, value, sub, tone, to }: {
+  icon: typeof Users; label: string; value: string | number; sub?: React.ReactNode; tone: string; to?: string;
+}) {
+  const body = (
+    <>
+      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-3 ${tone}`}>
+        <Icon size={18} strokeWidth={2.2} />
       </div>
       <p className="text-3xl font-bold text-gray-900 tracking-tight leading-none">{value}</p>
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">{label}</p>
-    </div>
+      {sub && <div className="text-xs text-gray-500 mt-1.5">{sub}</div>}
+    </>
   );
+  return to
+    ? <Link to={to} className="ios-stat-tile block hover:shadow-md transition-shadow">{body}</Link>
+    : <div className="ios-stat-tile">{body}</div>;
 }
 
-interface PatientHistoryPanelProps {
-  patientId: number;
-  patient: any;
-  onViewProfile: () => void;
-}
-
-// ── Inline patient history panel ──────────────────────────────────────────────
-function PatientHistoryPanel({ patientId, patient, onViewProfile }: PatientHistoryPanelProps) {
-  const { t } = useTranslation('doctorCore');
-  const { data, isLoading } = useQuery({
-    queryKey: ['patient-history', patientId],
-    queryFn:  () => consultationApi.getPatientHistory(patientId),
-    enabled:  !!patientId,
-  });
-
-  const consultations: any[] = (data as any)?.consultations || [];
-  const stats         = (data as any)?.stats || {};
-
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-
-  if (isLoading) return (
-    <div className="flex items-center justify-center py-8 text-gray-400 gap-2">
-      <span className="w-4 h-4 border-2 border-gray-200 border-t-primary-400 rounded-full animate-spin" />
-      <span className="text-sm">{t('doctorDashboard.history.loading')}</span>
-    </div>
-  );
-
+/**
+ * Consultations per day over the last 14 days. One series, so one hue and no
+ * legend; thin bars rounded at the data end and anchored to the baseline, a
+ * hover tooltip per bar, and the full series in the aria-label.
+ */
+function ConsultationTrend({ days, label }: {
+  days: { day: string; count: number }[];
+  label: (d: { day: string; count: number }) => string;
+}) {
+  const max = Math.max(1, ...days.map(d => d.count));
   return (
-    <div className="space-y-4 pt-1">
-
-      {/* Patient vitals row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[
-          { icon: '🩸', label: t('doctorDashboard.history.bloodType'),  value: patient.blood_type || '—' },
-          { icon: '⚠️', label: t('doctorDashboard.history.allergies'),   value: patient.allergies  || t('doctorDashboard.history.none') },
-          { icon: '📋', label: t('doctorDashboard.history.conditions'),  value: patient.chronic_conditions || t('doctorDashboard.history.none') },
-          { icon: '🛡️', label: t('doctorDashboard.history.insurance'),   value: patient.insurance_provider || t('doctorDashboard.history.none') },
-        ].map(({ icon, label, value }) => (
-          <div key={label} className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{icon} {label}</p>
-            <p className="text-xs font-bold text-gray-800 truncate">{value}</p>
+    <div>
+      <div className="flex items-end gap-[2px] h-32 border-b border-gray-200" role="img" aria-label={days.map(label).join('; ')}>
+        {days.map(d => (
+          <div key={d.day} className="group relative flex-1 h-full flex items-end justify-center">
+            <div
+              className="w-3/5 rounded-t-[4px] bg-primary-500 group-hover:bg-primary-700 transition-colors"
+              style={{ height: d.count ? `${Math.max(6, (d.count / max) * 100)}%` : '2px', opacity: d.count ? 1 : 0.3 }}
+            />
+            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] font-semibold text-white opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              {label(d)}
+            </span>
           </div>
         ))}
       </div>
-
-      {/* Quick stats */}
-      <div className="grid grid-cols-4 gap-2">
-        {[
-          { icon: Activity,    label: t('doctorDashboard.history.visits'),    value: stats.total_visits    || 0, color: 'text-teal-600',   bg: 'bg-teal-50 border-teal-100'   },
-          { icon: Pill,        label: t('doctorDashboard.history.medicines'), value: stats.total_medicines || 0, color: 'text-blue-600',   bg: 'bg-blue-50 border-blue-100'   },
-          { icon: Stethoscope, label: t('doctorDashboard.history.doctors'),   value: stats.total_doctors   || 0, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-100'},
-          { icon: FlaskConical,label: t('doctorDashboard.history.diagnoses'), value: stats.total_diagnoses || 0, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100'},
-        ].map(({ icon: Icon, label, value, color, bg }) => (
-          <div key={label} className={`rounded-xl border px-3 py-2.5 ${bg} text-center`}>
-            <Icon size={14} strokeWidth={2} className={`${color} mx-auto mb-1`} />
-            <p className={`text-lg font-bold ${color} leading-none`}>{value}</p>
-            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{label}</p>
-          </div>
-        ))}
+      <div className="flex justify-between text-[10px] text-gray-400 mt-1.5">
+        <span>{formatDate(days[0]?.day)}</span>
+        <span>{formatDate(days[days.length - 1]?.day)}</span>
       </div>
-
-      {/* Consultation timeline */}
-      <div>
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
-          {t('doctorDashboard.history.timelineTitle', { count: consultations.length })}
-        </p>
-        {consultations.length === 0 ? (
-          <div className="text-center py-6 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-            <Clock size={22} strokeWidth={1.3} className="mx-auto mb-2 text-gray-300" />
-            <p className="text-sm text-gray-400">{t('doctorDashboard.history.timelineEmpty')}</p>
-          </div>
-        ) : (
-          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-            {consultations.map((c, i) => {
-              const isExp = expandedIdx === i;
-              const isDr  = !!c.doctor_id;
-              return (
-                <div key={c.id} className="bg-gray-50 border border-gray-100 rounded-2xl overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedIdx(isExp ? null : i)}
-                    className="w-full text-left px-3.5 py-2.5 hover:bg-white/70 transition-colors flex items-start justify-between gap-2"
-                  >
-                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-xs mt-0.5 ${
-                        isDr ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'
-                      }`}>
-                        {isDr ? '🩺' : '📝'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-xs font-bold text-gray-800">{formatDate(c.visit_date)}</p>
-                          {c.status && (
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                              c.status === 'dispensed' ? 'bg-green-100 text-green-700' :
-                              c.status === 'active'    ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-gray-100 text-gray-500'
-                            }`}>{c.status}</span>
-                          )}
-                        </div>
-                        {c.diagnosis && (
-                          <p className="text-[10px] text-blue-600 font-semibold mt-0.5 truncate">{t('doctorDashboard.history.dxPrefix', { diagnosis: c.diagnosis })}</p>
-                        )}
-                        {c.doctor_display_name && (
-                          <p className="text-[10px] text-gray-400 truncate">{t('doctorDashboard.history.doctorPrefix', { name: c.doctor_display_name })}</p>
-                        )}
-                      </div>
-                    </div>
-                    <ChevronDown size={13} strokeWidth={2.5} className={`text-gray-400 shrink-0 mt-1 transition-transform ${isExp ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {isExp && (
-                    <div className="px-3.5 pb-3 border-t border-gray-100 pt-2.5 space-y-2">
-                      {[
-                        { label: t('doctorDashboard.history.symptoms'),  value: c.sick_description,      cls: 'bg-orange-50 border-orange-100 text-orange-800' },
-                        { label: t('doctorDashboard.history.diagnosis'), value: c.diagnosis,             cls: 'bg-blue-50 border-blue-100 text-blue-800'       },
-                        { label: t('doctorDashboard.history.treatment'), value: c.treatment_description, cls: 'bg-teal-50 border-teal-100 text-teal-800'       },
-                      ].filter(r => r.value).map(({ label, value, cls }) => (
-                        <div key={label} className={`rounded-xl border px-3 py-2 ${cls}`}>
-                          <p className="text-[9px] font-bold uppercase tracking-wide opacity-60 mb-0.5">{label}</p>
-                          <p className="text-xs leading-relaxed">{value}</p>
-                        </div>
-                      ))}
-                      {c.medicines && c.medicines.length > 0 && (
-                        <div>
-                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">{t('doctorDashboard.history.medicines')}</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {c.medicines.map((m: any) => (
-                              <span key={m.id} className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full pl-2 pr-2.5 py-0.5 text-[10px] font-semibold text-gray-700">
-                                💊 {m.medicine_name}{m.dosage ? ` · ${m.dosage}` : ''}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* View full profile button */}
-      <button
-        onClick={onViewProfile}
-        className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-primary-600 border border-primary-200 bg-primary-50 rounded-2xl hover:bg-primary-100 transition-colors"
-      >
-        {t('doctorDashboard.history.viewFullProfile')} <ArrowUpRight size={14} strokeWidth={2.5} />
-      </button>
     </div>
   );
 }
 
-// ── Main dashboard ────────────────────────────────────────────────────────────
 export default function DoctorDashboard() {
   const { t } = useTranslation('doctorCore');
+  const { t: tb } = useTranslation('billing');
   const { user } = useAuth();
-  const navigate  = useNavigate();
-  const [query, setQuery] = useState('');
-  const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
-  const debouncedQ = useDebounce(query, 350);
+  const navigate = useNavigate();
+  const { plan, billing } = useDashboardPlan('doctor');
 
   const { data: me }      = useQuery({ queryKey: ['me'], queryFn: authApi.me });
   const { data: requests = [] as any[] } = useQuery({ queryKey: ['access-requests'], queryFn: accessRequestApi.getAll });
   const { data: labRequests = [] } = useQuery({ queryKey: ['lab-requests'], queryFn: labApi.getAll });
   const { data: labViewRequests = [] } = useQuery({ queryKey: ['lab-view-requests'], queryFn: labViewRequestApi.getAll });
   const { data: consultations = [] } = useQuery({ queryKey: ['doctor-consultations'], queryFn: consultationApi.getAll });
-
-  const { data: searchResults = [] as any[], isLoading: searching } = useQuery({
-    queryKey: ['patient-search', debouncedQ],
-    queryFn:  () => accessRequestApi.searchPatients(debouncedQ),
-    enabled:  debouncedQ.length >= 1,
-  });
+  const { data: appointments = [] } = useQuery({ queryKey: ['appointments'], queryFn: appointmentApi.getAll });
 
   const profile   = me?.profile;
   const firstName = firstNameOf(me?.name || user?.name, 'Doctor');
 
-  const pendingRequests = requests.filter((r: any) => r.status === 'pending').length;
-  const accepted        = requests.filter((r: any) => r.status === 'accepted').length;
-
   const pendingLabResults = (labRequests as any[])
     .filter((r: any) => r.status !== 'completed')
     .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
   const agingConsultations = (consultations as any[])
     .filter((c: any) => c.status === 'active')
     .sort((a: any, b: any) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
-
   const pendingAccessRequests = (requests as any[]).filter((r: any) => r.status === 'pending');
   const pendingViewRequests   = (labViewRequests as any[]).filter((r: any) => r.status === 'pending');
+
+  // ── Today ──────────────────────────────────────────────────────────────────
+  const today = isoDay(new Date());
+  const todays = (appointments as any[])
+    .filter(a => String(a.appointment_date).slice(0, 10) === today && ['confirmed', 'pending'].includes(a.status))
+    .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)));
+  const nowHm = new Date().toTimeString().slice(0, 5);
+  const nextUp = todays.find(a => a.status === 'confirmed' && String(a.end_time ?? a.start_time).slice(0, 5) >= nowHm);
+  const apptRequests = (appointments as any[]).filter(a => a.status === 'pending').length;
+
+  // ── Practice numbers ───────────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const sameDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate(), 23, 59).getTime();
+    const cs = consultations as any[];
+    const at = (c: any) => new Date(c.visit_date).getTime();
+    const thisMonth = cs.filter(c => at(c) >= monthStart);
+    const lastMonthToDate = cs.filter(c => at(c) >= lastMonthStart && at(c) <= sameDayLastMonth).length;
+    const firstSeen = new Map<number, number>();
+    for (const c of cs) {
+      if (!c.patient_id) continue;
+      firstSeen.set(c.patient_id, Math.min(firstSeen.get(c.patient_id) ?? Infinity, at(c)));
+    }
+    const newPatients = [...firstSeen.values()].filter(ts => ts >= monthStart).length;
+    const days = Array.from({ length: 14 }, (_, i) => {
+      const key = isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13 + i));
+      return { day: key, count: cs.filter(c => String(c.visit_date).slice(0, 10) === key).length };
+    });
+    const diag = new Map<string, number>();
+    for (const c of thisMonth) {
+      const k = (c.diagnosis ?? '').trim();
+      if (k) diag.set(k, (diag.get(k) ?? 0) + 1);
+    }
+    return {
+      patients: firstSeen.size,
+      newPatients,
+      thisMonth: thisMonth.length,
+      lastMonthToDate,
+      days,
+      fortnight: days.reduce((n, d) => n + d.count, 0),
+      topDiagnoses: [...diag.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5),
+    };
+  }, [consultations]);
+  const trend = stats.lastMonthToDate
+    ? Math.round(((stats.thisMonth - stats.lastMonthToDate) / stats.lastMonthToDate) * 100)
+    : null;
+
+  // ── Profile completeness: what patients see when they look a doctor up ─────
+  const profileFields = [
+    { key: 'specialization', ok: !!profile?.specialization },
+    { key: 'license', ok: !!profile?.license_number },
+    { key: 'phone', ok: !!profile?.phone },
+    { key: 'fee', ok: !!profile?.consultation_fee },
+    { key: 'bio', ok: !!profile?.bio },
+    { key: 'school', ok: !!profile?.medical_school },
+    { key: 'experience', ok: !!profile?.years_experience },
+  ];
+  const completeness = Math.round((profileFields.filter(f => f.ok).length / profileFields.length) * 100);
+  const missing = profileFields.filter(f => !f.ok).slice(0, 3);
 
   const recentActivity = [
     ...(labRequests as any[]).filter((r: any) => r.status === 'completed').map((r: any) => ({
@@ -260,28 +190,21 @@ export default function DoctorDashboard() {
 
   const recentPatients = Object.values(
     (consultations as any[]).reduce((acc: Record<number, any>, c: any) => {
-      if (!acc[c.patient_id] || new Date(c.visit_date) > new Date(acc[c.patient_id].visit_date)) {
-        acc[c.patient_id] = c;
-      }
+      if (!acc[c.patient_id] || new Date(c.visit_date) > new Date(acc[c.patient_id].visit_date)) acc[c.patient_id] = c;
       return acc;
     }, {})
   )
     .sort((a: any, b: any) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())
     .slice(0, 6);
 
-  function calcAge(dob: string | null | undefined): number | null {
-    if (!dob) return null;
-    return Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
-  }
+  const waitingOnOthers = pendingLabResults.length + pendingAccessRequests.length + pendingViewRequests.length;
 
-  const handlePatientClick = (patientId: number) => {
-    setExpandedPatientId(prev => prev === patientId ? null : patientId);
-  };
+  const actionBtn = 'flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 transition-colors';
 
   return (
     <div className="space-y-6 p-4 md:p-0">
 
-      {/* Welcome banner */}
+      {/* Welcome */}
       <DashboardWelcome
         role="doctor"
         eyebrow={t('doctorDashboard.welcome.greeting')}
@@ -290,25 +213,15 @@ export default function DoctorDashboard() {
       >
         <WelcomeStats
           items={[
-            { label: t('doctorDashboard.welcome.pendingRequests'), value: pendingRequests },
-            { label: t('doctorDashboard.welcome.accessGranted'), value: accepted },
-            ...(profile?.years_experience
-              ? [{ label: t('doctorDashboard.welcome.yearsExp'), value: profile.years_experience }]
-              : []),
+            { label: t('doctorDashboard.overview.todayAppointments'), value: todays.length },
+            { label: t('doctorDashboard.overview.activeTreatments'), value: agingConsultations.length },
+            { label: t('doctorDashboard.welcome.pendingRequests'), value: pendingAccessRequests.length },
           ]}
         />
       </DashboardWelcome>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
-        <StatTile label={t('doctorDashboard.stats.specialization')} value={profile?.specialization || '—'} color="teal"   />
-        <StatTile label={t('doctorDashboard.stats.licenseNo')}   value={profile?.license_number  || '—'} color="blue"   />
-        <StatTile label={t('doctorDashboard.stats.consultationFee')}  value={profile?.consultation_fee ? `LKR ${Number(profile.consultation_fee).toLocaleString()}` : '—'} color="green"  />
-        <StatTile label={t('doctorDashboard.stats.affiliation')}   value={profile?.hospital_affiliation ? profile.hospital_affiliation.split(' ').slice(0,2).join(' ') + '…' : '—'} color="purple" />
-      </div>
-
-      {/* ── Quick Actions ── */}
-      <div className="ios-tile p-4 flex flex-wrap gap-2">
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => navigate('/doctor/consultations', { state: { autoOpen: true } })}
           className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl shadow-sm hover:opacity-90 transition-opacity"
@@ -321,15 +234,188 @@ export default function DoctorDashboard() {
         >
           <FlaskConical size={15} strokeWidth={2.5} /> {t('doctorDashboard.quickActions.newLabRequest')}
         </button>
-        <button
-          onClick={() => navigate('/doctor/requests')}
-          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-gray-700 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-gray-100 transition-colors"
-        >
+        <button onClick={() => navigate('/doctor/patients')} className={actionBtn}>
+          <UserSearch size={15} strokeWidth={2.5} /> {t('doctorDashboard.overview.findPatient')}
+        </button>
+        <button onClick={() => navigate('/doctor/appointments')} className={actionBtn}>
+          <CalendarClock size={15} strokeWidth={2.5} /> {t('doctorDashboard.overview.schedule')}
+          {apptRequests > 0 && <span className="ml-1 text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5">{apptRequests}</span>}
+        </button>
+        <button onClick={() => navigate('/doctor/requests')} className={actionBtn}>
           <Send size={15} strokeWidth={2.5} /> {t('doctorDashboard.quickActions.viewRequests')}
         </button>
       </div>
 
-      {/* ── Operational Alerts ── */}
+      {/* Today + account */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="ios-tile p-5 xl:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                <CalendarClock size={12} strokeWidth={2.5} /> {t('doctorDashboard.overview.todayTitle')}
+              </p>
+              <p className="text-base font-bold text-gray-900">
+                {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+            <Link to="/doctor/appointments" className="text-xs font-semibold text-primary-600 hover:underline">
+              {t('doctorDashboard.overview.openSchedule')} →
+            </Link>
+          </div>
+
+          {todays.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+              <Sparkles size={22} strokeWidth={1.5} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm text-gray-500">{t('doctorDashboard.overview.noAppointmentsToday')}</p>
+              {apptRequests > 0 && (
+                <Link to="/doctor/appointments" className="inline-block mt-2 text-xs font-semibold text-primary-600 hover:underline">
+                  {t('doctorDashboard.overview.pendingBookings', { count: apptRequests })}
+                </Link>
+              )}
+            </div>
+          ) : (
+            <ol className="space-y-2">
+              {todays.map(a => {
+                const isNext = nextUp?.id === a.id;
+                const past = String(a.end_time ?? a.start_time).slice(0, 5) < nowHm;
+                return (
+                  <li key={a.id} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${
+                    isNext ? 'border-primary-300 bg-primary-50/60' : past ? 'border-gray-100 bg-gray-50/60 opacity-70' : 'border-gray-100 bg-white'}`}>
+                    <div className="w-14 shrink-0 text-center">
+                      <p className="text-sm font-bold text-gray-900 tabular-nums">{String(a.start_time).slice(0, 5)}</p>
+                      <p className="text-[10px] text-gray-400 tabular-nums">{String(a.end_time ?? '').slice(0, 5)}</p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{a.patient_name}</p>
+                      <p className="text-xs text-gray-500 truncate">{a.reason || a.organization_name || t('doctorDashboard.overview.noReason')}</p>
+                    </div>
+                    {isNext && <span className="badge-blue">{t('doctorDashboard.overview.nextUp')}</span>}
+                    {a.status === 'pending' && <span className="badge-yellow">{t('doctorDashboard.overview.awaitingConfirm')}</span>}
+                    {a.patient_id && (
+                      <button onClick={() => navigate(`/doctor/patients/${a.patient_id}`)} className="btn-ghost !px-2 !py-1" title={t('patientsPage.openProfile')}>
+                        <ChevronRight size={16} />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {/* Package & billing */}
+          {plan && (
+            <Link to="/doctor/package" className="ios-tile p-5 block hover:shadow-md transition-shadow">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Package size={12} strokeWidth={2.5} /> {t('doctorDashboard.overview.package')}
+              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-lg font-bold text-gray-900">{plan.name}</p>
+                <span className="text-xs text-gray-500">
+                  {formatPrice(plan.price_monthly, plan.currency)}{plan.price_monthly > 0 ? ` ${tb('perMonth')}` : ''}
+                </span>
+              </div>
+              {billing && (
+                <p className={`text-xs font-semibold mt-1.5 ${
+                  billing.status === 'suspended' ? 'text-red-600' : billing.status === 'expiring' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                  {billing.status === 'expiring' && <>{tb('status.expiring')} · <Countdown to={billing.expires_at} /></>}
+                  {billing.status === 'active' && tb('card.activeTitle', { date: formatDate(billing.expires_at) })}
+                  {billing.status === 'suspended' && tb('status.suspended')}
+                  {billing.status === 'free' && tb('status.free')}
+                  {billing.status === 'not_started' && tb('status.not_started')}
+                </p>
+              )}
+            </Link>
+          )}
+
+          {/* Profile completeness */}
+          <div className="ios-tile p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('doctorDashboard.overview.profileTitle')}</p>
+              <span className={`text-sm font-bold ${completeness === 100 ? 'text-emerald-600' : 'text-gray-900'}`}>{completeness}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+              <div className={`h-full rounded-full ${completeness === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`} style={{ width: `${completeness}%` }} />
+            </div>
+            {completeness === 100 ? (
+              <p className="text-xs text-emerald-700 mt-2 flex items-center gap-1"><CheckCircle2 size={13} /> {t('doctorDashboard.overview.profileDone')}</p>
+            ) : (
+              <>
+                <p className="text-xs text-gray-500 mt-2">
+                  {t('doctorDashboard.overview.profileMissing', {
+                    fields: missing.map(f => t(`doctorDashboard.overview.fields.${f.key}`)).join(', '),
+                  })}
+                </p>
+                <Link to="/doctor/settings" className="inline-block mt-2 text-xs font-semibold text-primary-600 hover:underline">
+                  {t('doctorDashboard.overview.completeProfile')} →
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+        <KpiTile icon={Users} tone="bg-teal-50 text-teal-700" to="/doctor/patients"
+          label={t('doctorDashboard.overview.kpi.patients')} value={stats.patients}
+          sub={t('doctorDashboard.overview.kpi.newThisMonth', { count: stats.newPatients })} />
+        <KpiTile icon={Stethoscope} tone="bg-blue-50 text-blue-700" to="/doctor/consultations"
+          label={t('doctorDashboard.overview.kpi.consultationsMonth')} value={stats.thisMonth}
+          sub={trend === null ? t('doctorDashboard.overview.kpi.noComparison') : (
+            <span className={`inline-flex items-center gap-1 font-semibold ${trend >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {trend >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              {t('doctorDashboard.overview.kpi.vsLastMonth', { pct: `${trend >= 0 ? '+' : ''}${trend}%` })}
+            </span>
+          )} />
+        <KpiTile icon={FlaskConical} tone="bg-violet-50 text-violet-700" to="/doctor/lab-requests"
+          label={t('doctorDashboard.overview.kpi.labsPending')} value={pendingLabResults.length}
+          sub={pendingLabResults.length ? t('doctorDashboard.overview.kpi.oldest', { count: daysSince(pendingLabResults[0]?.created_at) }) : undefined} />
+        <KpiTile icon={Clock} tone="bg-amber-50 text-amber-700" to="/doctor/requests"
+          label={t('doctorDashboard.overview.kpi.waitingOnOthers')} value={waitingOnOthers}
+          sub={t('doctorDashboard.overview.kpi.waitingHint')} />
+      </div>
+
+      {/* Trend + top diagnoses */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="ios-tile p-5 xl:col-span-2">
+          <div className="flex items-baseline justify-between mb-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Activity size={12} strokeWidth={2.5} /> {t('doctorDashboard.overview.trendTitle')}
+            </p>
+            <p className="text-xs text-gray-500">{t('doctorDashboard.overview.trendTotal', { count: stats.fortnight })}</p>
+          </div>
+          <ConsultationTrend
+            days={stats.days}
+            label={d => t('doctorDashboard.overview.trendTooltip', { date: formatDate(d.day), count: d.count })}
+          />
+        </div>
+        <div className="ios-tile p-5">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <ClipboardList size={12} strokeWidth={2.5} /> {t('doctorDashboard.overview.topDiagnoses')}
+          </p>
+          {stats.topDiagnoses.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">{t('doctorDashboard.overview.noDiagnoses')}</p>
+          ) : (
+            <ul className="space-y-2.5">
+              {stats.topDiagnoses.map(([name, n]) => (
+                <li key={name}>
+                  <div className="flex justify-between text-sm">
+                    <span className="font-semibold text-gray-800 truncate pr-2">{name}</span>
+                    <span className="text-gray-500 tabular-nums">{n}</span>
+                  </div>
+                  <div className="h-1.5 mt-1 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-primary-400" style={{ width: `${(n / stats.topDiagnoses[0][1]) * 100}%` }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* ── Action centre: things waiting on someone ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="ios-tile p-5">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
@@ -426,115 +512,17 @@ export default function DoctorDashboard() {
         </div>
       </div>
 
-      {/* ── Patient Search ── */}
-      <div className="ios-tile p-5 space-y-4">
-        <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{t('doctorDashboard.search.title')}</p>
-          <p className="text-base font-bold text-gray-900">{t('doctorDashboard.search.subtitle')}</p>
-        </div>
-
-        {/* Search input */}
-        <div className="relative">
-          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-            <Search size={16} strokeWidth={2} className="text-gray-400" />
-          </div>
-          <input
-            type="text"
-            placeholder={t('dashboard.search.placeholder')}
-            value={query}
-            onChange={e => { setQuery(e.target.value); setExpandedPatientId(null); }}
-            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all"
-          />
-          {query && (
-            <button onClick={() => { setQuery(''); setExpandedPatientId(null); }}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              ×
-            </button>
-          )}
-        </div>
-
-        {/* Results */}
-        {debouncedQ.length >= 1 && (
-          <div className="space-y-2">
-            {searching ? (
-              <div className="flex items-center gap-2 py-4 justify-center text-gray-400 text-sm">
-                <span className="w-4 h-4 border-2 border-gray-200 border-t-primary-400 rounded-full animate-spin" />
-                {t('dashboard.search.searching')}
-              </div>
-            ) : searchResults.length === 0 ? (
-              <div className="text-center py-6 text-gray-400">
-                <UserRound size={28} strokeWidth={1.3} className="mx-auto mb-2 text-gray-200" />
-                <p className="text-sm">{t('dashboard.search.noResults', { query: debouncedQ })}</p>
-              </div>
-            ) : (
-              searchResults.map((pt: any) => {
-                const age        = calcAge(pt.date_of_birth);
-                const isExpanded = expandedPatientId === pt.id;
-                return (
-                  <div key={pt.id} className={`border rounded-2xl transition-all overflow-hidden ${
-                    isExpanded
-                      ? 'border-primary-200 bg-primary-50/20'
-                      : 'border-gray-100 bg-gray-50 hover:border-primary-200 hover:bg-primary-50/30'
-                  }`}>
-                    {/* Patient row */}
-                    <div
-                      className="flex items-center gap-3 px-4 py-3 cursor-pointer"
-                      onClick={() => handlePatientClick(pt.id)}
-                    >
-                      {/* Avatar */}
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                        {pt.name.charAt(0).toUpperCase()}
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-900 truncate">{pt.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-xs text-gray-400">{pt.email}</span>
-                          {age && <span className="text-[10px] font-semibold bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-md">{t('dashboard.search.yrs', { age })}</span>}
-                          {pt.blood_type && <span className="text-[10px] font-semibold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md">🩸 {pt.blood_type}</span>}
-                          {pt.allergies && <span className="text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">⚠️ {t('dashboard.search.allergiesTag')}</span>}
-                        </div>
-                      </div>
-
-                      {/* Expand indicator */}
-                      <ChevronDown
-                        size={16}
-                        strokeWidth={2.5}
-                        className={`text-gray-400 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-primary-500' : ''}`}
-                      />
-                    </div>
-
-                    {/* Expanded history panel */}
-                    {isExpanded && (
-                      <div className="px-4 pb-4 border-t border-primary-100/60">
-                        <PatientHistoryPanel
-                          patientId={pt.id}
-                          patient={pt}
-                          onViewProfile={() => navigate(`/doctor/patients/${pt.id}`)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        {debouncedQ.length === 0 && (
-          <p className="text-xs text-gray-400 text-center py-3">
-            {t('doctorDashboard.search.hint')}
-          </p>
-        )}
-      </div>
-
-      {/* ── Recently Seen Patients + Activity ── */}
+      {/* ── Recently seen patients + activity ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="ios-tile p-5">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-            <Users size={12} strokeWidth={2.5} /> {t('doctorDashboard.recent.seenPatients')}
-          </p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Users size={12} strokeWidth={2.5} /> {t('doctorDashboard.recent.seenPatients')}
+            </p>
+            <Link to="/doctor/patients" className="text-xs font-semibold text-primary-600 hover:underline">
+              {t('doctorDashboard.overview.viewAllPatients')} →
+            </Link>
+          </div>
           {recentPatients.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-4">{t('doctorDashboard.recent.noConsultations')}</p>
           ) : (
@@ -580,41 +568,6 @@ export default function DoctorDashboard() {
             </ul>
           )}
         </div>
-      </div>
-
-      {/* Doctor profile */}
-      <div className="ios-tile p-5">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{t('doctorDashboard.profile.title')}</p>
-        <div className="divide-y divide-gray-100">
-          {(() => {
-            const fields = [
-              { label: t('doctorDashboard.profile.fullName'),      value: me?.name },
-              { label: t('doctorDashboard.profile.email'),          value: me?.email },
-              { label: t('doctorDashboard.profile.phone'),          value: profile?.phone },
-              { label: t('doctorDashboard.profile.licenseNo'),    value: profile?.license_number },
-              { label: t('doctorDashboard.profile.medicalSchool'), value: profile?.medical_school },
-              { label: t('doctorDashboard.profile.affiliation'),    value: profile?.hospital_affiliation },
-            ];
-            const rows = [];
-            for (let i = 0; i < fields.length; i += 2) rows.push(fields.slice(i, i + 2));
-            return rows.map((row, i) => (
-              <div key={i} className={`grid gap-x-6 divide-x divide-gray-100 py-2.5 first:pt-0 last:pb-0 ${row.length === 2 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
-                {row.map(({ label, value }) => (
-                  <div key={label} className="flex justify-between text-sm gap-3 min-w-0 pl-3 first:pl-0">
-                    <span className="text-gray-400 shrink-0">{label}</span>
-                    <span className="text-gray-900 font-semibold text-right truncate">{value || <span className="text-gray-300">—</span>}</span>
-                  </div>
-                ))}
-              </div>
-            ));
-          })()}
-        </div>
-        {profile?.bio && (
-          <div className="mt-4 pt-4 border-t border-gray-50">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{t('doctorDashboard.profile.bio')}</p>
-            <p className="text-sm text-gray-600 leading-relaxed">{profile.bio}</p>
-          </div>
-        )}
       </div>
     </div>
   );

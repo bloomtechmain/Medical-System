@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { queryAs, RLSActor } from '../config/db';
 import { streamUploadToResponse } from '../utils/fileStorage';
 import { parsePaging } from '../utils/pagination';
+import { logger } from '../config/logger';
 import { enqueue as enqueuePatientReportVitals, READABLE_REPORT_TYPES } from '../queue/jobs/extractPatientReportVitals';
 
 // patient_reports / data_access_requests live in the `clinical` schema
@@ -36,15 +37,26 @@ const create = async (req: Request, res: Response, next: NextFunction): Promise<
     // inline (setImmediate — no retry, lost on restart). See
     // queue/jobs/extractPatientReportVitals.ts. Migration 015: mark it
     // 'pending' first so the reports page can show "reading…" straight away.
+    //
+    // The report and its file are already saved at this point, so nothing
+    // below may turn the upload into an error: when it did (a database
+    // missing migration 015's vitals_status column), the patient saw "upload
+    // failed" for a report that HAD been stored, retried, and ended up with
+    // duplicates. Reading the values is a bonus on top of the upload, never a
+    // condition of it.
     if (READABLE_REPORT_TYPES.includes(report_type)) {
-      const jobId = await enqueuePatientReportVitals({
-        patientId: req.user.id,
-        patientReportId: report.id,
-        filename: req.file.filename,
-      });
-      if (jobId) {
-        await queryAs(actor(req), `UPDATE patient_reports SET vitals_status='pending' WHERE id=$1`, [report.id]);
-        report.vitals_status = 'pending';
+      try {
+        const jobId = await enqueuePatientReportVitals({
+          patientId: req.user.id,
+          patientReportId: report.id,
+          filename: req.file.filename,
+        });
+        if (jobId) {
+          await queryAs(actor(req), `UPDATE patient_reports SET vitals_status='pending' WHERE id=$1`, [report.id]);
+          report.vitals_status = 'pending';
+        }
+      } catch (err) {
+        logger.error({ err, reportId: report.id }, 'Report saved, but queuing it for vitals reading failed');
       }
     }
 

@@ -44,6 +44,20 @@ if [ -n "${RDS_INSTANCE_IDENTIFIER:-}" ]; then
 
   echo "==> Snapshot complete: ${LABEL}"
   echo "SNAPSHOT_LOCATION=rds-snapshot:${LABEL}" >> "${GITHUB_ENV:-/dev/null}"
+
+  # Manual snapshots are kept forever unless deleted, and past the free
+  # backup allowance each one is billed. Keep only the newest SNAPSHOT_KEEP.
+  if [ -n "${SNAPSHOT_KEEP:-}" ]; then
+    OLD=$(aws rds describe-db-snapshots \
+      --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" --snapshot-type manual \
+      --query "reverse(sort_by(DBSnapshots[?starts_with(DBSnapshotIdentifier, 'pre-migration-${ENVIRONMENT}-')], &SnapshotCreateTime))[${SNAPSHOT_KEEP}:].DBSnapshotIdentifier" \
+      --output text)
+    for SNAP in $OLD; do
+      [ "$SNAP" = "None" ] && continue
+      echo "==> Deleting old pre-deploy snapshot ${SNAP}"
+      aws rds delete-db-snapshot --db-snapshot-identifier "$SNAP" >/dev/null
+    done
+  fi
   exit 0
 fi
 

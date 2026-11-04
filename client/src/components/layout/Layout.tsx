@@ -4,6 +4,7 @@ import Header from './Header';
 import MobileHeader from './MobileHeader';
 import MobileBottomNav from './MobileBottomNav';
 import ImpersonationBanner from '../common/ImpersonationBanner';
+import SubscriptionGate from '../billing/SubscriptionGate';
 
 export default function Layout() {
   return (
@@ -32,7 +33,10 @@ export default function Layout() {
             pb-20   = space above fixed mobile bottom-nav (80 px) on mobile
             md resets both so desktop layout is unaffected                 */}
         <main className="flex-1 overflow-y-auto p-4 pt-[72px] pb-[88px] md:p-6 md:pt-6 md:pb-6">
-          <Outlet />
+          {/* Migration 016: expiry countdown banner / locked-for-payment screen */}
+          <SubscriptionGate>
+            <Outlet />
+          </SubscriptionGate>
         </main>
       </div>
 
