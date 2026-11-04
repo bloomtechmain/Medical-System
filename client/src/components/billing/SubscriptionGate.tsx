@@ -22,6 +22,14 @@ import { SUPPORT_EMAIL } from '../site/siteConfig';
 
 const DISMISS_KEY = 'suwela:billing-banner-dismissed';
 
+async function digestDismissValue(value: string): Promise<string> {
+  const encoded = new TextEncoder().encode(value);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `v1:${hashHex}`;
+}
+
 // Where the Package page is for the account the server says is locked.
 const PACKAGE_BASE: Record<string, string> = {
   doctor: '/doctor', pharmacy: '/pharmacist', laboratory: '/laboratory', hospital: '/hospital', clinic: '/clinic',
@@ -51,8 +59,21 @@ export default function SubscriptionGate({ children }: { children: ReactNode }) 
 
   useEffect(() => { if (onPackagePage) setServerBlock(null); }, [onPackagePage]);
 
-  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem(DISMISS_KEY) === billing?.expires_at);
-  useEffect(() => { setDismissed(sessionStorage.getItem(DISMISS_KEY) === billing?.expires_at); }, [billing?.expires_at]);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const syncDismissed = async () => {
+      const expiresAt = billing?.expires_at;
+      if (!expiresAt) {
+        if (!cancelled) setDismissed(sessionStorage.getItem(DISMISS_KEY) === '');
+        return;
+      }
+      const digest = await digestDismissValue(expiresAt);
+      if (!cancelled) setDismissed(sessionStorage.getItem(DISMISS_KEY) === digest);
+    };
+    void syncDismissed();
+    return () => { cancelled = true; };
+  }, [billing?.expires_at]);
 
   if (serverBlock && !onPackagePage && billing?.status !== 'suspended') {
     const pkgBase = PACKAGE_BASE[serverBlock.subject?.audience ?? ''] ?? `/${base}`;
@@ -85,7 +106,12 @@ export default function SubscriptionGate({ children }: { children: ReactNode }) 
           <button
             type="button"
             aria-label={t('banner.dismiss')}
-            onClick={() => { sessionStorage.setItem(DISMISS_KEY, billing.expires_at ?? ''); setDismissed(true); }}
+            onClick={async () => {
+              const expiresAt = billing.expires_at ?? '';
+              const marker = expiresAt ? await digestDismissValue(expiresAt) : '';
+              sessionStorage.setItem(DISMISS_KEY, marker);
+              setDismissed(true);
+            }}
             className="text-amber-700 hover:text-amber-900 p-1"
           >
             <X size={16} />
