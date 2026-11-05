@@ -3,6 +3,7 @@ import { logger } from '../config/logger';
 import { PlanAudience } from '../config/planCatalog';
 import { loadPlan, resolvePlanSubject, Plan, PlanSubject } from './plans';
 import { sendNotification } from './notify';
+import { sendPackageReminderEmails, sendPackageExpiredEmails, PackageEmailFacts } from './accountEmails';
 
 // Monthly billing for paid packages (migration 016).
 //
@@ -344,10 +345,47 @@ const claimNotice = async (subject: PlanSubject, periodEnd: Date, stage: '7d' | 
   return rows.length > 0;
 };
 
+/** Whether this is the first notice of any stage recorded for the period. */
+const isFirstNoticeOfPeriod = async (subject: PlanSubject, periodEnd: Date): Promise<boolean> => {
+  const col = subject.kind === 'user' ? 'user_id' : 'organization_id';
+  const { rows: [r] } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM public.billing_notices WHERE ${col} = $1 AND period_end = $2`,
+    [subject.id, periodEnd]
+  );
+  return (r?.n ?? 0) <= 1;
+};
+
+// The facts the package emails need, for the account's current package.
+const packageEmailFacts = async (
+  subject: PlanSubject, holder: { userId: number | null; name: string }, periodEnd: Date, daysLeft: number,
+  known?: { planName: string; price: string },
+): Promise<PackageEmailFacts> => {
+  let planName = known?.planName;
+  let price = known?.price;
+  if (!planName || !price) {
+    const row = await loadRow(pool, subject);
+    const plan = await loadPlan(subject.audience, row?.plan_id ?? null);
+    planName = plan?.name ?? 'Current';
+    price = plan ? money(plan.price_monthly, plan.currency) : '—';
+  }
+  return {
+    holderUserId: holder.userId,
+    accountName: holder.name,
+    accountType: subject.kind === 'organization' ? `${subject.audience} organisation` : subject.audience,
+    isOrganization: subject.kind === 'organization',
+    planName, price,
+    expiresOn: fmtDate(periodEnd),
+    daysLeft,
+    paymentInstructions: PAYMENT_INSTRUCTIONS(),
+  };
+};
+
 export const sendSuspensionNotices = async (subject: PlanSubject, periodEnd: Date): Promise<void> => {
   if (!(await claimNotice(subject, new Date(periodEnd), 'expired'))) return;
   const holder = await accountHolder(subject);
   const data = { kind: subject.kind, id: subject.id, audience: subject.audience };
+  // Email the holder and every system admin as well as the in-app notices.
+  await sendPackageExpiredEmails(await packageEmailFacts(subject, holder, new Date(periodEnd), 0));
   if (holder.userId) {
     await sendNotification(holder.userId, 'billing_suspended', 'Package expired — payment due',
       subject.kind === 'organization'
@@ -371,12 +409,18 @@ const sendReminder = async (subject: PlanSubject, periodEnd: Date, daysLeft: num
       'Pay before then to keep the dashboard open.',
       data);
   }
-  // Admins hear about it once per period — at the first reminder — and see
-  // the live countdown on their dashboard from then on.
-  if (stage === '7d' || daysLeft <= 1) {
+  // Admins hear about it at the first reminder of the period and again on the
+  // last day, and see the live countdown on their dashboard in between.
+  const tellAdmins = stage === '7d' || daysLeft <= 1 || await isFirstNoticeOfPeriod(subject, periodEnd);
+  if (tellAdmins) {
     await notifyAdmins('billing_admin_expiring', `Payment due ${when}`,
       `${holder.name} (${subject.audience}, ${planName}) expires on ${fmtDate(periodEnd)}.`, data);
   }
+  // The same reminder by email: to the holder at every stage (7, 3, 1 days),
+  // and to the system admins when they get the in-app notice.
+  await sendPackageReminderEmails(
+    await packageEmailFacts(subject, holder, periodEnd, daysLeft, { planName, price }),
+    { alsoAdmins: tellAdmins });
 };
 
 // ── The job ──────────────────────────────────────────────────────────────────

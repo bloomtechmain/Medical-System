@@ -16,6 +16,7 @@ import { resolveRegistrationPlan, effectivePlanForUser, toPlan, Plan } from '../
 import { recordRegistrationPlan } from './planController';
 import { sendNotification } from '../utils/notify';
 import { verificationCodeEmail, passwordResetEmail } from '../utils/emailTemplates';
+import { sendWelcomeEmail, sendPasswordChangedEmail } from '../utils/accountEmails';
 
 const MFA_PENDING_PURPOSE = 'mfa_pending';
 const REFRESH_TOKEN_DAYS = 7;
@@ -352,6 +353,9 @@ const register = async (req: Request, res: Response, next: NextFunction): Promis
       });
       return;
     }
+
+    // No code step in this environment, so the welcome goes out now.
+    void sendWelcomeEmail(user, !user.is_active);
 
     if (!user.is_active) {
       res.status(201).json({
@@ -810,6 +814,7 @@ const changePassword = async (req: Request, res: Response, next: NextFunction): 
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hash, user.id]);
     await revokeRefreshTokens(user.id);
+    void sendPasswordChangedEmail(user, 'changed');
 
     audit(req, {
       action: AuditAction.PASSWORD_CHANGED_SELF,
@@ -952,6 +957,9 @@ const verifyEmail = async (req: Request, res: Response, next: NextFunction): Pro
       [user.id]
     );
     user = updated ?? user;
+    // First confirmation of this address: the account really exists now, so
+    // this is when the welcome goes out (professionals: "under review").
+    if (user.is_active || !user.approved_at) void sendWelcomeEmail(user, !user.is_active);
     audit(req, {
       action: AuditAction.EMAIL_VERIFIED,
       actorId: user.id,
@@ -1145,6 +1153,7 @@ const googleAuth = async (req: Request, res: Response, next: NextFunction): Prom
         await client.query('COMMIT');
         user = inserted;
         created = true;
+        void sendWelcomeEmail(user);
       } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
         throw err;
@@ -1205,6 +1214,7 @@ const acceptTerms = async (req: Request, res: Response, next: NextFunction): Pro
 };
 
 const PASSWORD_RESET_MINUTES = 60;
+const PASSWORD_RESETS_PER_HOUR = 5;
 
 // SEC-17 (auth): forgot-password, step 1 — always responds the same way
 // whether or not the email matches an account, so this can't be used to
@@ -1217,9 +1227,27 @@ const forgotPassword = async (req: Request, res: Response, next: NextFunction): 
     const { email } = req.body as { email: string };
     const generic = { message: 'If an account with that email exists, a password reset link has been sent.' };
 
-    const { rows } = await pool.query<DbUser>('SELECT id, name, email, is_active FROM users WHERE email = $1', [email]);
+    const { rows } = await pool.query<DbUser>(
+      'SELECT id, name, email, is_active FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL',
+      [String(email || '').trim()]
+    );
     if (!rows.length || !rows[0].is_active) { res.json(generic); return; }
     const user = rows[0];
+
+    // Per-account ceiling on top of authLimiter's per-IP one, so this can't be
+    // used to flood someone's inbox. Same generic answer either way.
+    const { rows: recent } = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::bigint AS n FROM public.password_reset_tokens
+        WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+      [user.id]
+    );
+    if (Number(recent[0]?.n ?? 0) >= PASSWORD_RESETS_PER_HOUR) { res.json(generic); return; }
+
+    // Only the newest link works: requesting another cancels older ones.
+    await pool.query(
+      'UPDATE public.password_reset_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL',
+      [user.id]
+    );
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_MINUTES * 60 * 1000);
@@ -1230,7 +1258,14 @@ const forgotPassword = async (req: Request, res: Response, next: NextFunction): 
 
     const resetUrl = buildClientLink(`/reset-password?token=${token}`);
     const mail = passwordResetEmail({ name: user.name, link: resetUrl, minutes: PASSWORD_RESET_MINUTES });
-    await sendMail(user.email, mail.subject, mail.html, { text: mail.text });
+    try {
+      await sendMail(user.email, mail.subject, mail.html, { text: mail.text });
+    } catch (mailErr) {
+      // Logged, not surfaced: an error only for real accounts would tell a
+      // stranger which addresses are registered (the generic answer exists
+      // precisely to avoid that).
+      logger.error({ err: mailErr, userId: user.id }, 'Could not send the password-reset email');
+    }
 
     res.json(generic);
   } catch (err) { next(err); }
@@ -1257,10 +1292,21 @@ const resetPassword = async (req: Request, res: Response, next: NextFunction): P
     );
     if (!rows.length) { res.status(400).json({ message: 'Invalid or expired reset link' }); return; }
 
+    // Claim the link first, so two simultaneous submissions can't both use it.
+    const claimed = await pool.query(
+      'UPDATE public.password_reset_tokens SET used_at = NOW() WHERE id = $1 AND used_at IS NULL', [rows[0].id]);
+    if (!claimed.rowCount) { res.status(400).json({ message: 'Invalid or expired reset link' }); return; }
+
     const hash = await bcrypt.hash(newPassword, 10);
-    await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hash, rows[0].user_id]);
-    await pool.query('UPDATE public.password_reset_tokens SET used_at = NOW() WHERE id = $1', [rows[0].id]);
+    // Opening the emailed link proves the inbox, so an unconfirmed address is
+    // confirmed too — a reset is a full account recovery, not a half one.
+    const { rows: [owner] } = await pool.query<DbUser>(
+      `UPDATE users SET password = $1, updated_at = NOW(), email_verified_at = COALESCE(email_verified_at, NOW())
+        WHERE id = $2 RETURNING id, name, email`,
+      [hash, rows[0].user_id]
+    );
     await revokeRefreshTokens(rows[0].user_id);
+    if (owner) void sendPasswordChangedEmail(owner, 'reset');
 
     // An unauthenticated path: the actor is the account being reset, proven
     // only by possession of the emailed token. Worth recording precisely

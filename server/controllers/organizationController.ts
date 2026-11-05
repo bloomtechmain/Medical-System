@@ -7,6 +7,7 @@ import { logger } from '../config/logger';
 import { recordRegistrationPlan } from './planController';
 import { resolveRegistrationPlan } from '../utils/plans';
 import { isPlanAudience } from '../config/planCatalog';
+import { sendAccountApprovedEmail } from '../utils/accountEmails';
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -101,11 +102,14 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
       SET is_active   = NOT is_active,
           approved_at = CASE WHEN NOT is_active AND approved_at IS NULL THEN NOW() ELSE approved_at END
       WHERE id = $1
-      RETURNING *
+      RETURNING *, (is_active AND approved_at = NOW()) AS approved_now
     `, [req.params.id]);
     if (!rows.length) { res.status(404).json({ message: 'Organization not found' }); return; }
 
-    let org = rows[0];
+    // NOW() is fixed for the statement, so approved_at = NOW() is true exactly
+    // when this UPDATE stamped it: the organisation's first approval.
+    const { approved_now: approvedNow, ...first } = rows[0];
+    let org = first;
 
     // PRO-11: a self-registered org (see registerOrganization) has no
     // schema_name yet — the tenant schema/role are only ever created here,
@@ -136,6 +140,11 @@ const toggleActive = async (req: Request, res: Response, next: NextFunction): Pr
           await revokeRefreshTokens(org.owner_user_id);
         }
       }
+    }
+    if (approvedNow && org.owner_user_id) {
+      const { rows: [owner] } = await pool.query(
+        'SELECT id, name, email FROM public.users WHERE id = $1 AND deleted_at IS NULL', [org.owner_user_id]);
+      if (owner) void sendAccountApprovedEmail(owner, org.name);
     }
     res.json(org);
   } catch (err) { next(err); }
