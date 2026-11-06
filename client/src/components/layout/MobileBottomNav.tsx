@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { LucideIcon } from 'lucide-react';
@@ -135,9 +135,8 @@ interface MoreDrawerProps {
 function MoreDrawer({ items, getBadge, onClose }: MoreDrawerProps) {
   const { t }             = useTranslation('common');
   const { user, logout } = useAuth();
-  const navigate         = useNavigate();
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => { logout(); };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>

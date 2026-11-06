@@ -85,8 +85,27 @@ function slugify(str: string): string {
     .trim()
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
-    .replace(/-+/g, '-');
+    .replace(/-+/g, '-')
+    // The server takes 3-60 characters that start and end with a letter or
+    // number: "City Pharmacy -" used to give "city-pharmacy-", refused.
+    .slice(0, 60)
+    .replace(/^-+|-+$/g, '');
 }
+
+// Same rule as the server (server.ts registerOrgValidators).
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/;
+
+// The server answers a refused field with { errors: [{ path, msg }] } and no
+// message, which used to show only "Registration failed. Please try again."
+const registrationError = (err: any): string => {
+  if (err?.message) return err.message;
+  const first = Array.isArray(err?.errors) ? err.errors[0] : null;
+  if (first?.path === 'slug') return 'The URL slug must be 3-60 lowercase letters, numbers or hyphens, starting and ending with a letter or number.';
+  if (first?.path === 'owner_email') return 'Please enter a valid email address for the owner.';
+  if (first?.path === 'owner_password') return 'The password must be 10-128 characters.';
+  if (first?.msg && first.msg !== 'Invalid value') return first.msg;
+  return 'Registration failed. Please check the details and try again.';
+};
 
 const STEP3_FIELDS: Record<string, string[]> = {
   hospital:   ['phone', 'license_number'],
@@ -209,7 +228,7 @@ export default function OrgRegister() {
       }
       setDone(true);
     } catch (err: any) {
-      toast.error(err.message || 'Registration failed. Please try again.');
+      toast.error(registrationError(err));
     } finally {
       setLoading(false);
     }
@@ -422,7 +441,7 @@ export default function OrgRegister() {
                       placeholder="nawaloka-hospital"
                       {...register('slug', {
                         required: 'Slug is required',
-                        pattern: { value: /^[a-z0-9-]+$/, message: 'Only lowercase letters, numbers, and hyphens' },
+                        pattern: { value: SLUG_PATTERN, message: '3-60 lowercase letters, numbers or hyphens, starting and ending with a letter or number' },
                       })}
                     />
                   </div>

@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { ReactNode, Suspense, lazy, useEffect } from 'react';
+import { ReactNode, Suspense, lazy, useEffect, useRef } from 'react';
 import { useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 import Layout from './components/layout/Layout';
@@ -7,8 +7,8 @@ import TermsGate from './components/common/TermsGate';
 import { dashboardContexts, resolveActiveContext } from './constants/dashboards';
 import RequireFeature from './components/plans/RequireFeature';
 import BrandLoader from './components/common/BrandLoader';
-import { currentZone, zoneForPath, zoneOrigin } from './utils/zones';
-import { withAuthHandoff } from './utils/authHandoff';
+import { currentZone, isAdminAlias, zoneForPath, zoneOrigin } from './utils/zones';
+import { withAuthHandoff, clearStoredSession, noSessionUrl, SESSION_ORIGIN_KEY } from './utils/authHandoff';
 
 // PERF-10: every page was a static import, so the client shipped as one
 // ~2 MB bundle regardless of role — a patient's browser downloaded the
@@ -86,17 +86,82 @@ const goTo = (path: string) => {
   return <CrossZoneRedirect path={path} />;
 };
 
-const CrossZoneRedirect = ({ path }: { path: string }) => {
+const CrossZoneRedirect = ({ path, origin: forcedOrigin }: { path: string; origin?: string }) => {
   const { token, user } = useAuth();
+  const sent = useRef(false);
   useEffect(() => {
-    const origin = zoneOrigin(zoneForPath(path));
+    if (sent.current) return;
+    const origin = forcedOrigin ?? zoneOrigin(zoneForPath(path.split(/[?#]/)[0]));
     if (!origin) return; // zones misconfigured — nothing sane to do, stay put
+    sent.current = true;
     const target = `${origin}${path}`;
-    const url = token && user
-      ? withAuthHandoff(target, { token, user, refreshToken: localStorage.getItem('refreshToken') || undefined })
-      : target;
+    const here = currentZone();
+    // localStorage, not React state: a silent token refresh updates storage
+    // only, so state can hold an already-replaced token.
+    const liveToken = localStorage.getItem('token') || token;
+    const toSite = origin === zoneOrigin('site');
+    let url = target;
+    // Only dashboards need the session. A signed-in person opening a public
+    // page (say /help) on app.suwela.com goes to www without it.
+    if (liveToken && user && !toSite) {
+      url = withAuthHandoff(target, {
+        token: liveToken,
+        user: JSON.parse(localStorage.getItem('user') || 'null') ?? user,
+        refreshToken: localStorage.getItem('refreshToken') || undefined,
+        adminSession: localStorage.getItem('admin_session') || undefined,
+      });
+      // The session MOVES to the other origin; this one forgets it. www only
+      // remembers where it went (no secret) for the landing and Sign in pages.
+      clearStoredSession();
+      if (here === 'site') localStorage.setItem(SESSION_ORIGIN_KEY, origin);
+    } else if (!liveToken && toSite && here !== null && here !== 'site') {
+      // Leaving app/dashboard with no session: tell www there is none here,
+      // or its sign-in page would send the person straight back.
+      url = noSessionUrl(target, window.location.origin);
+    }
     window.location.replace(url);
-  }, [path, token, user]);
+  }, [path, forcedOrigin, token, user]);
+  return <RouteFallback />;
+};
+
+// www.suwela.com only: where a session moved to after signing in (see
+// authHandoff.ts). Only ever one of our own dashboard origins.
+const movedSessionOrigin = (): string | null => {
+  if (currentZone() !== 'site') return null;
+  const o = localStorage.getItem(SESSION_ORIGIN_KEY);
+  return o && (o === zoneOrigin('app') || o === zoneOrigin('dashboard')) ? o : null;
+};
+
+// The public site lives on www.suwela.com, the dashboards on app.suwela.com,
+// the admin panel on dashboard.suwela.com (admin.suwela.com is forwarded
+// there). A page opened on the wrong one is sent to the right one, keeping
+// its path and query.
+const ROLE_HOME_PATHS = new Set(['/', '/login', '/register', '/org-register', '/forgot-password', '/reset-password']);
+
+const ZoneGuard = ({ children }: { children: ReactNode }) => {
+  const { token, user } = useAuth();
+  const { pathname, search, hash } = useLocation();
+  const here = currentZone();
+  if (here === null) return <>{children}</>;
+
+  const dashboardOrigin = zoneOrigin('dashboard');
+  if (dashboardOrigin && isAdminAlias(window.location.hostname, new URL(dashboardOrigin).hostname)) {
+    return <CrossZoneRedirect path={`${pathname}${search}${hash}`} origin={dashboardOrigin} />;
+  }
+
+  if (zoneForPath(pathname) !== 'site' || here === 'site') return <>{children}</>;
+
+  // A public page on app/dashboard. Signed in on "/" or /login etc.: RoleHome
+  // takes the person to their dashboard right here, so leave it alone.
+  if (token && user?.role && ROLE_HOME_PATHS.has(pathname)) return <>{children}</>;
+  const path = !token && pathname === '/' ? '/login' : pathname;
+  return <CrossZoneRedirect path={`${path}${search}${hash}`} origin={zoneOrigin('site') ?? undefined} />;
+};
+
+// "/", /login and the registration pages on www for someone whose session
+// moved to their dashboard: send them there, as before the split.
+const ToMovedSession = ({ origin }: { origin: string }) => {
+  useEffect(() => { window.location.replace(`${origin}/`); }, [origin]);
   return <RouteFallback />;
 };
 
@@ -108,7 +173,13 @@ interface PrivateRouteProps {
 const PrivateRoute = ({ children, roles }: PrivateRouteProps) => {
   const { user, token } = useAuth();
   const location = useLocation();
-  if (!token || !user) return goTo('/login');
+  if (!token || !user) {
+    // On www after the session moved to its dashboard (an old bookmark such
+    // as www.suwela.com/doctor): open the page where the session lives.
+    const moved = movedSessionOrigin();
+    if (moved) return <CrossZoneRedirect path={`${location.pathname}${location.search}`} />;
+    return goTo('/login');
+  }
 
   if (roles && !roles.includes(user.role as UserRole)) {
     // Requirement 1: a guard on role alone locks an organisation owner out of
@@ -139,13 +210,13 @@ const PrivateRoute = ({ children, roles }: PrivateRouteProps) => {
 const RoleHome = () => {
   const { user, logout } = useAuth();
   const contexts = dashboardContexts(user);
+  const unusable = contexts.length === 0;
 
-  if (contexts.length === 0) {
-    // No usable dashboard at all — a role the client does not know how to
-    // route. Signing out is better than looping on a blank screen.
-    logout();
-    return goTo('/login');
-  }
+  // No usable dashboard at all — a role the client does not know how to
+  // route. Signing out (which goes to the sign-in page) is better than
+  // looping on a blank screen. In an effect: not a state change mid-render.
+  useEffect(() => { if (unusable) logout(); }, [unusable, logout]);
+  if (unusable) return <RouteFallback />;
 
   // More than one, and no remembered choice: ask instead of guessing. Guessing
   // is exactly the behaviour that hid the personal dashboard.
@@ -157,14 +228,16 @@ const RoleHome = () => {
 
 export default function App() {
   const { token, user } = useAuth();
+  const moved = token ? null : movedSessionOrigin();
 
   return (
     <Suspense fallback={<RouteFallback />}>
+    <ZoneGuard>
     {/* COMP-02: prompts for acceptance when this account is not on the
         current Terms/Privacy version. Renders nothing otherwise. */}
     {token && user?.role && <TermsGate />}
     <Routes>
-      <Route path="/"           element={token && user?.role ? <RoleHome /> : <Landing />} />
+      <Route path="/"           element={token && user?.role ? <RoleHome /> : moved ? <ToMovedSession origin={moved} /> : <Landing />} />
       <Route path="/welcome"    element={<Landing />} />
 
       {/* Public website pages. Not redirected when signed in, so the nav works
@@ -175,9 +248,9 @@ export default function App() {
       <Route path="/about"       element={<About />} />
       <Route path="/help"        element={<Help />} />
       <Route path="/compliance"  element={<Compliance />} />
-      <Route path="/login"      element={token && user?.role ? <RoleHome /> : <Login />} />
-      <Route path="/register"   element={token && user?.role ? <RoleHome /> : <Register />} />
-      <Route path="/org-register" element={token && user?.role ? <RoleHome /> : <OrgRegister />} />
+      <Route path="/login"      element={token && user?.role ? <RoleHome /> : moved ? <ToMovedSession origin={moved} /> : <Login />} />
+      <Route path="/register"   element={token && user?.role ? <RoleHome /> : moved ? <ToMovedSession origin={moved} /> : <Register />} />
+      <Route path="/org-register" element={token && user?.role ? <RoleHome /> : moved ? <ToMovedSession origin={moved} /> : <OrgRegister />} />
       <Route path="/forgot-password" element={token && user?.role ? <RoleHome /> : <ForgotPassword />} />
       <Route path="/reset-password"  element={token && user?.role ? <RoleHome /> : <ResetPassword />} />
 
@@ -288,6 +361,7 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </ZoneGuard>
     </Suspense>
   );
 }

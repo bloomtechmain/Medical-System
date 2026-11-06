@@ -45,8 +45,7 @@ export default function ChangePasswordPanel() {
     mutationFn: () => authApi.changePassword({ currentPassword, newPassword }),
     onSuccess: () => {
       toast.success('Password changed. Please sign in again.');
-      logout();
-      window.location.href = '/login';
+      logout(); // goes to the sign-in page itself
     },
     onError: (err: any) => toast.error(err.message || 'Failed to change password'),
   });
