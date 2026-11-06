@@ -31,7 +31,8 @@
     "queue:smoke-test": "node dist/scripts/smokeTestQueue.js",
     "worker": "node dist/worker.js",
     "worker:dev": "tsx watch worker.ts",
-    "mail:test": "tsx scripts/testMail.ts"
+    "mail:test": "tsx scripts/testMail.ts",
+    "mail:preview": "tsx scripts/previewEmails.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",

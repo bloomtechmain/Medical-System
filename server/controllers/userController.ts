@@ -8,6 +8,7 @@ import { logger } from '../config/logger';
 // Accounts approved while still unverified are sent a code — see approveUser.
 import { sendVerificationEmail } from './authController';
 import { sendNotification } from '../utils/notify';
+import { sendAccountApprovedEmail } from '../utils/accountEmails';
 
 // clinical.patient_profiles / clinical.medical_consultations / clinical.lab_requests
 // live behind row-level security — queries against them must carry the
@@ -463,6 +464,9 @@ const approveUser = async (req: Request, res: Response, next: NextFunction): Pro
 
     await sendNotification(user.id, 'account_approved', 'Welcome to Suwela',
       'Your registration has been approved. You can now sign in and start using your dashboard.', {});
+    // An unverified address gets a code below instead; an approval email to an
+    // inbox nobody has proven would be the wrong first message.
+    if (user.email_verified_at) void sendAccountApprovedEmail(user);
 
     // Migration 017: registrations now confirm their address with a code
     // before they reach the admin, so this only fires for accounts created
