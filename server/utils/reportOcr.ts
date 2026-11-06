@@ -27,6 +27,8 @@
  *      extractVitalsFromReport in labVitalsParser.ts), so one pass misreading
  *      "14.5" as "14.6" or "1.45" is out-voted by the others.
  */
+import fs from 'fs';
+import path from 'path';
 
 export interface OcrPass {
   variant: 'enhanced' | 'binarized' | 'deblurred' | 'original';
@@ -228,16 +230,64 @@ export const prepareImageForOcr = async (input: Buffer): Promise<PreparedImages 
   }
 };
 
+/**
+ * The image as JPEG or PNG bytes under ~10 MB, the form Amazon Textract
+ * accepts. JPEG/PNG pass through unchanged; WebP/BMP/GIF/TIFF are re-encoded
+ * as PNG, and an oversized image is scaled down. Null if it can't be decoded.
+ */
+export const asJpegOrPng = async (input: Buffer, maxBytes = 9.5 * 1024 * 1024): Promise<Buffer | null> => {
+  const isJpeg = input[0] === 0xff && input[1] === 0xd8;
+  const isPng = input.subarray(0, 4).toString('latin1') === '\x89PNG';
+  if ((isJpeg || isPng) && input.length <= maxBytes) return input;
+  const cv = await loadCanvas();
+  if (!cv) return null;
+  try {
+    const image = await cv.loadImage(input);
+    let scale = 1;
+    for (let i = 0; i < 4; i++) {
+      const w = Math.max(1, Math.round(image.width * scale)), h = Math.max(1, Math.round(image.height * scale));
+      const canvas = cv.createCanvas(w, h);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(image, 0, 0, w, h);
+      const out: Buffer = canvas.toBuffer('image/jpeg', 92);
+      if (out.length <= maxBytes) return out;
+      scale *= 0.7;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 type TessWorker = {
   setParameters: (p: Record<string, string>) => Promise<unknown>;
   recognize: (img: Buffer | string) => Promise<{ data: { text: string; confidence: number } }>;
   terminate: () => Promise<unknown>;
 };
 
+// The English model ships in the image (Dockerfile: /app/tessdata) and sits
+// at server/eng.traineddata in a checkout. Use it from disk; only when
+// neither exists does tesseract.js fall back to downloading it.
+const localLangPath = (): string | undefined => {
+  const candidates = [
+    process.env.TESSDATA_DIR,
+    path.join(process.cwd(), 'tessdata'),
+    process.cwd(),
+    path.join(__dirname, '..'),
+  ].filter((d): d is string => !!d);
+  return candidates.find(d => fs.existsSync(path.join(d, 'eng.traineddata')));
+};
+
 const createOcrWorker = async (): Promise<TessWorker | null> => {
   try {
     const { createWorker } = await import('tesseract.js');
-    return await createWorker('eng', 1, { logger: () => {} }) as unknown as TessWorker;
+    const langPath = localLangPath();
+    const opts = langPath
+      ? { logger: () => {}, langPath, gzip: false, cacheMethod: 'none' }
+      : { logger: () => {} };
+    return await createWorker('eng', 1, opts) as unknown as TessWorker;
   } catch (err) {
     console.error('OCR worker failed to start:', (err as Error).message);
     return null;

@@ -13,6 +13,14 @@ declare global {
     interface Request {
       user: JwtUser;
     }
+    namespace Multer {
+      interface File {
+        /** S3 mode: the first bytes of the upload, for the file-type check. */
+        headBytes?: Buffer;
+        /** S3 mode: the upload subdirectory (S3 key prefix) it was stored under. */
+        storageSubdir?: string;
+      }
+    }
   }
 }
 

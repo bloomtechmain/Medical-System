@@ -128,6 +128,18 @@ resource "aws_iam_role_policy" "task_uploads" {
   })
 }
 
+# Report reading (OCR_ENGINE=textract): Amazon Textract reads blurred and
+# tilted report photos far better than tesseract. $1.50 per 1,000 pages;
+# images are sent as bytes, nothing is stored by Textract.
+resource "aws_iam_role_policy" "task_textract" {
+  name = "textract-read"
+  role = aws_iam_role.task.id
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{ Effect = "Allow", Action = ["textract:DetectDocumentText"], Resource = "*" }]
+  })
+}
+
 # ── The server ───────────────────────────────────────────────────────────────
 
 resource "aws_instance" "app" {
@@ -286,6 +298,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "CLIENT_URL", value = "https://${var.site_host}" },
         { name = "EXTRA_CORS_ORIGINS", value = "https://${var.app_host},https://${var.dashboard_host},https://${var.admin_host}" },
         { name = "AWS_S3_BUCKET", value = aws_s3_bucket.uploads.bucket },
+        { name = "OCR_ENGINE", value = "textract" },
         { name = "AWS_REGION", value = var.aws_region },
         # Cloudflare → Caddy → api: two proxies, so the client's real IP is
         # two hops back (rate limits must key on the user, not Cloudflare).

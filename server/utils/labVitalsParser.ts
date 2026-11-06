@@ -18,7 +18,8 @@
  *   "Plasma Glucose Fasting   95   mg/dL   70 - 100"
  */
 
-import { ocrImageMultiPass } from './reportOcr';
+import { ocrImageMultiPass, asJpegOrPng } from './reportOcr';
+import { isTextractEnabled, textractImage } from './textractOcr';
 
 export interface ParsedVitals {
   wbc?: number; rbc?: number; hemoglobin?: number; hematocrit?: number;
@@ -142,7 +143,9 @@ function pickNumber(rest: string, field?: VitalField): number | undefined {
     // returning its bound would put a fake "normal" value in the record.
     if (/^\s*[-–~]\s*\d/.test(rest.slice(end)) || /(?:[<>≤≥]|up\s*to)\s*=?\s*$/i.test(rest.slice(0, start))) return undefined;
     const raw = parseFloat(m[1]);
-    if (isNaN(raw) || raw <= 0) continue;
+    // A zero result is a damaged one ("5000" blurred to "0000"); reading on
+    // would take the reference range's lower bound as the result.
+    if (isNaN(raw) || raw <= 0) { if (field) return undefined; continue; }
     if (!field) return raw;
     const unit = rest.slice(end, end + 14).trim();
     const v = convertUnit(field, raw, unit);
@@ -332,8 +335,11 @@ export function extractVitalsFromText(rawText: string): ParsedVitals {
     label('White', 'Blood', 'Cell(?:s|\\s+Count)?'),
     label('White', 'Cell', 'Count'),
     label('Total', 'White', 'Cell', 'Count'),
-    label('Total', 'Le[uc][uc]ocyte', 'Count'),
-    label('Le[uc][uc]ocyte(?:s|\\s+Count)?'),
+    // Leucocyte / Leukocyte (with a k). Not the "Differential" or "Absolute"
+    // leucocyte count headings: those carry no WBC value, and reading on
+    // took the neutrophil % or the absolute neutrophil count instead.
+    label('Total', 'Le[uck]{2}ocyte', 'Count'),
+    label('(?<!(?:Differential|Absolute)\\s+)Le[uck]{2}ocyte(?:s|\\s+Count)?'),
     label('T\\.?L\\.?C'),
     label('T\\.?W\\.?B\\.?C'),
   ], 'wbc');
@@ -397,7 +403,8 @@ export function extractVitalsFromText(rawText: string): ParsedVitals {
 
   // RDW — aka Red (Blood) Cell Distribution Width, RDW-CV/SD
   v.rdw = findValue(text, [
-    label('RDW(?:-CV|-SD)?'),
+    // RDW-CV (%) only. RDW-SD is in fL, and OCR's "RDW-5D" read as RDW 5.
+    label('RDW(?:[-\\s]?CV)?(?![-\\s]?[S5]D)'),
     label('Red\\s+(?:Cell|Blood\\s+Cell)\\s+Distribution\\s+Width'),
     label('Red\\s+Cell\\s+Size\\s+Distribution'),
   ], 'rdw');
@@ -669,26 +676,43 @@ const countFields = (v: ParsedVitals): number => Object.values(v).filter(x => x 
  * "1.45" is out-voted. A value found by only one pass is still kept — the
  * other passes simply failed to read that row — but loses any tie.
  */
-export function voteVitals(results: { vitals: ParsedVitals; confidence: number }[]): ParsedVitals {
+export function voteVitals(
+  results: { vitals: ParsedVitals; confidence: number }[],
+  opts: { corroborate?: boolean } = {},
+): ParsedVitals {
   const out: ParsedVitals = {};
   const fields = new Set<VitalField>();
   for (const r of results) for (const k of Object.keys(r.vitals) as VitalField[]) if (r.vitals[k] !== undefined) fields.add(k);
   for (const f of fields) {
-    const tally = new Map<number, number>();
+    const tally = new Map<number, { score: number; passes: number; topConf: number }>();
     for (const r of results) {
       const v = r.vitals[f];
       if (v === undefined) continue;
       const key = round2(v);
+      const t = tally.get(key) ?? { score: 0, passes: 0, topConf: 0 };
       // Every reading counts for at least something even at very low
       // confidence, and agreement between passes is what matters most.
-      tally.set(key, (tally.get(key) ?? 0) + 1 + Math.max(0, r.confidence) / 100);
+      t.score += 1 + Math.max(0, r.confidence) / 100;
+      t.passes += 1;
+      t.topConf = Math.max(t.topConf, r.confidence);
+      tally.set(key, t);
     }
-    let best: number | undefined; let bestScore = -1;
-    for (const [val, score] of tally) if (score > bestScore) { best = val; bestScore = score; }
-    if (best !== undefined) out[f] = best;
+    let best: number | undefined; let bestT: { score: number; passes: number; topConf: number } | undefined;
+    for (const [val, t] of tally) if (!bestT || t.score > bestT.score) { best = val; bestT = t; }
+    if (best === undefined || !bestT) continue;
+    // Medical values: a wrong number is worse than a missing one. On a
+    // blurred photo a single low-confidence pass "reads" values that are not
+    // on the page (Hb 8 for 15, creatinine 12 on a blood count). Keep a value
+    // only when two passes agree on it, or one pass read it with high
+    // confidence (a clean page, where the others simply missed the row).
+    if (opts.corroborate && bestT.passes < 2 && bestT.topConf < SINGLE_PASS_MIN_CONFIDENCE) continue;
+    out[f] = best;
   }
   return out;
 }
+
+/** A value only one OCR pass read is kept only above this confidence. */
+const SINGLE_PASS_MIN_CONFIDENCE = 75;
 
 export interface ReportExtraction {
   vitals: ParsedVitals;
@@ -699,8 +723,22 @@ export interface ReportExtraction {
   confidence: number;
 }
 
-/** OCR one image (or rendered page) with every pass, then vote. */
+/**
+ * Read one image (or rendered page). Amazon Textract when enabled
+ * (OCR_ENGINE=textract): far better on blurred, small and tilted photos.
+ * Otherwise — or when the Textract call fails — tesseract with every pass,
+ * then a vote.
+ */
 async function readImage(buf: Buffer): Promise<{ vitals: ParsedVitals; text: string; confidence: number }> {
+  if (isTextractEnabled()) {
+    const img = await asJpegOrPng(buf);
+    const tx = img ? await textractImage(img) : null;
+    // Textract read the page: trust its answer even when it found no values.
+    // On a page that bad, tesseract only "finds" wrong ones (measured on
+    // blurred samples: Textract 0 wrong, tesseract 6). Tesseract is used
+    // only when Textract itself failed.
+    if (tx) return { vitals: extractVitalsFromText(tx.text), text: tx.text, confidence: tx.confidence };
+  }
   const passes = await ocrImageMultiPass(buf);
   if (!passes.length) return { vitals: {}, text: '', confidence: 0 };
   const parsed = passes.map(p => ({ vitals: extractVitalsFromText(p.text), confidence: p.confidence, text: p.text, fallback: !!p.fallback }));
@@ -708,9 +746,9 @@ async function readImage(buf: Buffer): Promise<{ vitals: ParsedVitals; text: str
   // Best single pass = most fields read, then highest confidence — its text
   // is what gets reported back.
   const best = [...regular].sort((a, b) => countFields(b.vitals) - countFields(a.vitals) || b.confidence - a.confidence)[0] ?? parsed[0];
-  const vitals = voteVitals(regular);
+  const vitals = voteVitals(regular, { corroborate: true });
   // Fallback passes may only add fields the regular passes didn't read.
-  const extra = voteVitals(parsed.filter(p => p.fallback));
+  const extra = voteVitals(parsed.filter(p => p.fallback), { corroborate: true });
   for (const k of Object.keys(extra) as VitalField[]) if (vitals[k] === undefined) vitals[k] = extra[k];
   return { vitals, text: best.text, confidence: Math.max(...regular.map(p => p.confidence), 0) };
 }
