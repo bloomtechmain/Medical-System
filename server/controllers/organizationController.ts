@@ -7,7 +7,7 @@ import { logger } from '../config/logger';
 import { recordRegistrationPlan } from './planController';
 import { resolveRegistrationPlan } from '../utils/plans';
 import { isPlanAudience } from '../config/planCatalog';
-import { sendAccountApprovedEmail } from '../utils/accountEmails';
+import { sendAccountApprovedEmail, sendWelcomeEmail } from '../utils/accountEmails';
 
 const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -365,6 +365,11 @@ const registerOrganization = async (req: Request, res: Response, next: NextFunct
       });
       return;
     }
+
+    // With verification off, nothing else tells a new owner their application
+    // arrived: send the "registration under review" email (with verification
+    // on, it goes once the code is entered). After COMMIT; never throws.
+    if (!existingOwner) void sendWelcomeEmail({ ...owner, role }, true);
 
     res.status(201).json({
       message: existingOwner

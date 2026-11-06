@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { SERVER_ORIGIN } from '../env';
+import { clearStoredSession, SIGNOUT_HASH } from '../utils/authHandoff';
+import { currentZone, zoneOrigin } from '../utils/zones';
 
 // In development SERVER_ORIGIN is empty → Vite proxy rewrites /api/* → localhost:5000/api/*.
 const BASE_URL = SERVER_ORIGIN ? `${SERVER_ORIGIN}/api` : '/api';
@@ -34,11 +36,18 @@ api.interceptors.request.use((config) => {
 // clear-and-redirect behavior.
 let refreshPromise: Promise<string | null> | null = null;
 
+// Several requests can fail at once; redirect only once.
+let redirectingToLogin = false;
+
 const clearSessionAndRedirect = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
-  localStorage.removeItem('user');
-  window.location.href = '/login';
+  if (redirectingToLogin) return;
+  redirectingToLogin = true;
+  clearStoredSession();
+  // With the subdomain split, end on www.suwela.com/login#signout so www
+  // forgets the session too. Plain /login on app.suwela.com would be sent on
+  // to www, which (holding an old copy) handed the dead session straight back.
+  const site = zoneOrigin('site');
+  window.location.replace(currentZone() !== null && site ? `${site}/login#${SIGNOUT_HASH}` : '/login');
 };
 
 const doRefresh = async (): Promise<string | null> => {

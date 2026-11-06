@@ -333,7 +333,7 @@ export default function Sidebar() {
 
         {/* Logout */}
         <button
-          onClick={() => { logout(); navigate('/login'); }}
+          onClick={() => logout()}
           className="flex items-center gap-3 rounded-2xl text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-150 overflow-hidden"
         >
           <span className="w-11 h-11 flex items-center justify-center shrink-0">

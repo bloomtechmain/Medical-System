@@ -67,6 +67,10 @@ COPY --from=builder --chown=node:node /app/dist ./dist
 # image is even built; ECS runs them from inside this container instead, so
 # the folder actually has to be here.
 COPY --from=builder --chown=node:node /app/migrations ./migrations
+# OCR language data (tesseract). Without it in the image, every OCR job
+# downloaded ~5 MB from a public CDN (/app is not writable, so it could not
+# even be cached): slower, and report reading broke whenever the CDN did.
+COPY --from=builder --chown=node:node /app/eng.traineddata ./tessdata/eng.traineddata
 
 USER node
 

@@ -6,7 +6,8 @@ import { Response } from 'express';
 import multer from 'multer';
 import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
-import { randomUploadName } from './uploadSecurity';
+import { Transform } from 'stream';
+import { randomUploadName, SIGNATURE_BYTES } from './uploadSecurity';
 
 // PRO-05: uploads (prescriptions, lab reports/referrals, patient reports) were
 // written to the application's own disk — fine for a single Railway
@@ -58,12 +59,27 @@ const createUploadStorage = (subdir: string, filenamePrefix: string): multer.Sto
     _handleFile(req, file, cb) {
       const ext = path.extname(file.originalname).toLowerCase();
       const name = randomUploadName(filenamePrefix, req.user?.id || 'u', ext);
+      // There is no local copy in S3 mode, so note what the later checks need
+      // while the file streams through: its first bytes (the file-type check
+      // in uploadSecurity read file.path, which S3 mode never sets, and
+      // crashed every upload with a 500) and its size (the upload quota
+      // read an undefined size and counted every file as 0 bytes).
+      let head = Buffer.alloc(0);
+      let size = 0;
+      const tap = new Transform({
+        transform(chunk: Buffer, _enc, done) {
+          size += chunk.length;
+          if (head.length < SIGNATURE_BYTES) head = Buffer.concat([head, chunk]).subarray(0, SIGNATURE_BYTES);
+          done(null, chunk);
+        },
+      });
+      file.stream.on('error', err => tap.destroy(err));
       const upload = new Upload({
         client: getS3(),
-        params: { Bucket: BUCKET, Key: `${subdir}/${name}`, Body: file.stream, ContentType: file.mimetype },
+        params: { Bucket: BUCKET, Key: `${subdir}/${name}`, Body: file.stream.pipe(tap), ContentType: file.mimetype },
       });
       upload.done()
-        .then(() => cb(null, { filename: name, size: (file as unknown as { size?: number }).size }))
+        .then(() => cb(null, { filename: name, size, headBytes: head, storageSubdir: subdir } as Partial<Express.Multer.File>))
         .catch(cb);
     },
     _removeFile(_req, file, cb) {
